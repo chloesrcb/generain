@@ -6,3 +6,4 @@ Description: Generate extreme and moderate rainfall events using the EGPD.
 Author: "Chloe Serre-Combe"
 Maintainer: "Chloe Serre-Combe" <chloe.serre-combe@umontpellier.fr>
 RoxygenNote: 7.2.3
+License: MIT + file LICENSE

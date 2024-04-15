@@ -78,11 +78,29 @@ get_h_vect <- function(df_dist, hmax) {
   return(h_vect)
 }
 
-# Calculate Distances
+#' Calculate the Euclidean distance between two points.
+#'
+#' @param point1 The first point.
+#' @param point2 The second point.
+#' @return The Euclidean distance between the two points.
+#'
+#' @examples
+#' euclidean_distance(c(0, 0), c(3, 4))
+#'
 euclidean_distance <- function(point1, point2) {
   sqrt(sum((point1 - point2)^2))
 }
 
+#' distances_regular_grid calculates the distances between sites on a regular
+#' grid.
+#'
+#' @param nsites the number of sites on the grid ie nb of pixels^2
+#' @return a matrix of distances between sites
+#'
+#' @examples
+#' distances_regular_grid(10)
+#'
+#' @export
 distances_regular_grid <- function(nsites) {
   # distances
   grid_size <- sqrt(nsites)
