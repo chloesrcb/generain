@@ -1,7 +1,12 @@
-# generain
+# generain package
+
 Model for extreme and moderate precipitation
 
 
-# installation
+# Installation
 
 ```devtools::install_github("chloesrcb/generain")```
+
+# Loading
+
+```library(generain)```
