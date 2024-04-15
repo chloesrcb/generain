@@ -1,4 +1,3 @@
-
 # EXCESSES ---------------------------------------------------------------------
 
 #' empirical_excesses function
@@ -39,7 +38,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
       rain_lag <- rains2[(1 + t):Tmax] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get final couple
       n <- nrow(data_cp)
-      if (n < 10) { # if not enough data
+      if (n < 5) { # if not enough data
         n_vect <- c(n_vect, NA)
         N_vect <- c(N_vect, NA)
       } else {
@@ -358,7 +357,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #'
 #' @import spam
 #' @import stats
-#' 
+#'
 #' @examples
 #' evaluate_optim(list_simu, quantile, true_param, tau)
 #' @export
@@ -382,6 +381,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau,
     df_result$beta2[n] <- params[2]
     df_result$alpha1[n] <- params[3]
     df_result$alpha2[n] <- params[4]
+    print(n_res)
   }
   return(df_result)
 }

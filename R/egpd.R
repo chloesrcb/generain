@@ -134,8 +134,8 @@ dgpdExt1 <- function(x, kappa, sigma, gamma){
 #'         RMSE. # TODO: add CRPS
 #'
 #' @import terra
-#' @importFrom evd qextgp
-#' @importFrom evd rextgp
+#' @importFrom mev qextgp
+#' @importFrom mev rextgp
 #' @importFrom scoringRules crps_sample
 #' @importFrom scoringRules crps
 #'
