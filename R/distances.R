@@ -57,7 +57,8 @@ reshape_distances <- function(dist_mat) {
   df_dist$Y <- 1:n
 
   # Reshape to suit ggplot, remove NAs, and sort the labels
-  df_dist <- na.omit(melt(df_dist, "Y", variable_name = "X"))
+  df_dist <- na.omit(reshape2::melt(df_dist, "Y", variable_name = "X"))
+  colnames(df_dist) <- c("Y", "X", "value")
   df_dist$X <- factor(df_dist$X, levels = rev(levels(df_dist$X)))
 
   return(df_dist)
@@ -116,7 +117,7 @@ get_euclidean_distance <- function(point1, point2) {
 #' @import tidyr
 #'
 #' @examples
-#' distances_regular_grid(10)
+#' distances_regular_grid(25)
 #'
 #' @export
 distances_regular_grid <- function(nsites) {
@@ -132,7 +133,7 @@ distances_regular_grid <- function(nsites) {
 
   for (i in 1:(grid_size^2)) {
     for (j in 1:(grid_size^2)) {
-      distances[i, j] <- get_euclidean_distance(grid_points[i, ],
+      distances[i, j] <- euclidean_distance(grid_points[i, ],
                                                 grid_points[j, ])
     }
   }

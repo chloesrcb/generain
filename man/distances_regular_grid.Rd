@@ -18,6 +18,6 @@ distances_regular_grid calculates the distances between sites on a regular
 grid.
 }
 \examples{
-distances_regular_grid(10)
+distances_regular_grid(25)
 
 }
