@@ -34,8 +34,10 @@ jobs:
           r-apt-repo: 'deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/'
       - name: Install dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck"))
-          remotes::install_deps(dependencies = TRUE)
+          sudo dnf update -y
+          sudo dnf install -y R libxml2-devel
+          R -e 'install.packages(c("remotes", "rcmdcheck"), repos="https://cloud.r-project.org/")'
+          R -e 'remotes::install_deps(dependencies = TRUE)'
         shell: Rscript {0}
       - name: Check
         run: rcmdcheck::rcmdcheck(args = "--no-manual", error_on = "error")
