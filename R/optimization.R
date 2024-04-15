@@ -404,6 +404,8 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist) {
 #' 
 #' @export
 get_criterion <- function(df_result, true_param) {
+    # remove NA values
+    df_result <- na.omit(df_result)
     # get the mean, RMSE and MAE values for each parameter
     mean_beta1 <- mean(df_result$beta1)
     mean_alpha1 <- mean(df_result$alpha1)
