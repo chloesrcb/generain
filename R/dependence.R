@@ -56,7 +56,8 @@ get_chiq <- function(data, quantile) {
 #' @examples
 #' data <- c(1, 2, 3, 4, 5)
 #' temporal_chi(data, 3, 0.5)
-#'
+#' 
+#' @export
 temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   # number of stations
   nsites <- ncol(data_rain)

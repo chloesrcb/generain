@@ -17,6 +17,7 @@
 #' @examples
 #' df_dist <- distances_regular_grid(25, 5)
 #' empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
+#' @export
 empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
   Tmax <- nrow(data_rain) # number of time steps
   q <- quantile # quantile
@@ -78,6 +79,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
 #' h <- 0.1
 #' tau <- 0.01
 #' theoretical_chi_ind(params, h, tau)
+#' @export
 theorical_chi_ind <- function(params, h, tau) {
   # get variogram parameter
   beta1 <- params[1]
@@ -110,6 +112,7 @@ theorical_chi_ind <- function(params, h, tau) {
 #' h_vect <- get_h_vect(df_dist, sqrt(17))
 #' tau <- 1:10
 #' theorical_chi_mat(params, h_vect, tau)
+#' @export
 theorical_chi_mat <- function(params, h_vect, tau) {
   # Init matrix
   chi <- matrix(0, nrow = length(tau), ncol = length(h_vect))
@@ -141,6 +144,7 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' tau <- 1:3
 #' chi_mat <- theorical_chi_mat(params, h_vect, tau)
 #' chi_vect <- get_chi_vect(chi_mat, h_vect, tau, df_dist)
+#' @export
 get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
   df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
   # create excesses matrix
@@ -180,6 +184,7 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @examples
 #' params <- c(0.5, 0.2, 0.3, 1)
 #' neg_ll(params, data)
+#' @export
 neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   # params conditions
   beta1 <- params[1]
@@ -221,6 +226,7 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
 #'
 #' @examples
 #' simulate_excess_ind(10, 0.5)
+#' @export
 simulate_excess_ind <- function(Tmax, chi_h_t) {
   # simulate excesses following a binomial distribution
   vect_E <- rbinom(Tmax, 1, chi_h_t)
@@ -242,6 +248,7 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
 #'
 #' @examples
 #' simulate_excesses(10, 5, c(1, 2, 3), 2, 3)
+#' @export
 simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
   df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
   # create excesses matrix
@@ -293,6 +300,7 @@ simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
 #'
 #' @examples
 #' evaluate_optim_simuExp(10, 100, 1:10, 1:10, chi_mat, df_dist)
+#' @export
 evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
                                    nconfig) {
   df_result <- data.frame(beta1 = rep(NA, n_res), beta2 = rep(NA, n_res),
@@ -336,6 +344,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #'
 #' @examples
 #' evaluate_optim(list_simu, quantile, true_param, tau)
+#' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau,
                            df_dist) {
   # get the number of simulations
@@ -369,6 +378,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau,
 #' @param df_result The data frame containing the result values
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @return The calculated criterion value in a dataframe.
+#' @export
 get_criterion <- function(df_result, true_param) {
     # get the mean, RMSE and MAE values for each parameter
     mean_beta1 <- mean(df_result$beta1)
