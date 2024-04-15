@@ -213,7 +213,7 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
   # negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
-  print(nll)
+#   print(nll)
   return(nll)
 }
 
@@ -361,8 +361,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @examples
 #' evaluate_optim(list_simu, quantile, true_param, tau)
 #' @export
-evaluate_optim <- function(list_simu, quantile, true_param, tau,
-                           df_dist) {
+evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist) {
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
@@ -373,15 +372,20 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau,
   for (n in 1:n_res) {
     simu_df <- as.data.frame(list_simu[[n]])
     excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist)
-    result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
-                h_vect = h_vect, tau = tau, df_dist = df_dist,
-                method = "CG")
-    params <- result$par
-    df_result$beta1[n] <- params[1]
-    df_result$beta2[n] <- params[2]
-    df_result$alpha1[n] <- params[3]
-    df_result$alpha2[n] <- params[4]
-    print(n_res)
+
+    tryCatch({
+        result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
+            excesses = excesses, h_vect = h_vect, tau = tau,
+            df_dist = df_dist, method = "CG")
+        params <- result$par
+        df_result$beta1[n] <- params[1]
+        df_result$beta2[n] <- params[2]
+        df_result$alpha1[n] <- params[3]
+        df_result$alpha2[n] <- params[4]
+    }, error = function(e) {
+        # Handle the error (e.g., print an error message)
+        print(paste("Error occurred for simulation", n))
+    })
   }
   return(df_result)
 }
