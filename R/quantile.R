@@ -19,6 +19,8 @@
 #'
 #' @import evd
 #' @import dplyr
+#' @importFrom graphics par
+#' @importFrom graphics abline
 #'
 #' @examples
 #' quantile_matrix(0.5, data_rain)

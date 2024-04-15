@@ -39,8 +39,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
       rain_lag <- rains2[(1 + t):Tmax] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get final couple
       n <- nrow(data_cp)
-      if (n < 10) {
-        print("coucou")
+      if (n < 10) { # if not enough data
         n_vect <- c(n_vect, NA)
         N_vect <- c(N_vect, NA)
       } else {

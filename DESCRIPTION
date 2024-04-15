@@ -47,6 +47,8 @@ Imports:
   knitr,
   kableExtra,
   graphics,
+  grDevices,
+  scoringRules,
 Suggests:
   RandomFields,
   doParallel,
