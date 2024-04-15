@@ -112,10 +112,6 @@ get_euclidean_distance <- function(point1, point2) {
 #' @param nsites the number of sites on the grid ie nb of pixels squared
 #' @return a matrix of distances between sites
 #'
-#' @import geodist
-#' @import stats
-#' @import terra
-#' @import reshape2
 #' @import spam
 #' @import tidyr
 #'
