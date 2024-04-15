@@ -1,44 +1,75 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-#
-# See https://github.com/r-lib/actions/tree/master/examples#readme for
-# additional example workflows available for the R community.
-
-name: R
-
+# Workflow derived from https://github.com/r-lib/actions/tree/master/examples
+# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  issue_comment:
+    types: [created]
 
-permissions:
-  contents: read
+name: Commands
 
 jobs:
-  build:
+  document:
+    if: ${{ github.event.issue.pull_request && (github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'OWNER') && startsWith(github.event.comment.body, '/document') }}
+    name: document
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        r-version: ['3.6.3', '4.1.1']
-
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up R ${{ matrix.r-version }}
-        uses: r-lib/actions/setup-r@f57f1301a053485946083d7a45022b278929a78a
+      - uses: actions/checkout@v2
+
+      - uses: r-lib/actions/pr-fetch@v1
         with:
-          r-version: ${{ matrix.r-version }}
-          install-r: true
-          r-apt-repo: 'deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/'
-      - name: Install dependencies
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: r-lib/actions/setup-r@v1
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v1
+        with:
+          extra-packages: roxygen2
+
+      - name: Document
+        run: Rscript -e 'roxygen2::roxygenise()'
+
+      - name: commit
         run: |
-          sudo dnf update -y
-          sudo dnf install -y R libxml2-devel
-          R -e 'install.packages(c("remotes", "rcmdcheck"), repos="https://cloud.r-project.org/")'
-          R -e 'remotes::install_deps(dependencies = TRUE)'
-        shell: Rscript {0}
-      - name: Check
-        run: rcmdcheck::rcmdcheck(args = "--no-manual", error_on = "error")
-        shell: Rscript {0}
+          git config --local user.name "$GITHUB_ACTOR"
+          git config --local user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git add man/\* NAMESPACE
+          git commit -m 'Document'
+
+      - uses: r-lib/actions/pr-push@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  style:
+    if: ${{ github.event.issue.pull_request && (github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'OWNER') && startsWith(github.event.comment.body, '/style') }}
+    name: style
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: r-lib/actions/pr-fetch@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: r-lib/actions/setup-r@v1
+
+      - name: Install dependencies
+        run: Rscript -e 'install.packages("styler")'
+
+      - name: Style
+        run: Rscript -e 'styler::style_pkg()'
+
+      - name: commit
+        run: |
+          git config --local user.name "$GITHUB_ACTOR"
+          git config --local user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git add \*.R
+          git commit -m 'Style'
+
+      - uses: r-lib/actions/pr-push@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
