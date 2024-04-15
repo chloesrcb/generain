@@ -1,0 +1,8 @@
+Package: generain
+Version: 1.0
+Date: 2024-03-27
+Title: Generator of Extreme and Moderate Rainfall Events
+Description: Generate extreme and moderate rainfall events using the EGPD.
+Author: "Chloe Serre-Combe"
+Maintainer: "Chloe Serre-Combe" <chloe.serre-combe@umontpellier.fr>
+RoxygenNote: 7.2.3
