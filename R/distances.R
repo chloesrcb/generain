@@ -133,7 +133,7 @@ distances_regular_grid <- function(nsites) {
 
   for (i in 1:(grid_size^2)) {
     for (j in 1:(grid_size^2)) {
-      distances[i, j] <- euclidean_distance(grid_points[i, ],
+      distances[i, j] <- get_euclidean_distance(grid_points[i, ],
                                                 grid_points[j, ])
     }
   }
