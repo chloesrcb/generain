@@ -1,3 +1,4 @@
+
 #' Compute the distance matrix between locations
 #'
 #' This function computes the distance matrix between a set of locations.
@@ -9,6 +10,10 @@
 #' longitude format.
 #' @return A distance matrix where each element represents the distance between
 #' two locations.
+#'
+#' @import geodist
+#' @importFrom stats dist
+#'
 #' @export
 get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
   # get longitude and latitude in a dataframe to get distance between points
@@ -31,26 +36,31 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
 #'
 #' @param dist_mat The input distance matrix.
 #' @return A dataframe containing the reshaped distances.
+#'
+#' @import reshape2
+#' @import spam
+#' @import terra
+#'
 #' @export
 reshape_distances <- function(dist_mat) {
-    # convert distance matrix into a dataframe
-    df_dist <- as.data.frame(dist_mat)
-    n <- nrow(df_dist)
-    colnames(df_dist) <- c(1:n)
-    rownames(df_dist) <- c(1:n)
+  # convert distance matrix into a dataframe
+  df_dist <- as.data.frame(dist_mat)
+  n <- nrow(df_dist)
+  colnames(df_dist) <- c(1:n)
+  rownames(df_dist) <- c(1:n)
 
-    # Make a triangle
-    df_dist[lower.tri(df_dist)] <- NA
+  # Make a triangle
+  df_dist[lower.tri(df_dist)] <- NA
 
-    # Convert to a data frame, and add tenure labels
-    df_dist <- as.data.frame(df_dist)
-    df_dist$Y <- 1:n
+  # Convert to a data frame, and add tenure labels
+  df_dist <- as.data.frame(df_dist)
+  df_dist$Y <- 1:n
 
-    # Reshape to suit ggplot, remove NAs, and sort the labels
-    df_dist <- na.omit(melt(df_dist, "Y", variable_name = "X"))
-    df_dist$X <- factor(df_dist$X, levels = rev(levels(df_dist$X)))
+  # Reshape to suit ggplot, remove NAs, and sort the labels
+  df_dist <- na.omit(melt(df_dist, "Y", variable_name = "X"))
+  df_dist$X <- factor(df_dist$X, levels = rev(levels(df_dist$X)))
 
-    return(df_dist)
+  return(df_dist)
 }
 
 
@@ -62,6 +72,8 @@ reshape_distances <- function(dist_mat) {
 #' @param df_dist The distance dataframe.
 #' @param hmax The maximum spacial lag value.
 #' @return The h vector.
+#'
+#' @import terra
 #'
 #' @examples
 #' hmax <- 2
@@ -78,6 +90,8 @@ get_h_vect <- function(df_dist, hmax) {
   return(h_vect)
 }
 
+
+
 #' Calculate the Euclidean distance between two points.
 #'
 #' @param point1 The first point.
@@ -87,15 +101,23 @@ get_h_vect <- function(df_dist, hmax) {
 #' @examples
 #' euclidean_distance(c(0, 0), c(3, 4))
 #'
-euclidean_distance <- function(point1, point2) {
+#' @export
+get_euclidean_distance <- function(point1, point2) {
   sqrt(sum((point1 - point2)^2))
 }
 
 #' distances_regular_grid calculates the distances between sites on a regular
 #' grid.
 #'
-#' @param nsites the number of sites on the grid ie nb of pixels^2
+#' @param nsites the number of sites on the grid ie nb of pixels squared
 #' @return a matrix of distances between sites
+#'
+#' @import geodist
+#' @import stats
+#' @import terra
+#' @import reshape2
+#' @import spam
+#' @import tidyr
 #'
 #' @examples
 #' distances_regular_grid(10)
@@ -114,7 +136,8 @@ distances_regular_grid <- function(nsites) {
 
   for (i in 1:(grid_size^2)) {
     for (j in 1:(grid_size^2)) {
-      distances[i, j] <- euclidean_distance(grid_points[i, ], grid_points[j, ])
+      distances[i, j] <- get_euclidean_distance(grid_points[i, ],
+                                                grid_points[j, ])
     }
   }
 

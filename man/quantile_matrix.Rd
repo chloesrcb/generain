@@ -26,6 +26,12 @@ quantile_matrix(
 quantile. Default is 80.}
 
 \item{step}{The resolution of the quantile matrix. Default is 0.005.}
+
+\item{zeros}{A logical value indicating whether to include zero values in the
+dataset. Default is TRUE.}
+
+\item{qlim}{A logical value indicating a quantile limit, more precised some
+times. Default is TRUE.}
 }
 \value{
 A matrix containing the quantile values for each pair of variables

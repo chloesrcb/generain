@@ -21,7 +21,6 @@ This function calculates the theoretical chi matrix based on the given
 parameters.
 }
 \examples{
-df_dist <- distances_regular_grid(25, 5)
 h_vect <- get_h_vect(df_dist, sqrt(17))
 tau <- 1:10
 theorical_chi_mat(params, h_vect, tau)

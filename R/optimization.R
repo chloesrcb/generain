@@ -1,3 +1,4 @@
+
 # EXCESSES ---------------------------------------------------------------------
 
 #' empirical_excesses function
@@ -13,9 +14,8 @@
 #'
 #' @return A list with n_vect the number of excesses and N_vect the number of
 #' possible excesses ie the number of observations for each pair of sites.
-#'
+#' @import tidyr
 #' @examples
-#' df_dist <- distances_regular_grid(25, 5)
 #' empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
 #' @export
 empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
@@ -74,6 +74,8 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
 #'
 #' @return The theoretical chi value.
 #'
+#' @import stats
+#' 
 #' @examples
 #' params <- c(0.5, 0.2, 0.3, 0.4)
 #' h <- 0.1
@@ -108,7 +110,6 @@ theorical_chi_ind <- function(params, h, tau) {
 #' @return The theoretical chi matrix.
 #'
 #' @examples
-#' df_dist <- distances_regular_grid(25, 5)
 #' h_vect <- get_h_vect(df_dist, sqrt(17))
 #' tau <- 1:10
 #' theorical_chi_mat(params, h_vect, tau)
@@ -171,7 +172,7 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 # NEGATIVE LOG-LIKELIHOOD ------------------------------------------------------
 
 #' neg_ll function
-#' 
+#'
 #' Calculate the negative log-likelihood for a given set of variogram
 #' parameters by considering excess indicators following a binomial distribution
 #' with a probability parameter equals to the theorical spatio-temporal chi
@@ -179,8 +180,15 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' configuration.
 #'
 #' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2).
-#' @param data The input data.
+#' @param excesses List of excesses (N_vect, n_vect).
+#' @param h_vect The spatial lag vector.
+#' @param tau The temporal lag vector.
+#' @param df_dist The distances long dataframe.
+#' @param simu_exp A boolean value to indicate if the data is simulated with
+#'                 an exponential distribution.
+#' 
 #' @return The negative log-likelihood value.
+#'
 #' @examples
 #' params <- c(0.5, 0.2, 0.3, 1)
 #' neg_ll(params, data)
@@ -224,6 +232,8 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
 #'
 #' @return The simulated individual excess.
 #'
+#' @import stats
+#' 
 #' @examples
 #' simulate_excess_ind(10, 0.5)
 #' @export
@@ -295,7 +305,11 @@ simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
 #' @param h_vect The spatial lag vector
 #' @param chi The spatio-temporal extremogram matrix
 #' @param df_dist The distances long dataframe
+#' @param nconfig The number of configurations
 #'
+#' @import spam
+#' @import stats
+#' 
 #' @return The result of the optimization process as a dataframe.
 #'
 #' @examples
@@ -307,23 +321,23 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
                       alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
 
   for (n in 1:n_res){
-      simu_E <- simulate_excesses(Tmax, tau_vect, h_vect, chi, df_dist)
-      mat_E <- simu_E$mat_E
-      N_vect <- rep(Tmax, nconfig)
-      n_vect <- colSums(mat_E)
-      excesses <- list(N_vect = N_vect, n_vect = n_vect) # simu of excesses
+    simu_E <- simulate_excesses(Tmax, tau_vect, h_vect, chi, df_dist)
+    mat_E <- simu_E$mat_E
+    N_vect <- rep(Tmax, nconfig)
+    n_vect <- colSums(mat_E)
+    excesses <- list(N_vect = N_vect, n_vect = n_vect) # simu of excesses
 
-      # Conjugate gradient method
-      result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
-                      excesses = excesses,
-                      h_vect = h_vect, tau = tau_vect, df_dist = df_dist,
-                      method = "CG")
+    # Conjugate gradient method
+    result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
+                    excesses = excesses,
+                    h_vect = h_vect, tau = tau_vect, df_dist = df_dist,
+                    method = "CG")
 
-      params <- result$par
-      df_result$beta1[n] <- params[1]
-      df_result$beta2[n] <- params[2]
-      df_result$alpha1[n] <- params[3]
-      df_result$alpha2[n] <- params[4]
+    params <- result$par
+    df_result$beta1[n] <- params[1]
+    df_result$beta2[n] <- params[2]
+    df_result$alpha1[n] <- params[3]
+    df_result$alpha2[n] <- params[4]
   }
 
     return(df_result)
@@ -339,9 +353,13 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @param quantile The quantile value
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param tau The temporal lag vector
+#' @param df_dist The distances long dataframe
 #'
 #' @return The result of the optimization process as a dataframe.
 #'
+#' @import spam
+#' @import stats
+#' 
 #' @examples
 #' evaluate_optim(list_simu, quantile, true_param, tau)
 #' @export
@@ -378,6 +396,9 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau,
 #' @param df_result The data frame containing the result values
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @return The calculated criterion value in a dataframe.
+#' 
+#' @import terra
+#' 
 #' @export
 get_criterion <- function(df_result, true_param) {
     # get the mean, RMSE and MAE values for each parameter

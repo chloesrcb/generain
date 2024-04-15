@@ -13,7 +13,7 @@ temporal_chi(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE)
 
 \item{quantile}{The quantile value.}
 
-\item{zeros}{Logical indicating whether to include zero values in the 
+\item{zeros}{Logical indicating whether to include zero values in the
 calculation.}
 
 \item{mean}{Logical indicating whether to return the mean value.}

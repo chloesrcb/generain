@@ -9,9 +9,16 @@
 #' @param count_min The minimum number of observations required to calculate a
 #' quantile. Default is 80.
 #' @param step The resolution of the quantile matrix. Default is 0.005.
+#' @param zeros A logical value indicating whether to include zero values in the
+#'              dataset. Default is TRUE.
+#' @param qlim A logical value indicating a quantile limit, more precised some
+#'             times. Default is TRUE.
 #'
 #' @return A matrix containing the quantile values for each pair of variables
 #' in the dataset.
+#'
+#' @import evd
+#' @import dplyr
 #'
 #' @examples
 #' quantile_matrix(0.5, data_rain)

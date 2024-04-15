@@ -18,6 +18,8 @@ evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist, nconfig)
 \item{chi}{The spatio-temporal extremogram matrix}
 
 \item{df_dist}{The distances long dataframe}
+
+\item{nconfig}{The number of configurations}
 }
 \value{
 The result of the optimization process as a dataframe.

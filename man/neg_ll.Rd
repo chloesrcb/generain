@@ -9,7 +9,16 @@ neg_ll(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE)
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}
 
-\item{data}{The input data.}
+\item{excesses}{List of excesses (N_vect, n_vect).}
+
+\item{h_vect}{The spatial lag vector.}
+
+\item{tau}{The temporal lag vector.}
+
+\item{df_dist}{The distances long dataframe.}
+
+\item{simu_exp}{A boolean value to indicate if the data is simulated with
+an exponential distribution.}
 }
 \value{
 The negative log-likelihood value.

@@ -8,7 +8,7 @@ grid.}
 distances_regular_grid(nsites)
 }
 \arguments{
-\item{nsites}{the number of sites on the grid ie nb of pixels^2}
+\item{nsites}{the number of sites on the grid ie nb of pixels squared}
 }
 \value{
 a matrix of distances between sites

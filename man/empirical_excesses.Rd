@@ -26,6 +26,5 @@ This function calculates the empirical excesses based on indicators above a
 quantile threshold.
 }
 \examples{
-df_dist <- distances_regular_grid(25, 5)
 empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
 }

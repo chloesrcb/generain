@@ -14,6 +14,8 @@ evaluate_optim(list_simu, quantile, true_param, tau, df_dist)
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
 \item{tau}{The temporal lag vector}
+
+\item{df_dist}{The distances long dataframe}
 }
 \value{
 The result of the optimization process as a dataframe.

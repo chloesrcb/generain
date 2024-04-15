@@ -8,6 +8,10 @@
 #'
 #' @return The chi-square statistic.
 #'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#'
 #' @examples
 #' data1 <- c(1, 2, 3, 4, 5)
 #' data2 <- c(2, 3, 4, 5, 6)
@@ -17,7 +21,6 @@
 #'
 #' @export
 get_chiq <- function(data, quantile) {
-  # data <- na.omit(data)
   n <- nrow(data)
   # Transform data into uniform ranks
   data_unif <- cbind(rank(data[, 1]) / (n + 1),
@@ -47,16 +50,20 @@ get_chiq <- function(data, quantile) {
 #' @param data_rain The rainfall data.
 #' @param tmax The maximum threshold value.
 #' @param quantile The quantile value.
-#' @param zeros Logical indicating whether to include zero values in the 
+#' @param zeros Logical indicating whether to include zero values in the
 #'              calculation.
 #' @param mean Logical indicating whether to return the mean value.
 #'
 #' @return The temporal chi statistic.
 #'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#'
 #' @examples
 #' data <- c(1, 2, 3, 4, 5)
 #' temporal_chi(data, 3, 0.5)
-#' 
+#'
 #' @export
 temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   # number of stations
@@ -84,7 +91,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     }
     print(paste0(s, "/", nsites)) # print progress
   }
-  if(mean){
+  if (mean) {
     chi_temp <- colMeans(chi_s_temp, na.rm = TRUE)
   } else {
     chi_temp <- chi_s_temp
@@ -94,6 +101,28 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
 }
 
 
+#' Calculate temporal chi using WLSE method
+#'
+#' This function calculates the temporal chi using the Weighted Least Squares
+#' Estimation (WLSE) method.
+#'
+#' @param dftemp The input data frame containing the temporal chi values.
+#' @param weights The weights to be used in the calculation: "residuals", "exp",
+#'               or "none"
+#' @return The calculated temporal chi value.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#' @import lmtest
+#'
+#' @examples
+#' data <- data.frame(time = c(1, 2, 3), value = c(10, 20, 30))
+#' weights <- c(0.5, 0.3, 0.2)
+#' result <- temporal_chi_WLSE(data, weights)
+#' print(result)
+#'
+#' @export
 temporal_chi_WLSE <- function(dftemp, weights){
     # define weights to use (classic with residuals and Buhl one with exp)
     if (weights == "residuals") {
@@ -116,6 +145,29 @@ temporal_chi_WLSE <- function(dftemp, weights){
 
 
 
+#' Calculate the estimate of variotemp
+#'
+#'
+#' This function calculates the estimate of variotemp based on the given
+#' parameters.
+#'
+#' @param chitemp The chitemp parameter.
+#' @param tmax The tmax parameter.
+#' @param npoints The number of points parameter.
+#' @param weights The weights parameter.
+#'
+#' @return The estimate of variotemp.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#' @import lmtest
+#'
+#' @examples
+#' get_estimate_variotemp(chitemp = 0.5, tmax = 100, npoints = 10,
+#'                        weights = c(0.2, 0.3, 0.5))
+#' 
+#' @export
 get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
                                   summary = FALSE) {
   # every chi lagged mean
@@ -147,6 +199,28 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
 
 # SPATIAL CHI ------------------------------------------------------------------
 
+#' Calculate the spatial mean lags
+#'
+#' This function calculates the spatial mean lags based on a given radius.
+#' The function takes an optional argument 'mid' which determines whether
+#' the midpoint of the lags should be returned instead of the full lags.
+#'
+#' @param radius The radius used to calculate the spatial mean lags.
+#' @param mid Logical value indicating whether to return the midpoint of the 
+#'            lags. Default is FALSE.
+#'
+#' @return A vector of spatial mean lags or the midpoint of the lags if 'mid' 
+#'         is TRUE.
+#' 
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#' 
+#' @examples
+#' spatial_mean_lags(5)
+#' spatial_mean_lags(10, mid = TRUE)
+#'
+#' @export
 spatial_mean_lags <- function(radius, mid = FALSE) {
   h_vect <- c()
   for (i in c(2:length(radius))) {
@@ -156,6 +230,36 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
   return(h_vect)
 }
 
+
+
+#' Function to estimate the spatial extremogram
+#'
+#' This function calculates the spatial extremogram for a given lags vector and
+#' and radius matrix and rainfall data.
+#' 
+#' @param lags The lags vector.
+#' @param rad_mat The matrix of radii.
+#' @param data_rain The rainfall data.
+#' @param quantile The quantile value.
+#' @param zeros Logical value indicating whether to include zero values in the
+#'             calculation.
+#' @param mid Logical value indicating whether to return the mean values for
+#'           the plot.
+#'
+#' @return The spatial extremogram.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#'
+#' @examples
+#' lags <- c(1, 2, 3, 4, 5)
+#' rad_mat <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
+#' data_rain <- c(10, 20, 30)
+#' quantile <- 0.5
+#' spatial_chi(lags, rad_mat, data_rain, quantile)
+#' 
+#' @export
 spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE, 
                         mid = TRUE) {
   # initialize values
@@ -203,6 +307,31 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
 }
 
 
+#' Calculate spatial chi-squared distances
+#'
+#' This function calculates the spatial extremogram for a given
+#' distance matrix and rainfall data.
+#'
+#' @param df_dist The distance dataframe.
+#' @param data_rain The rainfall data.
+#' @param quantile The quantile value.
+#' @param hmax The maximum spatial lag value (optional).
+#' @param comephore Logical value indicating whether we work on the COMEPHORE 
+#'                  dataset. Default is FALSE.
+#'
+#' @return The spatial chi-squared distances.
+#'
+#' @examples
+#' df_dist <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
+#' data_rain <- c(10, 20, 30)
+#' quantile <- 0.5
+#' spatial_chi_alldist(df_dist, data_rain, quantile)
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#'
+#' @export
 spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
                                 comephore = FALSE) {
   chi_slag <- c()
@@ -241,6 +370,30 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 }
 
 
+#' Calculate the estimate of the spatial variogram parameters
+#'
+#' This function calculates the estimate of the spatial variogram parameters
+#' based on the given spatial chi values. It uses the Weighted Least Squares
+#' Estimation (WLSE) method to estimate the parameters.
+#'
+#' @param chispa The spatial chi values.
+#' @param weights The weights to be used in the calculation: "residuals", "exp",
+#'               or "none"
+#' @param summary Logical value indicating whether to return the summary of the
+#'               model. Default is FALSE.
+#'
+#' @return The estimated spatial variogram parameters.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#' @import lmtest
+#' 
+#' @examples
+#' chispa <- data.frame(chi = c(0.5, 0.6, 0.7), lagspa = c(1, 2, 3))
+#' weights <- "residuals"
+#' get_estimate_variospa(chispa, weights)
+#' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   # eta transformation
   etachispa_df <- data.frame(chi = eta(chispa$chi),
@@ -256,7 +409,7 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   } else if (weights == "none") {
     ws <- rep(1, length(etachispa_df$lagspa))
   }
-  
+
   # perform weighted least squares regression
   wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
 
@@ -278,28 +431,112 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
 
 # VARIOGRAM --------------------------------------------------------------------
 
-# transforlation function eta
+#' Transforms the extremogram using the eta transformation.
+#'
+#' The eta function transforms the input vector by applying a logarithmic
+#' transformation using the quantile function of the standard normal
+#' distribution.
+#'
+#' @param chi The input extremogram to be transformed.
+#' @return The transformed vector.
+#'
+#' @examples
+#' eta(c(-1, 0, 1, 2))
+#' # Output: [1]  2.000000e+00  1.000000e-06 -1.151293e-01 -2.000000e-01
+#'
+#' @import stats
+#'
+#' @export
 eta <- function(chi) {
-  chi[chi <= 0] <- 0.000001
+  chi[chi <= 0] <- 0.000001 # to avoid log(0)
   stdnorm <- qnorm(1 - 0.5 * chi)
   chi <- 2 * log(stdnorm)
   return(chi)
 }
 
+#' Calculate the theorical spatio-temporal variogram
+#'
+#' This function calculates the theorical spatio-temporal variogram based on the
+#' given extremogram.
+#'
+#' @param chi The extremogram.
+#'
+#' @return The theorical spatio-temporal variogram.
+#'
+#' @import stats
+#' 
+#' @examples
+#' chi <- 0.5
+#' vario_spatemp(chi)
+#'
+#' @export
 vario_spatemp <- function(chi) {
   invphi <- qnorm(1 - 0.5 * chi)
   return(2 * invphi^2)
 }
 
+#' Calculate the spatial or temporal variogram
+#'
+#' This function calculates the spatial or temporal variogram based on the given
+#' WLSE estimated parameters c and alpha. (c = log(beta))
+#'
+#' @param x The corresponding lags.
+#' @param c The c variogram parameter. (log(beta))
+#' @param alpha The alpha variogram parameter.
+#'
+#' @return The calculated spatial or temporal variogram.
+#'
+#' @examples
+#' x <- c(1, 2, 3, 4, 5)
+#' c <- 1
+#' alpha <- 0.5
+#' vario <- vario(x, c, alpha)
+#' print(vario)
+#' 
+#' @export
 vario <- function(x, c, alpha) {
   return(2 * exp(c) * x^alpha)
 }
 
+#' Calculate the chi-squared variogram
+#'
+#' This function calculates the chi-squared variogram based on the given
+#' variogram value.
+#'
+#' @param vario The variogram value.
+#'
+#' @return The theorical spatio-temporal extremogram.
+#'
+#' @examples
+#' vario <- 0.5
+#' chi_vario(vario)
+#'
+#' @export
 chi_vario <- function(vario) {
   chi <- 2 * (1 - sqrt(vario / 2))
   return(chi)
 }
 
+#' Calculate the standard deviation of a variogram
+#'
+#' This function calculates the standard deviation of a variogram based on
+#' the given parameters.
+#'
+#' @param x The input data.
+#' @param vario The variogram function.
+#' @param sd_c The constant term in the standard deviation formula.
+#' @param sd_alpha The alpha term in the standard deviation formula.
+#'
+#' @return The standard deviation of the variogram.
+#'
+#' @examples
+#' x <- c(1, 2, 3, 4, 5)
+#' vario <- function(h) h^2
+#' sd_c <- 1
+#' sd_alpha <- 0.5
+#' sd_vario(x, vario, sd_c, sd_alpha)
+#'
+#' @export
 sd_vario <- function(x, vario, sd_c, sd_alpha) {
   sd <- vario * sqrt(sd_c^2 + sd_alpha^2) # with delta-method
   return(sd)
@@ -307,6 +544,27 @@ sd_vario <- function(x, vario, sd_c, sd_alpha) {
 
 # SPATIO-TEMPORAL CHI ----------------------------------------------------------
 
+#' chispatemp_dt function
+#'
+#' This function calculates the chi-squared spatial-temporal dependence test.
+#'
+#' @param lagt The temporal lag.
+#' @param lags The spatial lags.
+#' @param rad_mat The matrix of radii.
+#' @param data_rain The rainfall data.
+#' @param quant_mat The matrix of quantiles (optional).
+#' @param q_fixed The fixed quantile value (optional).
+#'
+#' @return The result of the chi-squared spatial-temporal dependence test.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#' 
+#' @examples
+#' chispatemp_dt(1, 2, rad_mat, data_rain)
+#' 
+#' @export
 chispatemp_dt <- function(lagt, lags, rad_mat, data_rain, quant_mat = NA,
                          q_fixed = NA) {
   if (!is.na(q_fixed)) {
@@ -356,27 +614,78 @@ chispatemp_dt <- function(lagt, lags, rad_mat, data_rain, quant_mat = NA,
 
 # VALIDATION -------------------------------------------------------------------
 
+#' Calculate the mean absolute error (MAE) between true values and
+#' predicted values.
+#'
+#' @param true_values A numeric vector of true values.
+#' @param predicted_values A numeric vector of predicted values.
+#' @return The mean absolute error between true values and predicted values.
+#'
+#' @examples
+#' true <- c(1, 2, 3)
+#' predicted <- c(1.5, 2.5, 3.5)
+#' mae(true, predicted)
+#'
+#' @export
 mae <- function(true_values, predicted_values) {
   return(mean(abs(true_values - predicted_values)))
 }
 
-rmse <- function(true_values, predicted_values) {
-  return(sqrt(mean((true_values - predicted_values)^2)))
+
+#' Calculate the root mean squared error (RMSE) between true values and
+#' predicted values.
+#'
+#' @param true_values The vector of true values.
+#' @param predicted_values The vector of predicted values.
+#' @return The root mean squared error (RMSE) between true values and
+#'         predicted values.
+#'
+#' @examples
+#' true_values <- c(1, 2, 3)
+#' predicted_values <- c(1.5, 2.5, 3.5)
+#' rmse <- calculate_rmse(true_values, predicted_values)
+#' print(rmse)
+#' # Output: 0.5
+#'
+#' @export
+calculate_rmse <- function(true_values, predicted_values) {
+  # Calculate the squared differences between true values and predicted values
+  squared_diff <- (true_values - predicted_values)^2
+
+  # Calculate the mean of squared differences
+  mean_squared_diff <- mean(squared_diff)
+
+  # Calculate the square root of mean squared differences
+  rmse <- sqrt(mean_squared_diff)
+
+  return(rmse)
 }
 
+#' Evaluate variogram estimates
+#'
+#' This function evaluates variogram estimates over all simulations and returns
+#' the mean, the RMSE and the MAE of the estimates.
+#' 
+#' @param list_simu The list of dataframes containing the simulations.
+#' @param quantile The quantile for the chiplot.
+#' @param true_param The true parameters of the simulations (beta, alpha).
+#' @param spatial Logical indicating whether to use spatial chi.
+#' @param df_dist The dataframe containing the distances between the sites for
+#'               spatial chi.
+#' @param tmax The maximum temporal lag for temporal chi.
+#' @param hmax The maximum spatial lag for spatial chi.
+#'
+#' @return A list containing the dataframe of valid results and the results.
+#'
+#' @import terra
+#' @import dplyr
+#' @import tidyr
+#'
+#' 
+#' @export
 evaluate_vario_estimates <- function(list_simu, quantile, true_param,
                                     spatial = TRUE, df_dist = NA,
                                     tmax = NA, hmax = NA) {
-  # functions to estimates variogram parameters over all simulations and return
-  # the mean, the RMSE and the MAE of the estimates
-  # list_simu: list of dataframes containing the simulations
-  # quantile: quantile for the chiplot
-  # true_param: true parameters of the simulations (beta, alpha)
-  # spatial = TRUE if spatial chi, FALSE if temporal chi
-  # df_dist: containing the distances between the sites for spatial chi
-  # tmax: maximum temporal lag for temporal chi
-  # hmax: maximum spatial lag for spatial chi
-
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
