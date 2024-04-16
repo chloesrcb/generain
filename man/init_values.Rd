@@ -21,8 +21,3 @@ It performs the necessary setup and initialization steps given a classical
 GPD distribution with a threshold equals to u. For EGPD, classical threshold
 will be u=0.
 }
-\examples{
-y <- c(1, 2, 3, 4, 5)
-initialize_values(y, 0)
-
-}

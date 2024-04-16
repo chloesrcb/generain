@@ -17,14 +17,10 @@
 #' @return A matrix containing the quantile values for each pair of variables
 #' in the dataset.
 #'
-#' @import evd
+#' @importFrom evd chiplot
 #' @import dplyr
 #' @importFrom graphics par
 #' @importFrom graphics abline
-#'
-#' @examples
-#' quantile_matrix(0.5, data_rain)
-#' quantile_matrix(0.9, data_rain, count_min = 100, step = 0.01)
 #'
 #' @export
 quantile_matrix <- function(q, data_rain, count_min = 80, step = 0.005,

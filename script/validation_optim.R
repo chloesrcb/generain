@@ -101,3 +101,33 @@ df_result <- evaluate_optim(list_BR, quantile = 0.8, true_param = true_param,
                             nmin = 10)
 # get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
+
+
+# Plot the results -------------------------------------------------------------
+
+# Load the ggplot2 library
+library(ggplot2)
+
+# Create the boxplot using ggplot
+p <- ggplot(df_result) +
+    geom_boxplot(aes(x = factor(1), y = beta1), fill = btfgreen,
+                                                color = "black") +
+    geom_boxplot(aes(x = factor(2), y = beta2), fill = btfgreen,
+                                                    color = "black") +
+    geom_boxplot(aes(x = factor(3), y = alpha1), fill = btfgreen,
+                                                color = "black") +
+    geom_boxplot(aes(x = factor(4), y = alpha2), fill = btfgreen,
+                                                color = "black") +
+    btf_theme +
+    ylab("Estimates") +
+    xlab("") +
+    scale_x_discrete(labels = c(TeX("$\\widehat{\\beta}_1$"),
+                                TeX("$\\widehat{\\beta}_2$"),
+                                TeX("$\\widehat{\\alpha}_1$"),
+                                TeX("$\\widehat{\\alpha}_2$")))
+
+# Save the plot
+phd_extremes_im <- "../../phd_extremes/thesis/resources/images"
+
+filename <- paste0(phd_extremes_im, "/loglike_optim/boxplot_BR_49s_100t.png")
+ggsave(plot = p, filename = filename, width = 10, height = 10)

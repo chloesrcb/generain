@@ -20,9 +20,3 @@ The theoretical chi value.
 This function calculates the individual theoretical spatio-temporal chi value
 based on a the variogram parameters, a spatial lag and a temporal lag.
 }
-\examples{
-params <- c(0.5, 0.2, 0.3, 0.4)
-h <- 0.1
-tau <- 0.01
-theoretical_chi_ind(params, h, tau)
-}

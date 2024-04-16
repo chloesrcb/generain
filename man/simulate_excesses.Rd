@@ -24,6 +24,3 @@ The simulated excesses matrix and the chi vector.
 This function simulates excesses following a binomial distribution with given
 probability parameters equal to the spatio-temporal extremogram values.
 }
-\examples{
-simulate_excesses(10, 5, c(1, 2, 3), 2, 3)
-}

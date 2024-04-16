@@ -7,9 +7,9 @@
 format_estimate(estimate, p_value)
 }
 \arguments{
-\item{estimates}{A numeric vector of coefficient estimates.}
+\item{estimate}{A numeric vector of coefficient estimates.}
 
-\item{p_values}{A numeric vector of p-values corresponding to the
+\item{p_value}{A numeric vector of p-values corresponding to the
 coefficient estimates.}
 }
 \value{
@@ -19,11 +19,4 @@ A character vector of formatted coefficient estimates
 \description{
 This function formats coefficient estimates by adding asterisks
 to indicate significance.
-}
-\examples{
-estimates <- c(0.05, 0.01, 0.001)
-p_values <- c(0.1, 0.05, 0.001)
-format_coefficients(estimates, p_values, 0.05)
-# Output: "0.05", "0.01*", "0.001**"
-
 }

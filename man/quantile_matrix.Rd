@@ -44,8 +44,3 @@ The count_min parameter specifies the minimum number of observations
 required to calculate a quantile.
 The step parameter determines the resolution of the quantile matrix.
 }
-\examples{
-quantile_matrix(0.5, data_rain)
-quantile_matrix(0.9, data_rain, count_min = 100, step = 0.01)
-
-}

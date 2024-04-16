@@ -19,6 +19,3 @@ The simulated individual excess.
 Simulate individual excess following a binomial distribution with a given
 probability parameter equals to the chi value.
 }
-\examples{
-simulate_excess_ind(10, 0.5)
-}

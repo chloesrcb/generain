@@ -4,7 +4,7 @@
 \alias{empirical_excesses}
 \title{empirical_excesses function}
 \usage{
-empirical_excesses(data_rain, quantile, tau, h_vect, df_dist)
+empirical_excesses(data_rain, quantile, tau, h_vect, df_dist, nmin = 5)
 }
 \arguments{
 \item{data_rain}{The rainfall data.}
@@ -16,6 +16,8 @@ empirical_excesses(data_rain, quantile, tau, h_vect, df_dist)
 \item{h_vect}{The spatial lag vector.}
 
 \item{df_dist}{The distances inside a long dataframe.}
+
+\item{nmin}{The minimum number of observations to consider.}
 }
 \value{
 A list with n_vect the number of excesses and N_vect the number of
@@ -24,7 +26,4 @@ possible excesses ie the number of observations for each pair of sites.
 \description{
 This function calculates the empirical excesses based on indicators above a
 quantile threshold.
-}
-\examples{
-empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
 }

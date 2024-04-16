@@ -20,8 +20,3 @@ The theoretical chi matrix.
 This function calculates the theoretical chi matrix based on the given
 parameters.
 }
-\examples{
-h_vect <- get_h_vect(df_dist, sqrt(17))
-tau <- 1:10
-theorical_chi_mat(params, h_vect, tau)
-}

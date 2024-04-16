@@ -155,6 +155,8 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @param tmax The tmax parameter.
 #' @param npoints The number of points parameter.
 #' @param weights The weights parameter.
+#' @param summary Logical value indicating whether to return the summary of the
+#'              model. Default is FALSE.
 #'
 #' @return The estimate of variotemp.
 #'
@@ -163,9 +165,6 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @import tidyr
 #' @import lmtest
 #'
-#' @examples
-#' get_estimate_variotemp(chitemp = 0.5, tmax = 100, npoints = 10,
-#'                        weights = c(0.2, 0.3, 0.5))
 #' 
 #' @export
 get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
@@ -211,14 +210,10 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
 #'
 #' @return A vector of spatial mean lags or the midpoint of the lags if 'mid' 
 #'         is TRUE.
-#' 
+#'
 #' @import terra
 #' @import dplyr
 #' @import tidyr
-#' 
-#' @examples
-#' spatial_mean_lags(5)
-#' spatial_mean_lags(10, mid = TRUE)
 #'
 #' @export
 spatial_mean_lags <- function(radius, mid = FALSE) {
@@ -252,13 +247,6 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
 #' @import dplyr
 #' @import tidyr
 #'
-#' @examples
-#' lags <- c(1, 2, 3, 4, 5)
-#' rad_mat <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
-#' data_rain <- c(10, 20, 30)
-#' quantile <- 0.5
-#' spatial_chi(lags, rad_mat, data_rain, quantile)
-#' 
 #' @export
 spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE, 
                         mid = TRUE) {
@@ -321,12 +309,6 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
 #'
 #' @return The spatial chi-squared distances.
 #'
-#' @examples
-#' df_dist <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
-#' data_rain <- c(10, 20, 30)
-#' quantile <- 0.5
-#' spatial_chi_alldist(df_dist, data_rain, quantile)
-#'
 #' @import terra
 #' @import dplyr
 #' @import tidyr
@@ -388,11 +370,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #' @import dplyr
 #' @import tidyr
 #' @import lmtest
-#' 
-#' @examples
-#' chispa <- data.frame(chi = c(0.5, 0.6, 0.7), lagspa = c(1, 2, 3))
-#' weights <- "residuals"
-#' get_estimate_variospa(chispa, weights)
+#'
 #' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   # eta transformation
@@ -464,7 +442,7 @@ eta <- function(chi) {
 #' @return The theorical spatio-temporal variogram.
 #'
 #' @import stats
-#' 
+#'
 #' @examples
 #' chi <- 0.5
 #' vario_spatemp(chi)
@@ -492,7 +470,7 @@ vario_spatemp <- function(chi) {
 #' alpha <- 0.5
 #' vario <- vario(x, c, alpha)
 #' print(vario)
-#' 
+#' # Output: [1] 2.718282 7.389056 20.085537 54.598150 148.413159
 #' @export
 vario <- function(x, c, alpha) {
   return(2 * exp(c) * x^alpha)
@@ -560,10 +538,7 @@ sd_vario <- function(x, vario, sd_c, sd_alpha) {
 #' @import terra
 #' @import dplyr
 #' @import tidyr
-#' 
-#' @examples
-#' chispatemp_dt(1, 2, rad_mat, data_rain)
-#' 
+#'
 #' @export
 chispatemp_dt <- function(lagt, lags, rad_mat, data_rain, quant_mat = NA,
                          q_fixed = NA) {
@@ -665,7 +640,7 @@ calculate_rmse <- function(true_values, predicted_values) {
 #'
 #' This function evaluates variogram estimates over all simulations and returns
 #' the mean, the RMSE and the MAE of the estimates.
-#' 
+#'
 #' @param list_simu The list of dataframes containing the simulations.
 #' @param quantile The quantile for the chiplot.
 #' @param true_param The true parameters of the simulations (beta, alpha).
@@ -678,10 +653,9 @@ calculate_rmse <- function(true_values, predicted_values) {
 #' @return A list containing the dataframe of valid results and the results.
 #'
 #' @import terra
-#' @import dplyr
 #' @import tidyr
+#' @import lmtest
 #'
-#' 
 #' @export
 evaluate_vario_estimates <- function(list_simu, quantile, true_param,
                                     spatial = TRUE, df_dist = NA,

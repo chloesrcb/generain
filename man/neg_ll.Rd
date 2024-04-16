@@ -30,7 +30,3 @@ with a probability parameter equals to the theorical spatio-temporal chi
 value. The number observations is different for each spatio-temporal
 configuration.
 }
-\examples{
-params <- c(0.5, 0.2, 0.3, 1)
-neg_ll(params, data)
-}

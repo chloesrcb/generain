@@ -18,8 +18,3 @@ A list containing the estimates of the EGPD parameters.
 This function calculates the estimates of the Extreme Generalized Pareto
 Distribution (EGPD) parameters.
 }
-\examples{
-data <- read.csv("rainfall_data.csv")
-estimates <- get_egpd_estimates(data, left_censoring = 10)
-
-}

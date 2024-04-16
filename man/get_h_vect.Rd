@@ -18,8 +18,3 @@ The h vector.
 This function calculates the spatial lag vector based on the given distance 
 dataframe and maximum spacial lag value.
 }
-\examples{
-hmax <- 2
-get_h_vect(df_dist, hmax)
-
-}

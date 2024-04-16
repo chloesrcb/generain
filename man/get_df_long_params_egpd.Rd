@@ -16,8 +16,3 @@ A long format dataframe.
 This function takes a dataframe of parameters and returns a long format 
 dataframe for EGPD estimates.
 }
-\examples{
-df <- data.frame(param1 = c(1, 2, 3), param2 = c("a", "b", "c"))
-get_df_long_params_egpd(df)
-
-}

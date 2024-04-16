@@ -23,15 +23,3 @@ The generated LaTeX table.
 This function generates a LaTeX table from a summary dataframe of WLSE
 results.
 }
-\examples{
-# Generate a summary dataframe
-summary_df <- data.frame(
-  Group = c("A", "B", "C"),
-  Mean = c(10, 20, 30),
-  SD = c(1, 2, 3)
-)
-
-# Generate LaTeX table from the summary dataframe
-wlse_tablatex(summary_df, 1)
-
-}

@@ -14,9 +14,9 @@
 #'
 #' @return A list with n_vect the number of excesses and N_vect the number of
 #' possible excesses ie the number of observations for each pair of sites.
+#' 
 #' @import tidyr
-#' @examples
-#' empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
+#' 
 #' @export
 empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
                                 nmin = 5) {
@@ -75,12 +75,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
 #' @return The theoretical chi value.
 #'
 #' @import stats
-#' 
-#' @examples
-#' params <- c(0.5, 0.2, 0.3, 0.4)
-#' h <- 0.1
-#' tau <- 0.01
-#' theoretical_chi_ind(params, h, tau)
+#'
 #' @export
 theorical_chi_ind <- function(params, h, tau) {
   # get variogram parameter
@@ -109,10 +104,6 @@ theorical_chi_ind <- function(params, h, tau) {
 #'
 #' @return The theoretical chi matrix.
 #'
-#' @examples
-#' h_vect <- get_h_vect(df_dist, sqrt(17))
-#' tau <- 1:10
-#' theorical_chi_mat(params, h_vect, tau)
 #' @export
 theorical_chi_mat <- function(params, h_vect, tau) {
   # Init matrix
@@ -140,11 +131,6 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #'
 #' @return The theorical spatio-temporal extremogram vector.
 #'
-#' @examples
-#' h_vect <- c(1, 2, 3)
-#' tau <- 1:3
-#' chi_mat <- theorical_chi_mat(params, h_vect, tau)
-#' chi_vect <- get_chi_vect(chi_mat, h_vect, tau, df_dist)
 #' @export
 get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
   df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
@@ -186,12 +172,9 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param df_dist The distances long dataframe.
 #' @param simu_exp A boolean value to indicate if the data is simulated with
 #'                 an exponential distribution.
-#' 
+#'
 #' @return The negative log-likelihood value.
 #'
-#' @examples
-#' params <- c(0.5, 0.2, 0.3, 1)
-#' neg_ll(params, data)
 #' @export
 neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   # params conditions
@@ -233,9 +216,7 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
 #' @return The simulated individual excess.
 #'
 #' @import stats
-#' 
-#' @examples
-#' simulate_excess_ind(10, 0.5)
+#'
 #' @export
 simulate_excess_ind <- function(Tmax, chi_h_t) {
   # simulate excesses following a binomial distribution
@@ -256,8 +237,6 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
 #'
 #' @return The simulated excesses matrix and the chi vector.
 #'
-#' @examples
-#' simulate_excesses(10, 5, c(1, 2, 3), 2, 3)
 #' @export
 simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
   df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
@@ -309,11 +288,9 @@ simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
 #'
 #' @import spam
 #' @import stats
-#' 
+#'
 #' @return The result of the optimization process as a dataframe.
 #'
-#' @examples
-#' evaluate_optim_simuExp(10, 100, 1:10, 1:10, chi_mat, df_dist)
 #' @export
 evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
                                    nconfig) {
@@ -356,14 +333,13 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @param df_dist The distances long dataframe
 #' @param method The optimization method to use "CG", "Nelder-Mead",
 #'               "BFGS", "SANN", "Brent" (default is "CG")
+#' @param nmin The minimum number of observations to consider
 #'
 #' @return The result of the optimization process as a dataframe.
 #'
 #' @import spam
 #' @import stats
 #'
-#' @examples
-#' evaluate_optim(list_simu, quantile, true_param, tau)
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                            method = "CG", nmin = 5) {
@@ -406,9 +382,9 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
 #' @param df_result The data frame containing the result values
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @return The calculated criterion value in a dataframe.
-#' 
+#'
 #' @import terra
-#' 
+#'
 #' @export
 get_criterion <- function(df_result, true_param) {
     # remove NA values

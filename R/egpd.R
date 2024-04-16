@@ -13,10 +13,6 @@
 #'
 #' @import mev
 #'
-#' @examples
-#' y <- c(1, 2, 3, 4, 5)
-#' initialize_values(y, 0)
-#'
 #' @export
 init_values <- function(y, u) {
   gpfit <- gp.fit(y, u) # Fit the GPD
@@ -35,10 +31,6 @@ init_values <- function(y, u) {
 #' @param left_censoring The threshold for left censoring. Default is 0.
 #'
 #' @return A list containing the estimates of the EGPD parameters.
-#'
-#' @examples
-#' data <- read.csv("rainfall_data.csv")
-#' estimates <- get_egpd_estimates(data, left_censoring = 10)
 #'
 #' @export
 get_egpd_estimates <- function(rain_df, left_censoring = 0) {
@@ -82,9 +74,6 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
 #' @import tidyr
 #'
 #' @return A long format dataframe.
-#' @examples
-#' df <- data.frame(param1 = c(1, 2, 3), param2 = c("a", "b", "c"))
-#' get_df_long_params_egpd(df)
 #'
 #' @export
 get_df_long_params_egpd <- function(df_params) {
@@ -139,10 +128,6 @@ dgpdExt1 <- function(x, kappa, sigma, gamma){
 #' @importFrom scoringRules crps_sample
 #' @importFrom scoringRules crps
 #'
-#' @examples
-#' rain_df <- data.frame(rnorm(100), rnorm(100))
-#' censore <- seq(0.1, 5, 0.01)
-#' choose_censore(rain_df, censore, nb_simu = 100)
 #'
 #' @export
 choose_censore <- function(rain_df, censore, nb_simu = 100) {

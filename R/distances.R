@@ -76,10 +76,6 @@ reshape_distances <- function(dist_mat) {
 #'
 #' @import terra
 #'
-#' @examples
-#' hmax <- 2
-#' get_h_vect(df_dist, hmax)
-#'
 #' @export
 get_h_vect <- function(df_dist, hmax) {
   # get unique distances

@@ -22,9 +22,3 @@ The theorical spatio-temporal extremogram vector.
 This function calculates the theorical spatio-temporal extremogram vector
 based on the given theorical spatio-temporal extremogram matrix.
 }
-\examples{
-h_vect <- c(1, 2, 3)
-tau <- 1:3
-chi_mat <- theorical_chi_mat(params, h_vect, tau)
-chi_vect <- get_chi_vect(chi_mat, h_vect, tau, df_dist)
-}

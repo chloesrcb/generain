@@ -29,9 +29,3 @@ None
 \description{
 This function saves a LaTeX table to a file.
 }
-\examples{
-table <- "\\\\begin{tabular}{cc} \\\\hline A & B \\\\\\\\ \\\\hline 1 & 2 \\\\\\\\ \\\\hline \\\\end{tabular}"
-save_tablatex(table_latex = table,
-              filename = "table.tex", pval = TRUE)
-
-}

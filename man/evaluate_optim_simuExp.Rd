@@ -29,6 +29,3 @@ This function evaluates the optimization process using simulated experiments.
 Simulation of excesses is performed considering a binomial distribution with
 a probability parameter equals to the spatio-temporal extremogram value.
 }
-\examples{
-evaluate_optim_simuExp(10, 100, 1:10, 1:10, chi_mat, df_dist)
-}

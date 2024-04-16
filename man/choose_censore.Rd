@@ -21,9 +21,3 @@ The selected censored data in a datafram according to the NRMSE and
 This function selects the censored data from a rain_df dataframe for each
 site according to the NRMSE and RMSE.
 }
-\examples{
-rain_df <- data.frame(rnorm(100), rnorm(100))
-censore <- seq(0.1, 5, 0.01)
-choose_censore(rain_df, censore, nb_simu = 100)
-
-}

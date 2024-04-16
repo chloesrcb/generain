@@ -1,23 +1,15 @@
-library(kableExtra)
-
 #' Formats p-values with asterisks
 #'
 #'This function formats coefficient estimates by adding asterisks
 #' to indicate significance.
 #'
-#' @param estimates A numeric vector of coefficient estimates.
-#' @param p_values A numeric vector of p-values corresponding to the
+#' @param estimate A numeric vector of coefficient estimates.
+#' @param p_value A numeric vector of p-values corresponding to the
 #'                 coefficient estimates.
 #'
 #' @return A character vector of formatted coefficient estimates
 #'          with asterisks indicating significance.
 #'
-#' @examples
-#' estimates <- c(0.05, 0.01, 0.001)
-#' p_values <- c(0.1, 0.05, 0.001)
-#' format_coefficients(estimates, p_values, 0.05)
-#' # Output: "0.05", "0.01*", "0.001**"
-#' 
 #' @export
 format_estimate <- function(estimate, p_value) {
   asterisks <- ifelse(p_value < 0.001, "***",
@@ -41,11 +33,7 @@ format_estimate <- function(estimate, p_value) {
 #'
 #' @return None
 #'
-#' @examples
-#' table <- "\\begin{tabular}{cc} \\hline A & B \\\\ \\hline 1 & 2 \\\\ \\hline \\end{tabular}"
-#' save_tablatex(table_latex = table,
-#'               filename = "table.tex", pval = TRUE)
-#'
+#' @export
 save_tablatex <- function(table_latex, filename = "", pval = FALSE,
                     tab_folder = "/tables/") {
     # Add custom LaTeX code for font size
@@ -89,17 +77,6 @@ save_tablatex <- function(table_latex, filename = "", pval = FALSE,
 #' @import kableExtra
 #' @import knitr
 #' @import dplyr
-#' 
-#' @examples
-#' # Generate a summary dataframe
-#' summary_df <- data.frame(
-#'   Group = c("A", "B", "C"),
-#'   Mean = c(10, 20, 30),
-#'   SD = c(1, 2, 3)
-#' )
-#'
-#' # Generate LaTeX table from the summary dataframe
-#' wlse_tablatex(summary_df, 1)
 #'
 #' @export
 wlse_tablatex <- function(summary_df, ind, filename = "") {

@@ -4,7 +4,15 @@
 \alias{evaluate_optim}
 \title{evaluate_optim function}
 \usage{
-evaluate_optim(list_simu, quantile, true_param, tau, df_dist)
+evaluate_optim(
+  list_simu,
+  quantile,
+  true_param,
+  tau,
+  df_dist,
+  method = "CG",
+  nmin = 5
+)
 }
 \arguments{
 \item{list_simu}{A list of simulated data}
@@ -16,6 +24,11 @@ evaluate_optim(list_simu, quantile, true_param, tau, df_dist)
 \item{tau}{The temporal lag vector}
 
 \item{df_dist}{The distances long dataframe}
+
+\item{method}{The optimization method to use "CG", "Nelder-Mead",
+"BFGS", "SANN", "Brent" (default is "CG")}
+
+\item{nmin}{The minimum number of observations to consider}
 }
 \value{
 The result of the optimization process as a dataframe.
@@ -24,7 +37,4 @@ The result of the optimization process as a dataframe.
 This function evaluates the optimization process on simulated data (for
 example, following a Brown-Resnick process) using the negative
 log-likelihood function.
-}
-\examples{
-evaluate_optim(list_simu, quantile, true_param, tau)
 }
