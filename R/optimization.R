@@ -10,6 +10,7 @@
 #' @param tau The temporal lag vector.
 #' @param h_vect The spatial lag vector.
 #' @param df_dist The distances inside a long dataframe.
+#' @param nmin The minimum number of observations to consider.
 #'
 #' @return A list with n_vect the number of excesses and N_vect the number of
 #' possible excesses ie the number of observations for each pair of sites.
@@ -17,7 +18,8 @@
 #' @examples
 #' empirical_excesses(data_rain, 0.95, 1:10, c(0.1, 0.2, 0.3), df_dist)
 #' @export
-empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
+empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
+                                nmin = 5) {
   Tmax <- nrow(data_rain) # number of time steps
   q <- quantile # quantile
   df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
@@ -38,7 +40,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist) {
       rain_lag <- rains2[(1 + t):Tmax] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get final couple
       n <- nrow(data_cp)
-      if (n < 5) { # if not enough data
+      if (n < nmin) { # if not enough data
         n_vect <- c(n_vect, NA)
         N_vect <- c(N_vect, NA)
       } else {
@@ -352,6 +354,8 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param tau The temporal lag vector
 #' @param df_dist The distances long dataframe
+#' @param method The optimization method to use "CG", "Nelder-Mead",
+#'               "BFGS", "SANN", "Brent" (default is "CG")
 #'
 #' @return The result of the optimization process as a dataframe.
 #'
@@ -361,7 +365,8 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @examples
 #' evaluate_optim(list_simu, quantile, true_param, tau)
 #' @export
-evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist) {
+evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
+                           method = "CG", nmin = 5) {
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
@@ -370,13 +375,15 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist) {
   h_vect <- get_h_vect(df_dist, sqrt(17))
   # for all simulations
   for (n in 1:n_res) {
-    simu_df <- as.data.frame(list_simu[[n]])
-    excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist)
-
+    simu_df <- as.data.frame(list_simu[[n]]) # get the simulation dataframe
+    # get the empirical excesses
+    excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist,
+                                   nmin)
+    # optimize the negative log-likelihood function
     tryCatch({
         result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
             excesses = excesses, h_vect = h_vect, tau = tau,
-            df_dist = df_dist, method = "CG")
+            df_dist = df_dist, method = method)
         params <- result$par
         df_result$beta1[n] <- params[1]
         df_result$beta2[n] <- params[2]

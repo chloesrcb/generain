@@ -77,6 +77,7 @@ result$par
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = param,
                             tau = 1:10, df_dist = df_dist)
 
+get_criterion(df_result, param)
 # simu 2
 
 list_BR <- list()
@@ -107,3 +108,5 @@ result$par
 
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = param,
                             tau = 1:10, df_dist = df_dist)
+
+get_criterion(df_result, param)
