@@ -28,11 +28,3 @@ The spatial extremogram.
 This function calculates the spatial extremogram for a given lags vector and
 and radius matrix and rainfall data.
 }
-\examples{
-lags <- c(1, 2, 3, 4, 5)
-rad_mat <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
-data_rain <- c(10, 20, 30)
-quantile <- 0.5
-spatial_chi(lags, rad_mat, data_rain, quantile)
-
-}

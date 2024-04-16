@@ -14,6 +14,9 @@ get_estimate_variotemp(chitemp, tmax, npoints, weights, summary = FALSE)
 \item{npoints}{The number of points parameter.}
 
 \item{weights}{The weights parameter.}
+
+\item{summary}{Logical value indicating whether to return the summary of the
+model. Default is FALSE.}
 }
 \value{
 The estimate of variotemp.
@@ -21,9 +24,4 @@ The estimate of variotemp.
 \description{
 This function calculates the estimate of variotemp based on the given
 parameters.
-}
-\examples{
-get_estimate_variotemp(chitemp = 0.5, tmax = 100, npoints = 10,
-                       weights = c(0.2, 0.3, 0.5))
-
 }

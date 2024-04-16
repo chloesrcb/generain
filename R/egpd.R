@@ -98,10 +98,10 @@ get_df_long_params_egpd <- function(df_params) {
 #' @param gamma The gamma parameter (shape).
 #'
 #' @return The calculated dgpdExt1 value.
+#' 
+#' @import POT
 #'
-#' @examples
-#' dgpdExt1(1:10, 2, 0.5, 1)
-#'
+#' @export
 dgpdExt1 <- function(x, kappa, sigma, gamma){
   h <- dgpd(x / sigma, loc=0, scale=sigma, shape=gamma)
   H <- pgpd(x / sigma, loc=0, scale=sigma, shape=gamma)

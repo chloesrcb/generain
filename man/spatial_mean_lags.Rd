@@ -21,8 +21,3 @@ This function calculates the spatial mean lags based on a given radius.
 The function takes an optional argument 'mid' which determines whether
 the midpoint of the lags should be returned instead of the full lags.
 }
-\examples{
-spatial_mean_lags(5)
-spatial_mean_lags(10, mid = TRUE)
-
-}

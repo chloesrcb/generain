@@ -26,5 +26,5 @@ c <- 1
 alpha <- 0.5
 vario <- vario(x, c, alpha)
 print(vario)
-
+# Output: [1] 2.718282 7.389056 20.085537 54.598150 148.413159
 }

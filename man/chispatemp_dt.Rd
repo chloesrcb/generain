@@ -25,7 +25,3 @@ The result of the chi-squared spatial-temporal dependence test.
 \description{
 This function calculates the chi-squared spatial-temporal dependence test.
 }
-\examples{
-chispatemp_dt(1, 2, rad_mat, data_rain)
-
-}

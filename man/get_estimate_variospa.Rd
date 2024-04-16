@@ -23,8 +23,3 @@ This function calculates the estimate of the spatial variogram parameters
 based on the given spatial chi values. It uses the Weighted Least Squares
 Estimation (WLSE) method to estimate the parameters.
 }
-\examples{
-chispa <- data.frame(chi = c(0.5, 0.6, 0.7), lagspa = c(1, 2, 3))
-weights <- "residuals"
-get_estimate_variospa(chispa, weights)
-}

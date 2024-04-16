@@ -25,10 +25,3 @@ The spatial chi-squared distances.
 This function calculates the spatial extremogram for a given
 distance matrix and rainfall data.
 }
-\examples{
-df_dist <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), nrow = 3)
-data_rain <- c(10, 20, 30)
-quantile <- 0.5
-spatial_chi_alldist(df_dist, data_rain, quantile)
-
-}
