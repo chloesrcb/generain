@@ -110,10 +110,11 @@ theorical_chi_mat <- function(params, h_vect, tau) {
   chi <- matrix(0, nrow = length(tau), ncol = length(h_vect))
 
   # for each spatial lag
-  for (h in h_vect) {
+  for (j in seq_along(h_vect)) {
       # Get vario and chi for each lagtemp
+      h <- h_vect[j]
       for (t in seq_along(tau)) {
-          chi[t, h] <- theorical_chi_ind(params, h, tau[t])
+          chi[t, j] <- theorical_chi_ind(params, h, tau[t])
       }
   }
   return(chi)
@@ -182,9 +183,16 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
-  if (alpha1 <= 0 || alpha2 <= 0 || alpha1 >= 2 || alpha2 >= 2 || beta1 <= 0 ||
-      beta2 <= 0) { # if parameters are not in the right range
-    return(Inf)
+
+#   if (length(params) != 4) {
+#     adv <- params[5:6]
+#   }
+
+  if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
+    abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.00001 || abs(beta2) <= 0.00001 ||
+    alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
+    alpha1 >= 2 || alpha2 >= 2) {
+      return(Inf)
   }
 
   N_vect <- excesses$N_vect # number of observations
