@@ -14,7 +14,7 @@ source("load_libraries.R")
 source("../R/utils.R")
 source("../R/distances.R")
 source("../R/optimization.R")
-
+library(generain)
 ################################################################################
 # Test on exponential ----------------------------------------------------------
 ################################################################################
@@ -25,7 +25,7 @@ source("../R/optimization.R")
 nsites <- 25
 df_dist <- distances_regular_grid(nsites) # distance matrix
 npairs <- nrow(df_dist) # number of pairs
-h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
+h_vect <- get_h_vect(df_dist, sqrt(17), vectors=TRUE) # spatial lags
 tau_vect <- 1:10 # temporal lags
 nconfig <- npairs * length(tau_vect) # number of configurations
 Tmax <- 100 # number of time steps
@@ -39,7 +39,6 @@ df_result <- evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 
 true_param <- c(0.4, 0.2, 1.5, 1) # true parameters
 df_valid_exp <- get_criterion(df_result, true_param) # get RMSE, MAE, Mean
-
 
 ################################################################################
 # BR SIMU ----------------------------------------------------------------------
@@ -102,6 +101,27 @@ df_result <- evaluate_optim(list_BR, quantile = 0.8, true_param = true_param,
 # get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
 
+
+# simu with advection ----------------------------------------------------------
+
+# Simulation with 9 sites and 50 times and advection
+list_BR_adv_9_50 <- list()
+for (i in 1:10) {
+  file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i, ".csv")
+  df <- read.csv(file_path)
+  list_BR_adv_9_50[[i]] <- df
+}
+
+BR_df <- list_BR_adv_9_50[[1]] # first simulation
+nsites <- ncol(BR_df) # number of sites
+df_dist <- distances_regular_grid(nsites) # distance matrix
+h_vect <- get_h_vect(df_dist, sqrt(9)) # spatial lags
+
+# for one simulation
+excesses <- empirical_excesses(BR_df, 0.5, 1:10, h_vect, df_dist, nmin = 2)
+result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
+                h_vect = h_vect, tau = 1:10, df_dist = df_dist,
+                method = "CG", control=list(parscale=c(0.1, 0.1, 1, 1)))
 
 # Plot the results -------------------------------------------------------------
 
