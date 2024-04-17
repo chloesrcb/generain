@@ -31,7 +31,6 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
 }
 
 
-
 #' This function reshapes a distance matrix into a long dataframe.
 #'
 #' @param dist_mat The input distance matrix.
@@ -67,12 +66,14 @@ reshape_distances <- function(dist_mat) {
 
 #' get_h_vect function
 #'
-#' This function calculates the spatial lag vector based on the given distance 
+#' This function calculates the spatial lag vector based on the given distance
 #' dataframe and maximum spacial lag value.
 #'
 #' @param df_dist The distance dataframe.
 #' @param hmax The maximum spacial lag value.
-#' @return The h vector.
+#' @param vectors A logical value indicating whether to return the spatial
+#'                lag vectors. Default is FALSE for only distance lags (norm).
+#' @return The spatial distance lags vector or list of lag vectors.
 #'
 #' @import terra
 #'
@@ -111,12 +112,13 @@ get_euclidean_distance <- function(point1, point2) {
 #'
 #' @import spam
 #' @import tidyr
+#' @import reshape2
 #'
 #' @examples
 #' distances_regular_grid(25)
 #'
 #' @export
-distances_regular_grid <- function(nsites) {
+distances_regular_grid <- function(nsites, adv = 0, tau = 1:10) {
   # distances
   grid_size <- sqrt(nsites)
   # Calculate the spatial coordinates of the regular grid
@@ -125,18 +127,31 @@ distances_regular_grid <- function(nsites) {
   grid_points <- cbind(x_coords, y_coords)
   sites_coords <- data.frame(grid_points)
   colnames(sites_coords) <- c("Latitude", "Longitude")
-  distances <- matrix(0, nrow = grid_size^2, ncol = grid_size^2)
-
-  for (i in 1:(grid_size^2)) {
-    for (j in 1:(grid_size^2)) {
-      distances[i, j] <- get_euclidean_distance(grid_points[i, ],
-                                                grid_points[j, ])
+  if (adv == 0) {
+    distances <- matrix(0, nrow = grid_size^2, ncol = grid_size^2)
+    for (i in 1:(grid_size^2)) {
+      for (j in 1:(grid_size^2)) {
+        distances[i, j] <- get_euclidean_distance(grid_points[i, ],
+                                                  grid_points[j, ])
+      }
+    }
+  } else {
+    distances <- array(0, dim = c(grid_size^2, grid_size^2, length(tau)))
+    for (i in 1:(grid_size^2)) {
+      for (j in 1:(grid_size^2)) {
+        for (k in seq_along(tau)) {
+          x1 <- grid_points[i, 1]  - adv[1] * tau[k]
+          y1 <- grid_points[i, 2] - adv[2] * tau[k]
+          x2 <- grid_points[j, 1] - adv[1] * tau[k]
+          y2 <- grid_points[j, 2] - adv[2] * tau[k]
+          distances[i, j, k] <- get_euclidean_distance(c(x1, y1), c(x2, y2))
+        }
+      }
     }
   }
-
-  dist_matrix <- as.matrix(distances)
-  rownames(dist_matrix) <- c(1:nsites)
-  colnames(dist_matrix) <- c(1:nsites)
-  df_dist <- reshape_distances(dist_matrix)
-  return(df_dist)
+  # Convert array to long dataframe
+  df_dist_long <- melt(distances)
+  colnames(df_dist_long) <- c("Y", "X", "value")
+  # df_dist <- reshape_distances(dist_matrix)
+  return(df_dist_long)
 }
