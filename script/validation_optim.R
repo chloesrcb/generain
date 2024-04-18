@@ -25,7 +25,7 @@ library(generain)
 nsites <- 25
 df_dist <- distances_regular_grid(nsites) # distance matrix
 npairs <- nrow(df_dist) # number of pairs
-h_vect <- get_h_vect(df_dist, sqrt(17), vectors=TRUE) # spatial lags
+h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 tau_vect <- 1:10 # temporal lags
 nconfig <- npairs * length(tau_vect) # number of configurations
 Tmax <- 100 # number of time steps
@@ -33,7 +33,7 @@ Tmax <- 100 # number of time steps
 chi <- theorical_chi_mat(c(0.4, 0.2, 1.5, 1), h_vect, tau_vect) # chi matrix
 
 # simulate expo and optimize
-n_res <- 100 # number of simulations
+n_res <- 10 # number of simulations
 df_result <- evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
                                     nconfig)
 
@@ -64,7 +64,8 @@ df_dist <- distances_regular_grid(nsites) # distance matrix
 h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
-                            tau = 1:10, df_dist = df_dist)
+                            tau = 1:10, df_dist = df_dist,
+                            parscale = c(0.01, 0.01, 1, 1))
 
 df_valid_1 <- get_criterion(df_result, param)
 
@@ -88,18 +89,23 @@ df_dist <- distances_regular_grid(nsites) # distance matrix
 h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 # for one simulation
-excesses <- empirical_excesses(BR_df, 0.8, 1:10, h_vect, df_dist, nmin = 10)
+excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
 result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
-                h_vect = h_vect, tau = 1:10, df_dist = df_dist,
-                method = "CG")
+                h_vect = h_vect, tau = 1:10, df_dist = df_dist)
+
 result$par # estimated parameters
 
 # for all simulations
-df_result <- evaluate_optim(list_BR, quantile = 0.8, true_param = true_param,
+df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist, method = "CG",
-                            nmin = 10)
-# get RMSE, MAE, Mean
+                            nmin = 5, parscale = c(0.01, 0.01, 1, 1))
+install# get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
+
+# Save df_result and df_valid in a file
+write.table(df_result, file = "results.txt", sep = "\t", row.names = FALSE)
+write.table(df_valid, file = "results.txt", sep = "\t", row.names = FALSE, append = TRUE)
+
 
 
 # simu with advection ----------------------------------------------------------

@@ -184,10 +184,6 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   alpha1 <- params[3]
   alpha2 <- params[4]
 
-#   if (length(params) != 4) {
-#     adv <- params[5:6]
-#   }
-
   if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
     abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.00001 || abs(beta2) <= 0.00001 ||
     alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
@@ -206,7 +202,7 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
   # negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
-#   print(nll)
+  print(nll)
   return(nll)
 }
 
@@ -339,9 +335,12 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param tau The temporal lag vector
 #' @param df_dist The distances long dataframe
+#' @param hmax The maximum spatial lag value. Default is NA.
 #' @param method The optimization method to use "CG", "Nelder-Mead",
 #'               "BFGS", "SANN", "Brent" (default is "CG")
 #' @param nmin The minimum number of observations to consider
+#' @param parscale The scaling parameter for the optimization process. Default
+#'                 is c(1, 1, 1, 1).
 #'
 #' @return The result of the optimization process as a dataframe.
 #'
@@ -350,7 +349,14 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #'
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
-                           method = "CG", nmin = 5) {
+                            hmax = NA, method = "CG", nmin = 5,
+                            parscale = c(1, 1, 1, 1)) {
+  # if there is advection
+  if (length(true_param) == 6) {
+    adv <- params[5:6]
+    nsites <- length(unique(df_dist$X))
+    df_dist <- distances_regular_grid(nsites, adv = adv, tau = tau)
+  }
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
@@ -367,7 +373,8 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
     tryCatch({
         result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
             excesses = excesses, h_vect = h_vect, tau = tau,
-            df_dist = df_dist, method = method)
+            df_dist = df_dist, method = method,
+            control = list(parscale = parscale))
         params <- result$par
         df_result$beta1[n] <- params[1]
         df_result$beta2[n] <- params[2]
