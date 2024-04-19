@@ -73,6 +73,7 @@ df_valid_1 <- get_criterion(df_result, param)
 
 # true parameters
 # beta1, beta2, alpha1, alpha2
+
 true_param <- c(0.4, 0.2, 1.5, 1)
 
 # Iterate through files from 1 to 100
@@ -96,9 +97,12 @@ result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
 result$par # estimated parameters
 
 # for all simulations
+start_time <- Sys.time()
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist, method = "CG",
                             nmin = 5, parscale = c(0.01, 0.01, 1, 1))
+end_time <- Sys.time()
+print(end_time - start_time)
 # get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
 
