@@ -9,7 +9,6 @@ library(reshape2)
 # spatial 
 library(raster)
 library(rasterVis)
-library(terra)
 library(elevatr)
 library(rgeos)
 library(leaflet)

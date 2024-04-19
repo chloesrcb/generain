@@ -5,7 +5,7 @@
 \title{distances_regular_grid calculates the distances between sites on a regular
 grid.}
 \usage{
-distances_regular_grid(nsites)
+distances_regular_grid(nsites, adv = c(0, 0), tau = 1:10)
 }
 \arguments{
 \item{nsites}{the number of sites on the grid ie nb of pixels squared}

@@ -16,7 +16,6 @@ Imports:
   stats,
   ggplot2,
   reshape2,
-  terra,
   geodist,
   ismev,
   evd,

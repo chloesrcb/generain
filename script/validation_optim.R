@@ -102,12 +102,6 @@ df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
 # get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
 
-# Save df_result and df_valid in a file
-write.table(df_result, file = "results.txt", sep = "\t", row.names = FALSE)
-write.table(df_valid, file = "results.txt", sep = "\t", row.names = FALSE, append = TRUE)
-
-
-
 # simu with advection ----------------------------------------------------------
 
 # Simulation with 9 sites and 50 times and advection
@@ -117,23 +111,26 @@ for (i in 1:10) {
   df <- read.csv(file_path)
   list_BR_adv_9_50[[i]] <- df
 }
-
+adv <- c(0.05, 0.05) # advection
+tau <- 1:5 # temporal lags
 BR_df <- list_BR_adv_9_50[[1]] # first simulation
 nsites <- ncol(BR_df) # number of sites
 df_dist <- distances_regular_grid(nsites) # distance matrix
-h_vect <- get_h_vect(df_dist, sqrt(9)) # spatial lags
+h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 # for one simulation
-excesses <- empirical_excesses(BR_df, 0.5, 1:10, h_vect, df_dist, nmin = 2)
-result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
-                h_vect = h_vect, tau = 1:10, df_dist = df_dist,
-                method = "CG", control=list(parscale=c(0.1, 0.1, 1, 1)))
+excesses <- empirical_excesses(BR_df, 0.6, tau, h_vect, df_dist, nmin = 5)
+result <- optim(par = c(0.4, 0.2, 1.5, 1, adv), fn = neg_ll,
+                excesses = excesses, simu = BR_df, quantile = 0.6,
+                h_vect = h_vect, tau = tau, df_dist = df_dist,
+                method = "CG",
+                control = list(parscale = c(0.1, 0.1, 1, 1, 0.01, 0.01)))
 
 # Plot the results -------------------------------------------------------------
 
 # Load the ggplot2 library
 library(ggplot2)
-
+df_result <- df_result_400
 # Create the boxplot using ggplot
 p <- ggplot(df_result) +
     geom_boxplot(aes(x = factor(1), y = beta1), fill = btfgreen,
@@ -155,5 +152,5 @@ p <- ggplot(df_result) +
 # Save the plot
 phd_extremes_im <- "../../phd_extremes/thesis/resources/images"
 
-filename <- paste0(phd_extremes_im, "/loglike_optim/boxplot_BR_49s_100t.png")
+filename <- paste0(phd_extremes_im, "/validation/boxplot_depmodel_400s_50t.png")
 ggsave(plot = p, filename = filename, width = 10, height = 10)

@@ -8,7 +8,6 @@
 #'
 #' @return The chi-square statistic.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -56,7 +55,6 @@ get_chiq <- function(data, quantile) {
 #'
 #' @return The temporal chi statistic.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -111,7 +109,6 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
 #'               or "none"
 #' @return The calculated temporal chi value.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #' @import lmtest
@@ -160,7 +157,6 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #'
 #' @return The estimate of variotemp.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #' @import lmtest
@@ -211,7 +207,6 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
 #' @return A vector of spatial mean lags or the midpoint of the lags if 'mid' 
 #'         is TRUE.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -243,7 +238,6 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
 #'
 #' @return The spatial extremogram.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -253,6 +247,7 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
   # initialize values
   chi_slag <- c()
   chi_val <- c()
+  q <- quantile
   # get mid values for each intervals for the plot
   if (mid) {
     h_vect <- spatial_mean_lags(lags) # get mean values for the plot
@@ -309,7 +304,6 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
 #'
 #' @return The spatial chi-squared distances.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -317,6 +311,7 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
 spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
                                 comephore = FALSE) {
   chi_slag <- c()
+  q <- quantile
   # initialize values
   if (comephore) {
     df_dist$value <- ceiling(df_dist$value / 100) * 100 / 1000 # in km
@@ -366,7 +361,6 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #'
 #' @return The estimated spatial variogram parameters.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #' @import lmtest
@@ -535,7 +529,6 @@ sd_vario <- function(x, vario, sd_c, sd_alpha) {
 #'
 #' @return The result of the chi-squared spatial-temporal dependence test.
 #'
-#' @import terra
 #' @import dplyr
 #' @import tidyr
 #'
@@ -652,8 +645,6 @@ calculate_rmse <- function(true_values, predicted_values) {
 #'
 #' @return A list containing the dataframe of valid results and the results.
 #'
-#' @import terra
-#' @import tidyr
 #' @import lmtest
 #'
 #' @export
@@ -680,19 +671,5 @@ evaluate_vario_estimates <- function(list_simu, quantile, true_param,
     df_result$alpha[n] <- params[2]
   }
 
-  mean_beta <- mean(df_result$beta)
-  mean_alpha <- mean(df_result$alpha)
-
-  rmse_beta <- sqrt(mean((true_param[1] - df_result$beta)^2))
-  rmse_alpha <- sqrt(mean((true_param[2] - df_result$alpha)^2))
-
-  mae_beta <- mean(abs(true_param[1] - df_result$beta))
-  mae_alpha <- mean(abs(true_param[2] - df_result$alpha))
-
-  df_valid <- data.frame(mean = c(mean_beta, mean_alpha),
-                        rmse = c(rmse_beta, rmse_alpha),
-                        mae = c(mae_beta, mae_alpha),
-                        row.names = c("beta", "alpha"))
-
-  return(list(df_valid = df_valid, results = df_result))
+  return(df_result)
 }

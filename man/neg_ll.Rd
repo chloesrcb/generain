@@ -4,7 +4,17 @@
 \alias{neg_ll}
 \title{neg_ll function}
 \usage{
-neg_ll(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE)
+neg_ll(
+  params,
+  excesses,
+  h_vect,
+  tau,
+  df_dist,
+  simu_exp = FALSE,
+  simu = NA,
+  quantile = 0.9,
+  nmin = 5
+)
 }
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}

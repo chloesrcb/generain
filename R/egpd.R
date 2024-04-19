@@ -122,7 +122,6 @@ dgpdExt1 <- function(x, kappa, sigma, gamma){
 #' @return The selected censored data in a datafram according to the NRMSE and
 #'         RMSE. # TODO: add CRPS
 #'
-#' @import terra
 #' @importFrom mev qextgp
 #' @importFrom mev rextgp
 #' @importFrom scoringRules crps_sample

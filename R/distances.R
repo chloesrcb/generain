@@ -37,8 +37,6 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
 #' @return A dataframe containing the reshaped distances.
 #'
 #' @import reshape2
-#' @import spam
-#' @import terra
 #'
 #' @export
 reshape_distances <- function(dist_mat) {
@@ -74,8 +72,6 @@ reshape_distances <- function(dist_mat) {
 #' @param vectors A logical value indicating whether to return the spatial
 #'                lag vectors. Default is FALSE for only distance lags (norm).
 #' @return The spatial distance lags vector or list of lag vectors.
-#'
-#' @import terra
 #'
 #' @export
 get_h_vect <- function(df_dist, hmax) {
@@ -118,7 +114,7 @@ get_euclidean_distance <- function(point1, point2) {
 #' distances_regular_grid(25)
 #'
 #' @export
-distances_regular_grid <- function(nsites, adv = 0, tau = 1:10) {
+distances_regular_grid <- function(nsites, adv = c(0, 0), tau = 1:10) {
   # distances
   grid_size <- sqrt(nsites)
   # Calculate the spatial coordinates of the regular grid
@@ -127,7 +123,7 @@ distances_regular_grid <- function(nsites, adv = 0, tau = 1:10) {
   grid_points <- cbind(x_coords, y_coords)
   sites_coords <- data.frame(grid_points)
   colnames(sites_coords) <- c("Latitude", "Longitude")
-  if (adv == 0) {
+  if (all(adv == c(0, 0))) {
     distances <- matrix(0, nrow = grid_size^2, ncol = grid_size^2)
     for (i in 1:(grid_size^2)) {
       for (j in 1:(grid_size^2)) {

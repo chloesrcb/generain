@@ -10,11 +10,14 @@ get_h_vect(df_dist, hmax)
 \item{df_dist}{The distance dataframe.}
 
 \item{hmax}{The maximum spacial lag value.}
+
+\item{vectors}{A logical value indicating whether to return the spatial
+lag vectors. Default is FALSE for only distance lags (norm).}
 }
 \value{
-The h vector.
+The spatial distance lags vector or list of lag vectors.
 }
 \description{
-This function calculates the spatial lag vector based on the given distance 
+This function calculates the spatial lag vector based on the given distance
 dataframe and maximum spacial lag value.
 }

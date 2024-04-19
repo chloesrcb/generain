@@ -177,15 +177,27 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @return The negative log-likelihood value.
 #'
 #' @export
-neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
+neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
+                   simu = NA, quantile = 0.9, nmin = 5) {
   # params conditions
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
+  df_dist_new <- df_dist
+  print(params)
+
+  if (length(params) == 6) {
+    adv <- params[5:6]
+    nsites <- length(unique(df_dist$X))
+    df_dist_new <- distances_regular_grid(nsites, adv = adv, tau = tau)
+    h_vect <- get_h_vect(df_dist_new, sqrt(17))
+    excesses <- empirical_excesses(simu, quantile, tau, h_vect, df_dist,
+                                    nmin = nmin)
+  }
 
   if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
-    abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.00001 || abs(beta2) <= 0.00001 ||
+    abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.0001 || abs(beta2) <= 0.0001 ||
     alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
     alpha1 >= 2 || alpha2 >= 2) {
       return(Inf)
@@ -194,7 +206,8 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   N_vect <- excesses$N_vect # number of observations
   n_vect <- excesses$n_vect # number of excesses
   chi <- theorical_chi_mat(params, h_vect, tau) # get chi matrix
-  chi_vect <- get_chi_vect(chi, h_vect, tau, df_dist) # transform in chi vector
+  # transform in chi vector
+  chi_vect <- get_chi_vect(chi, h_vect, tau, df_dist_new)
 
   logC <- lchoose(N_vect, n_vect) # log binomial coefficient
   non_excesses <- N_vect - n_vect # number of non-excesses
@@ -202,7 +215,7 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE) {
   ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
   # negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
-  print(nll)
+#   print(nll)
   return(nll)
 }
 
@@ -397,8 +410,6 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
 #' @param df_result The data frame containing the result values
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @return The calculated criterion value in a dataframe.
-#'
-#' @import terra
 #'
 #' @export
 get_criterion <- function(df_result, true_param) {
