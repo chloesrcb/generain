@@ -99,7 +99,7 @@ result$par # estimated parameters
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist, method = "CG",
                             nmin = 5, parscale = c(0.01, 0.01, 1, 1))
-install# get RMSE, MAE, Mean
+# get RMSE, MAE, Mean
 df_valid_2 <- get_criterion(df_result, param)
 
 # Save df_result and df_valid in a file
