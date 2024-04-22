@@ -73,15 +73,18 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   for (s in 1:nsites) {
     rain_cp <- drop_na(data_rain[s]) # for one fixed station
     rain_Xs_unif <- data.frame(rank(rain_cp) / (nrow(rain_cp) + 1))
+    if (is.matrix(quantile)) {
+          q <- quantile[s, s]
+    }
     mean_excess_Xs <- mean(rain_Xs_unif > q)
     for (t in 1:tmax){
+      Tmax <- nrow(rain_cp)
       rain_nolag <- rain_cp[1:(Tmax - t), ] # without lag (in t_k)
       rain_lag <- rain_cp[(1 + t):Tmax, ] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get couple
       n <- nrow(data_cp)
       rain_unif <- cbind(rank(data_cp[, 1]) / (n + 1),
                         rank(data_cp[, 2]) / (n + 1))
-
       # check excess above a threshold q
       excess_t <- mean(rain_unif[, 1] > q & rain_unif[, 2] > q)
       chival <- excess_t / mean_excess_Xs
@@ -89,12 +92,12 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     }
     print(paste0(s, "/", nsites)) # print progress
   }
-  if (mean) {
+  if (mean) { # return mean values by lag
     chi_temp <- colMeans(chi_s_temp, na.rm = TRUE)
-  } else {
+  } else { # return all values
     chi_temp <- chi_s_temp
   }
-  chi_temp[chi_temp <= 0] <- 0.0000001
+  chi_temp[chi_temp <= 0] <- 0.0000001 # to avoid log(0)
   return(chi_temp)
 }
 
@@ -276,7 +279,7 @@ spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE,
           rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
         }
         print(c(ind_s1[i], ind_s2[i]))
-        if (length(quantile)>1) {
+        if (length(quantile) > 1) {
           q <- quantile[ind_s1[i], ind_s2[i]]
         }
         chi_val <- c(chi_val, get_chiq(rain_cp, q))
@@ -339,6 +342,8 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
       }
       chi_val <- c(chi_val, get_chiq(rain_cp, q))
     }
+    chi_val[chi_val <= 0] <- 0.0000001
+    chi_val[chi_val == 1] <- 0.9999999
     chi_slag <- c(chi_slag, mean(na.omit(chi_val)))
   }
 
@@ -659,9 +664,12 @@ evaluate_vario_estimates <- function(list_simu, quantile, true_param,
   for (n in 1:n_res) {
     simu_df <- as.data.frame(list_simu[[n]])
     if (spatial) {
+    
       chi <- spatial_chi_alldist(df_dist, simu_df, quantile = quantile,
                                  hmax = hmax)
+      print(n)
       params <- get_estimate_variospa(chi, weights = "exp", summary = FALSE)
+      print(n)
     } else {
       chi <- temporal_chi(simu_df, tmax = tmax, quantile = quantile)
       params <- get_estimate_variotemp(chi, tmax, npoints = ncol(simu_df),

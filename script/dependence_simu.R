@@ -8,7 +8,7 @@ library(generain)
 
 # true parameters
 # beta1, beta2, alpha1, alpha2
-true_param <- c(0.4, 0.2, 1.5, 1)
+param <- c(0.4, 0.2, 1.5, 1)
 
 # Simulation with 25 sites and 300 times
 list_BR_25_300 <- list()
@@ -51,9 +51,9 @@ df_dist <- distances_regular_grid(nsites) # distance matrix
 
 # Evaluate the estimates
 spa_estim_25 <- evaluate_vario_estimates(list_BR_25_300, 0.9,
-                                      true_param = c(param[1], param[3]),
-                                      spatial = TRUE,
-                                      df_dist = df_dist, hmax = sqrt(17))
+                                  true_param = c(param[1], param[3]),
+                                  spatial = TRUE, df_dist = df_dist,
+                                  hmax = sqrt(17))
 
 temp_estim_25 <- evaluate_vario_estimates(list_BR_25_300, 0.9,
                       c(param[2], param[4]), spatial = FALSE, tmax = 10)
@@ -61,7 +61,7 @@ temp_estim_25 <- evaluate_vario_estimates(list_BR_25_300, 0.9,
 df_result <- cbind(spa_estim_25, temp_estim_25)
 colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
 
-df_valid <- get_criterion(df_result, true_param)
+df_valid <- get_criterion(df_result, param)
 
 # Simulation with 400 sites and 50 times ---------------------------------------
 
@@ -96,6 +96,12 @@ spa_estim_49 <- evaluate_vario_estimates(list_BR_49_100, 0.8,
 
 temp_estim_49 <- evaluate_vario_estimates(list_BR_49_100, 0.8,
                       c(param[2], param[4]), spatial = FALSE, tmax = 10)
+
+
+df_result_49 <- cbind(spa_estim_49, temp_estim_49)
+colnames(df_result_49) <- c("beta1", "alpha1", "beta2", "alpha2")
+
+df_valid_49 <- get_criterion(df_result_49, param)
 
 # Simulation with 9 sites and 50 times and advection --------------------------
 
