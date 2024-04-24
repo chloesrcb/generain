@@ -1,7 +1,7 @@
 #' sim_BR function
 #'
 #' This function performs a simulation of a spatio-temporal Brown-Resnick
-#' process using a fractionnal Brownian motion model and based on 
+#' process using a fractionnal Brownian motion model and based on the
 #' David Leber code.
 #'
 #' @param beta1 The value of beta1.
@@ -111,7 +111,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv = c(0, 0)) {
 #' @import doParallel
 #'
 #' @export
-sim_BR_parallel <- function(params, n.BR, spa, temp){
+sim_BR_parallel <- function(params, n.BR, spa, temp) {
   # Parallelize the loop
   cl <- makeCluster(detectCores())
   clusterEvalQ(cl, library(RandomFields))
@@ -135,12 +135,13 @@ sim_BR_parallel <- function(params, n.BR, spa, temp){
 #' @param BR The BR simulationsas array.
 #' @param ngrid The number of grid points.
 #' @param n.BR The number of BR simulations.
-#' @param path The path to save the dataframes.
+#' @param folder The folder path.
+#' @param file The filename without extension, default is "rainBR".
 #'
 #' @return None
 #'
 #' @export
-save_simulations <- function(BR, ngrid, n.BR, path) {
+save_simulations <- function(BR, ngrid, n.BR, folder, file = "rainBR") {
   # Initialize the list to store the dataframes
   list_dataframes <- list()
 
@@ -168,7 +169,94 @@ save_simulations <- function(BR, ngrid, n.BR, path) {
     list_dataframes[[i]] <- df
 
     # Save the dataframe in a file
-    filename <- paste0(path, "rainBR_", i, ".csv")
+    filename <- paste0(folder, file, "_", i, ".csv")
     write.csv(df, file = filename, row.names = FALSE)
   }
+}
+
+
+
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
+                        adv = c(0, 0)) {
+  # beta1, beta2, alpha1, alpha2 are variogram parameters
+  # x is the first dimension (spatial x in our case)
+  # y is the second dimension (spatial y in our case)
+  # z is the third dimension (time in our case)
+  # (adv1, adv2) advection coordinates vector
+  ## Setup
+  RandomFields::RFoptions(spConform = FALSE, install="no")
+  lx <- length(sx <- seq_along(x))  # spatial
+  ly <- length(sy <- seq_along(y))  # spatial
+  lz <- length(sz <- seq_along(z))  # temporal
+  ## Model-Variogram BuhlCklu
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+
+  ## Construct grid
+  Nxy <- lx * ly # spatial
+  N <- Nxy * lz # spatio-temporal
+  grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix
+
+  for (i in sx)
+    for (j in seq_len(ly*lz))
+      grid[i+(j-1)*ly, 1] <- i
+
+  for (i in sy)
+    for (j in sx)
+      for(k in sz)
+        grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i
+
+  for (i in sz)
+    for (j in seq_len(Nxy))
+      grid[j+Nxy*(i-1), 3] <- i
+
+  ## Construct shifted variogram
+  Varm1 <- vapply(seq_len(N), function(n)
+    RandomFields::RFvariogram(modelBuhlCklu,
+                x = (sx - grid[n, 1]) - adv[1] * grid[n, 3],
+                y = (sy - grid[n, 2]) - adv[2] * grid[n, 3],
+                z = sz - grid[n, 3]),
+    array(NA_real_, dim = c(lx, ly, lz)))
+
+  ## => (lx, ly, lz, N)-array
+
+  ## Main
+  # Z <- array(, dim = c(lx, ly, lz, n.BR)) # 3d array
+
+  # for (i in seq_len(n.BR)) {
+  #   W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
+  #   Y <- exp(W - W[1] - Varm1[,,, 1])
+  #   R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+  #   Z[,,, i] <- R * Y
+  # }
+  # ## Return
+  # Z
+
+  ## Main
+  Z <- array(, dim = c(lx, ly, lz, n.BR)) # 3d array
+  E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N)
+
+  for (i in seq_len(n.BR)) {
+    ## n=1
+    V <- 1 / E[i, 1] # poisson process
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
+    Y <- exp(W - W[1] - Varm1[,,, 1])
+    Z[,,, i] <- V * Y
+
+    ## n in {2,..,N}
+    for (n in 2:N) {
+      Exp <- E[i, n]
+      V <- 1 / Exp
+      while(V > Z[N * (i - 1) + n]) {
+        if (all(V * Y[seq_len(n-1)] < Z[(N * (i-1) + 1):(N * (i-1) + (n-1))])) {
+          Z[,,, i] <- pmax(V * Y, Z[,,, i])
+        }
+        Exp <- Exp + rexp(1)
+        V <- 1 / Exp
+      }
+    }
+  }
+  ## Return
+  Z
 }
