@@ -1,57 +1,44 @@
-library(generain)
-setwd("./script")
+
 # load libraries
 source("load_libraries.R")
+library(units)
 
-################################################################################
-# LOCATION ---------------------------------------------------------------------
-################################################################################
-# get location of each rain gauge
-location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
-location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                                 "crbm", "archiw", "archie", "um35", "chu1",
-                                 "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
+# load global functions
+library(generain)
 
+# load data
+df_comephore <- read.csv("../data/comephore/inside_zoom.csv", sep = ",")
+loc_px <- read.csv("../data/comephore/loc_pixels_zoom.csv", sep = ",")
+
+comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix
-dist_mat <- get_dist_mat(location_gauges)
+dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 
-################################################################################
-# DATA -------------------------------------------------------------------------
-################################################################################
-# get rain measurements
-# load data
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
-rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 
 ################################################################################
 # QUANTILE ---------------------------------------------------------------------
 ################################################################################
 
 # get a matrix of high quantiles for all pair
-q <- 0.998 # quantile
-rownames(rain) <- rain$dates
-rain_new <- rain[-1] # remove dates column
-list_count_quant <- quantile_matrix(q, rain_new, qlim = TRUE, zeros = TRUE,
+q <- 0.99 # quantile
+list_count_quant <- quantile_matrix(q, comephore, qlim = TRUE, zeros = TRUE,
                                     count_min = 50) # with removing zeros
 quant_mat <- list_count_quant[1][[1]]
 count_mat <- list_count_quant[2]
 
-# 0.998 equiv to 0.96 without 0
-
 ################################################################################
-# EXTREMOGRAM ------------------------------------------------------------------
+# EXTREMOGRAM
 ################################################################################
-# Spatial and temporal CHIPLOT and CHI value for all pairs
 
-# TEMPORAL CHI -----------------------------------------------------------------
-
-tmax <- 20
-nsites <- 17
+# Temporal chi with spatial lag fixed at 0 -------------------------------------
+tmax <- 10
+nsites <- length(loc_px$pixel_name)
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
 start_time <- Sys.time()
-chimat_dtlag <- temporal_chi(rain_new, tmax, quantile = 0.998, mean = FALSE)
+chimat_dtlag <- temporal_chi(comephore, quantile = 0.99, tmax = tmax,
+                             mean = FALSE)
 end_time <- Sys.time()
 elapsed_time <- end_time - start_time
 print(elapsed_time)
@@ -62,9 +49,9 @@ chi_df_dt <- data.frame(chimat_dtlag)
 colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
 
-chimat_dt_mean <- temporal_chi(rain_new, tmax, quantile = 0.998, mean = TRUE)
+chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = 0.99, mean = TRUE)
 # get h axis in minutes ie x5 minutes
-df <- data.frame(lag = c(1:tmax) * 5, chi = chimat_dt_mean)
+df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
 ggplot(df, aes(x = lag, y = chi)) +
   geom_point(color = btfgreen) +
   btf_theme +
@@ -93,13 +80,12 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 
 chitemp
 
-wlse_temp <- get_estimate_variotemp(chimat_dtlag, tmax, nsites,
+wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
                                     weights = "exp", summary = TRUE)
 
 alpha2 <- wlse_temp[[2]]
 beta2 <- wlse_temp[[1]]
 c2 <- log(beta2)
-y <- alpha2 * df$lag + c2  #idem
 
 dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
 
@@ -113,75 +99,20 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 
 chitemp_eta_estim
 
+# Spatial chi ------------------------------------------------------------------
 
-# SPATIAL CHI ------------------------------------------------------------------
-
-# SPATIAL with temporal lag fixed at 0 (ie 1 in the precedent temporal case)
-
-# spatial structure with an almost constant amount of pairs in each intervals
-df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 14
-quantiles_rad <- quantile(df_dist_order$value,
-                            probs = seq(0, 1, length.out = num_intervals + 1))
-radius_intervals <- unique(quantiles_rad)
-radius <- as.integer(radius_intervals)
-radius[length(radius)] <- 1550
-dist_counts <- table(cut(df_dist$value, breaks = radius))
-
-# Get dataframe for the histogram plot
-df_hist <- data.frame(dist_counts)
-
-colnames(df_hist) <- c("Interval", "Count")
-
-df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
-df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
-
-# # Histogram
-histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
-  btf_theme +
-  geom_bar(stat = "identity", fill = btfgreen, alpha = 0.8) +
-  xlab("Spatial lag") +
-  ylab("Pair count") +
-  theme(axis.text.x = element_text(angle = 45)) +
-  scale_x_discrete(labels = df_hist$Breaks) +
-  scale_y_continuous(breaks = c(0, 4, 6, 8, 10, 12))
-
-histradius
-
-# Create matrix of radius
-rad_mat <- dist_mat
-# Loop through radius and set distances in matrix
-for (i in 2:length(radius)) {
-  curr_radius <- radius[i]
-  prev_radius <- radius[i - 1]
-  rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
-  rad_mat[dist_mat > curr_radius] <- Inf
-}
-
-rad_mat[dist_mat == 0] <- 0
-# Make a triangle
-rad_mat[lower.tri(rad_mat)] <- NA
-
-hmax <- max(radius) # distance max in absolute value...
-nb_col <- length(unique(radius)) # we exclude 0 ?
-chimat_dslag <- matrix(1, nrow = n - 1, ncol = nb_col)
-
-# plot chi for each distance
-chispa_df <- spatial_chi(rad_mat, rain_new,
-                         quantile = quant_mat, zeros = FALSE)
-
+q <- 0.99
+chispa_df <- spatial_chi_alldist(df_dist, data_rain = comephore, quantile = q,
+                                hmax = 6000, comephore = TRUE)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
 
-
-par(mfrow = c(1, 1))
-
 chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   btf_theme +
   geom_point(col = btfgreen, size = 4) +
-  xlab(TeX(paste0("$||", expression(bold("h")), "||$", " (km)"))) +
-  ylab(TeX(paste0("$\\widehat{\\chi}(", expression(bold("h")), ", 0)$"))) +
+  xlab(TeX(r"($h$)")) +
+  ylab(TeX(r"($\widehat{\chi}(h, 0)$)")) +
   theme(axis.ticks = element_blank(),
         axis.line = element_blank(),
         panel.border = element_blank(),
@@ -190,19 +121,16 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
         legend.position = "right",
         legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
         panel.grid = element_line(color =  "#5c595943")) +
-  ylim(0, 1) +
-  theme(panel.grid.major = element_line(color = "white"),
-        panel.grid.minor = element_line(color = "white"))
+  ylim(0, 1)
 
 chispa_plot
 
-ymin <- min(etachispa_df$chi)
 
 chispa_eta <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
   geom_point(col = "darkred", size = 4) +
-  xlab(TeX(paste0("$ log ||", expression(bold("h")), "||$"))) +
-  ylab(TeX(paste0("$\\widehat{\\chi}(", expression(bold("h")), ", 0)$"))) +
+  xlab(TeX(r"($\log(h)$)")) +
+  ylab(TeX(r"($\eta(\widehat{\chi}(h, 0))$)")) +
   theme(axis.ticks = element_blank(),
         axis.line = element_blank(),
         panel.border = element_blank(),
@@ -216,11 +144,10 @@ chispa_eta
 
 
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
+
 alpha1 <- wlse_spa[[2]]
 beta1 <- wlse_spa[[1]]
 c1 <- log(beta1)
-y <- alpha1 * etachispa_df$lagspa + c1  #idem
-
 
 chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
@@ -241,8 +168,9 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
 chispa_eta_estim
 
 ################################################################################
-# VARIOGRAM --------------------------------------------------------------------
+# VARIOGRAM
 ################################################################################
 
 # estimates
-param_ohsm <- c(beta1, beta2, alpha1, alpha2)
+param <- c(beta1, beta2, alpha1, alpha2)
+
