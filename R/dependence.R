@@ -98,6 +98,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     chi_temp <- chi_s_temp
   }
   chi_temp[chi_temp <= 0] <- 0.0000001 # to avoid log(0)
+  chi_temp[chi_temp == 1] <- 0.9999999
   return(chi_temp)
 }
 
@@ -154,7 +155,7 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @param chitemp The chitemp parameter.
 #' @param tmax The tmax parameter.
 #' @param npoints The number of points parameter.
-#' @param weights The weights parameter.
+#' @param weights The weights parameter, "residuals", "exp", or "none".
 #' @param summary Logical value indicating whether to return the summary of the
 #'              model. Default is FALSE.
 #'
@@ -230,7 +231,6 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
 #' This function calculates the spatial extremogram for a given lags vector and
 #' and radius matrix and rainfall data.
 #' 
-#' @param lags The lags vector.
 #' @param rad_mat The matrix of radii.
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
@@ -245,12 +245,13 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
 #' @import tidyr
 #'
 #' @export
-spatial_chi <- function(lags, rad_mat, data_rain, quantile, zeros = TRUE, 
+spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
                         mid = TRUE) {
   # initialize values
   chi_slag <- c()
   chi_val <- c()
   q <- quantile
+  lags <- get_h_vect(rad_mat, NA, intervals = TRUE)
   # get mid values for each intervals for the plot
   if (mid) {
     h_vect <- spatial_mean_lags(lags) # get mean values for the plot
