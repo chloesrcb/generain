@@ -4,7 +4,7 @@
 \alias{save_simulations}
 \title{save_simulations function}
 \usage{
-save_simulations(BR, ngrid, n.BR, path)
+save_simulations(BR, ngrid, n.BR, folder, file = "rainBR")
 }
 \arguments{
 \item{BR}{The BR simulationsas array.}
@@ -13,7 +13,9 @@ save_simulations(BR, ngrid, n.BR, path)
 
 \item{n.BR}{The number of BR simulations.}
 
-\item{path}{The path to save the dataframes.}
+\item{folder}{The folder path.}
+
+\item{file}{The filename without extension, default is "rainBR".}
 }
 \value{
 None

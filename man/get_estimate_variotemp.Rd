@@ -13,7 +13,7 @@ get_estimate_variotemp(chitemp, tmax, npoints, weights, summary = FALSE)
 
 \item{npoints}{The number of points parameter.}
 
-\item{weights}{The weights parameter.}
+\item{weights}{The weights parameter, "residuals", "exp", or "none".}
 
 \item{summary}{Logical value indicating whether to return the summary of the
 model. Default is FALSE.}

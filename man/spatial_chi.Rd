@@ -4,11 +4,9 @@
 \alias{spatial_chi}
 \title{Function to estimate the spatial extremogram}
 \usage{
-spatial_chi(lags, rad_mat, data_rain, quantile, zeros = TRUE, mid = TRUE)
+spatial_chi(rad_mat, data_rain, quantile, zeros = TRUE, mid = TRUE)
 }
 \arguments{
-\item{lags}{The lags vector.}
-
 \item{rad_mat}{The matrix of radii.}
 
 \item{data_rain}{The rainfall data.}

@@ -175,8 +175,28 @@ save_simulations <- function(BR, ngrid, n.BR, folder, file = "rainBR") {
 }
 
 
-
-sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
+#' sim_rpareto function
+#'
+#' This function performs a simulation of a spatio-temporal r-Pareto process
+#' using a fractionnal Brownian motion model and based on the David Leber code.
+#'
+#' @param beta1 The value of beta1.
+#' @param beta2 The value of beta2.
+#' @param alpha1 The value of alpha1.
+#' @param alpha2 The value of alpha2.
+#' @param x Vector for the first dimension (spatial x in our case).
+#' @param y Vector for the second dimension (spatial y in our case)
+#' @param z Vector for the third dimension (time in our case).
+#' @param n.res The number of simulations to perform.
+#' @param adv The advection coordinates vector. Default is c(0, 0).
+#'
+#' @return The result of the simulation.
+#'
+#' @import RandomFields
+#' @import stats
+#'
+#' @export
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.res,
                         adv = c(0, 0)) {
   # beta1, beta2, alpha1, alpha2 are variogram parameters
   # x is the first dimension (spatial x in our case)
@@ -234,10 +254,10 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
   # Z
 
   ## Main
-  Z <- array(, dim = c(lx, ly, lz, n.BR)) # 3d array
-  E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N)
+  Z <- array(, dim = c(lx, ly, lz, n.res)) # 3d array
+  E <- matrix(rexp(n.res * N), nrow=n.res, ncol=N)
 
-  for (i in seq_len(n.BR)) {
+  for (i in seq_len(n.res)) {
     ## n=1
     V <- 1 / E[i, 1] # poisson process
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process

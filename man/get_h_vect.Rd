@@ -4,15 +4,14 @@
 \alias{get_h_vect}
 \title{get_h_vect function}
 \usage{
-get_h_vect(df_dist, hmax)
+get_h_vect(df_dist, hmax, intervals = FALSE)
 }
 \arguments{
-\item{df_dist}{The distance dataframe.}
+\item{df_dist}{The distance dataframe or matrix for intervals.}
 
 \item{hmax}{The maximum spacial lag value.}
 
-\item{vectors}{A logical value indicating whether to return the spatial
-lag vectors. Default is FALSE for only distance lags (norm).}
+\item{intervals}{A logical value indicating whether we work with intervals.}
 }
 \value{
 The spatial distance lags vector or list of lag vectors.
