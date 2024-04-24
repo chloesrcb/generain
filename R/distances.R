@@ -67,19 +67,23 @@ reshape_distances <- function(dist_mat) {
 #' This function calculates the spatial lag vector based on the given distance
 #' dataframe and maximum spacial lag value.
 #'
-#' @param df_dist The distance dataframe.
+#' @param df_dist The distance dataframe or matrix for intervals.
 #' @param hmax The maximum spacial lag value.
-#' @param vectors A logical value indicating whether to return the spatial
-#'                lag vectors. Default is FALSE for only distance lags (norm).
+#' @param intervals A logical value indicating whether we work with intervals.
 #' @return The spatial distance lags vector or list of lag vectors.
 #'
 #' @export
-get_h_vect <- function(df_dist, hmax) {
+get_h_vect <- function(df_dist, hmax, intervals = FALSE) {
   # get unique distances
-  h_vect <- sort(df_dist$value)
-  h_vect <- unique(h_vect)
-  if (!is.na(hmax)) {
-      h_vect <- h_vect[h_vect <= hmax]
+  if (intervals) {
+    dist_int <- na.omit(as.vector(df_dist))
+    h_vect <- unique(dist_int)
+  } else {
+    h_vect <- sort(df_dist$value)
+    h_vect <- unique(h_vect)
+    if (!is.na(hmax)) {
+        h_vect <- h_vect[h_vect <= hmax]
+    }
   }
   return(h_vect)
 }
