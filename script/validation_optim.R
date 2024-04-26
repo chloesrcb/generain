@@ -10,11 +10,8 @@ setwd("./script")
 
 # load libraries
 source("load_libraries.R")
-# load global functions
-source("../R/utils.R")
-source("../R/distances.R")
-source("../R/optimization.R")
 library(generain)
+
 ################################################################################
 # Test on exponential ----------------------------------------------------------
 ################################################################################
@@ -111,7 +108,8 @@ df_valid_2 <- get_criterion(df_result, param)
 # Simulation with 9 sites and 50 times and advection
 list_BR_adv_9_50 <- list()
 for (i in 1:10) {
-  file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i, ".csv")
+  file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i,
+                      ".csv")
   df <- read.csv(file_path)
   list_BR_adv_9_50[[i]] <- df
 }

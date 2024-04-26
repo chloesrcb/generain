@@ -9,10 +9,8 @@ cat("\014")
 setwd("./script")
 
 # load libraries
+library(generain)
 source("load_libraries.R")
-# load global functions
-source("../R/utils.R")
-source("../R/egpd.R")
 
 # get censoring
 censores <- seq(0, 10, 0.05)

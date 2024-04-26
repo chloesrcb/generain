@@ -71,7 +71,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv = c(0, 0)) {
   for (i in seq_len(n.BR)) {
     ## n=1
     V <- 1 / E[i, 1] # poisson process
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n=1) # gaussian process
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
     Y <- exp(W - W[1] - Varm1[,,, 1])
     Z[,,, i] <- V * Y
 
@@ -241,42 +241,16 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.res,
 
   ## => (lx, ly, lz, N)-array
 
-  ## Main
-  # Z <- array(, dim = c(lx, ly, lz, n.BR)) # 3d array
-
-  # for (i in seq_len(n.BR)) {
-  #   W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
-  #   Y <- exp(W - W[1] - Varm1[,,, 1])
-  #   R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
-  #   Z[,,, i] <- R * Y
-  # }
-  # ## Return
-  # Z
-
-  ## Main
+  # Main
   Z <- array(, dim = c(lx, ly, lz, n.res)) # 3d array
-  E <- matrix(rexp(n.res * N), nrow=n.res, ncol=N)
-
+  set.seed(1234)
   for (i in seq_len(n.res)) {
-    ## n=1
-    V <- 1 / E[i, 1] # poisson process
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
-    Y <- exp(W - W[1] - Varm1[,,, 1])
-    Z[,,, i] <- V * Y
-
-    ## n in {2,..,N}
-    for (n in 2:N) {
-      Exp <- E[i, n]
-      V <- 1 / Exp
-      while(V > Z[N * (i - 1) + n]) {
-        if (all(V * Y[seq_len(n-1)] < Z[(N * (i-1) + 1):(N * (i-1) + (n-1))])) {
-          Z[,,, i] <- pmax(V * Y, Z[,,, i])
-        }
-        Exp <- Exp + rexp(1)
-        V <- 1 / Exp
-      }
-    }
+    s0 <- 10 # reference point
+    Y <- exp(W - W[s0] - Varm1[,,, s0])
+    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+    Z[,,, i] <- R * Y
   }
-  ## Return
+  # Return
   Z
 }
