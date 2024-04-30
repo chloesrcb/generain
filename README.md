@@ -9,7 +9,7 @@ Model for extreme and moderate precipitation
 
 or 
 
-```Rscript -e "remotes::install_github('chloesrcb/generain')"```
+```remotes::install_github('chloesrcb/generain')```
 
 # Loading
 
