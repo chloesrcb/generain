@@ -246,7 +246,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.res,
   set.seed(1234)
   for (i in seq_len(n.res)) {
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) # gaussian process
-    s0 <- 10 # reference point
+    s0 <- 1 # reference point
     Y <- exp(W - W[s0] - Varm1[,,, s0])
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
     Z[,,, i] <- R * Y
