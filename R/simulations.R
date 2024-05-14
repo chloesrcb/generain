@@ -27,7 +27,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   # z is the third dimension (time in our case)
   # (adv1, adv2) advection coordinates vector
   ## Setup
-  RandomFields::RFoptions(spConform = FALSE, install="no")
+  RandomFields::RFoptions(spConform = FALSE, install = "no")
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal
@@ -49,7 +49,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   # fill the second column with y coordinates
   for (i in sy)
     for (j in sx)
-      for(k in st)
+      for (k in st)
         grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
 
   # fill the third column with temporal t coordinates
@@ -58,22 +58,14 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
       grid[j + Nxy * (i - 1), 3] <- i
 
   ## Construct shifted variogram
-  # Varm1 <- vapply(seq_len(N), function(n)
-  #   RandomFields::RFvariogram(modelBuhlCklu,
-  #               x = (sx - grid[n, 1]),
-  #               y = (sy - grid[n, 2]),
-  #               z = st - grid[n, 3]),
-  #   array(NA_real_, dim = c(lx, ly, lt)))
-
-  ## => (lx, ly, lz, N)-array
-    ## Construct shifted variogram
   Varm1 <- vapply(seq_len(N), function(n) {
-    dx <- sx - grid[n, 1]
-    dy <- sy - grid[n, 2]
-    dt <- st - grid[n, 3]
-    combi <- expand.grid(dx = dx, dy = dy, dt = dt)
-    combi$dx_adv <- combi$dx - adv[1] * combi$dt
-    combi$dy_adv <- combi$dy - adv[2] * combi$dt
+    dx <- sx - grid[n, 1] # spatial lags
+    dy <- sy - grid[n, 2] # spatial lags
+    dt <- st - grid[n, 3] # temporal lags
+    combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
+    combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
+    combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+    # compute variogram for each combination
     result <- RandomFields::RFvariogram(modelBuhlCklu,
                 x = combi$dx_adv,
                 y = combi$dy_adv,
@@ -84,16 +76,16 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
 
   ## Main
   Z <- array(, dim = c(lx, ly, lt, n.BR)) # 3d array
-  E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N)
+  E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
 
   for (i in seq_len(n.BR)) {
-    ## n=1
+    # for n = 1
     V <- 1 / E[i, 1] # poisson process
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # gaussian process
     Y <- exp(W - W[1] - Varm1[,,, 1])
     Z[,,, i] <- V * Y
 
-    ## n in {2,..,N}
+    # n in {2,..,N}
     for (n in 2:N) {
       Exp <- E[i, n]
       V <- 1 / Exp
@@ -142,7 +134,7 @@ sim_BR_parallel <- function(params, n.BR, spa, temp) {
                 spa, spa, temp, 10)
   }
   stopCluster(cl)
-
+  simulations
 }
 
 #' save_simulations function

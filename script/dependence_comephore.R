@@ -173,4 +173,3 @@ chispa_eta_estim
 
 # estimates
 param <- c(beta1, beta2, alpha1, alpha2)
-

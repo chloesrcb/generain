@@ -37,7 +37,7 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
   kappa <- c()
   sigma <- c()
   xi <- c()
-  for (col in 1:ncol(rain_df)) {
+  for (col in seq_len(ncol(rain_df))) {
     y <- as.data.frame(na.omit(rain_df[, col]))
     y <- y[y > 0]
     kappa_0 <- 2
@@ -65,7 +65,7 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
 
 #' get_df_long_params_egpd function
 #'
-#' This function takes a dataframe of parameters and returns a long format 
+#' This function takes a dataframe of parameters and returns a long format
 #' dataframe for EGPD estimates.
 #'
 #' @param df_params A dataframe containing parameters.
@@ -98,13 +98,13 @@ get_df_long_params_egpd <- function(df_params) {
 #' @param gamma The gamma parameter (shape).
 #'
 #' @return The calculated dgpdExt1 value.
-#' 
+#'
 #' @import POT
 #'
 #' @export
-dgpdExt1 <- function(x, kappa, sigma, gamma){
-  h <- dgpd(x / sigma, loc=0, scale=sigma, shape=gamma)
-  H <- pgpd(x / sigma, loc=0, scale=sigma, shape=gamma)
+dgpdExt1 <- function(x, kappa, sigma, gamma) {
+  h <- dgpd(x / sigma, loc = 0, scale = sigma, shape = gamma)
+  H <- pgpd(x / sigma, loc = 0, scale = sigma, shape = gamma)
   dens <- (kappa / sigma) * h * H^(kappa - 1)
   return(dens)
 }
@@ -146,7 +146,7 @@ choose_censore <- function(rain_df, censore, nb_simu = 100) {
       y <- na.omit(rain_df[, i])
       y <- y[y > censore[c]]
       # Quantile
-      qextgp <- qextgp(p = c(1:length(y))/(length(y) + 1), type = 1,
+      qextgp <- qextgp(p = seq_along(y) / (length(y) + 1), type = 1,
                     kappa = params$kappa[i], sigma = params$sigma[i],
                     xi = params$xi[i])
       # sort values
