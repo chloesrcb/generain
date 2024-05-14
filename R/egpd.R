@@ -89,8 +89,8 @@ get_df_long_params_egpd <- function(df_params) {
 
 #' dgpdExt1 function
 #'
-#' This function calculates the density distribution of the EGPD with the first 
-#' model $G(v) = v^\kappa$ based on the given parameters.
+#' This function calculates the density distribution of the EGPD with the first
+#' model G(v) = v^kappa based on the given parameters.
 #'
 #' @param x The input value.
 #' @param kappa The kappa parameter (power transform).

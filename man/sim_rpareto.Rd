@@ -4,7 +4,7 @@
 \alias{sim_rpareto}
 \title{sim_rpareto function}
 \usage{
-sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, z, n.res, adv = c(0, 0))
+sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, n.res, adv = c(0, 0))
 }
 \arguments{
 \item{beta1}{The value of beta1.}
@@ -19,7 +19,7 @@ sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, z, n.res, adv = c(0, 0))
 
 \item{y}{Vector for the second dimension (spatial y in our case)}
 
-\item{z}{Vector for the third dimension (time in our case).}
+\item{t}{Vector for the third dimension (time in our case).}
 
 \item{n.res}{The number of simulations to perform.}
 

@@ -19,6 +19,6 @@ dgpdExt1(x, kappa, sigma, gamma)
 The calculated dgpdExt1 value.
 }
 \description{
-This function calculates the density distribution of the EGPD with the first 
-model $G(v) = v^\kappa$ based on the given parameters.
+This function calculates the density distribution of the EGPD with the first
+model G(v) = v^kappa based on the given parameters.
 }

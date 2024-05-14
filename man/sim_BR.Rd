@@ -4,7 +4,7 @@
 \alias{sim_BR}
 \title{sim_BR function}
 \usage{
-sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv = c(0, 0))
+sim_BR(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0))
 }
 \arguments{
 \item{beta1}{The value of beta1.}
@@ -19,7 +19,7 @@ sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv = c(0, 0))
 
 \item{y}{Vector for the second dimension (spatial y in our case)}
 
-\item{z}{Vector for the third dimension (time in our case).}
+\item{t}{Vector for the third dimension (time in our case).}
 
 \item{n.BR}{The number of BR simulations to perform.}
 
