@@ -69,5 +69,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/variations_adv_new/rpar_400s_3.gif"),
+                       "/simu_gif/variations_adv_new/rpar_400s_no_adv.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
