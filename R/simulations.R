@@ -255,12 +255,13 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
 
   ## Construct shifted variogram
   Varm1 <- vapply(seq_len(N), function(n) {
-    dx <- sx - grid[n, 1]
-    dy <- sy - grid[n, 2]
-    dt <- st - grid[n, 3]
-    combi <- expand.grid(dx = dx, dy = dy, dt = dt)
-    combi$dx_adv <- combi$dx - adv[1] * combi$dt
-    combi$dy_adv <- combi$dy - adv[2] * combi$dt
+    dx <- sx - grid[n, 1] # spatial lags
+    dy <- sy - grid[n, 2] # spatial lags
+    dt <- st - grid[n, 3] # temporal lags
+    combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
+    combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
+    combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+    # compute variogram for each combination
     result <- RandomFields::RFvariogram(modelBuhlCklu,
                 x = combi$dx_adv,
                 y = combi$dy_adv,
@@ -269,7 +270,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
     return(result)
     }, array(NA_real_, dim = c(lx, ly, lt)))
 
-  ## => (lx, ly, lz, N)-array
+  ## => (lx, ly, lt, N)-array
 
   # Main
   Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
@@ -277,7 +278,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   for (i in seq_len(n.res)) {
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # gaussian process
     s0 <- 1 # reference point
-    Y <- exp(W - W[s0] - Varm1[,,, s0]/2)
+    Y <- exp(W - W[s0] - Varm1[,,, s0])
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
     Z[,,, i] <- R * Y
   }
