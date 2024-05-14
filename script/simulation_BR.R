@@ -11,16 +11,12 @@ beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-
 n.BR <- 1
 adv <- c(-0.5, -0.5)
 
 BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
 
-# # save simulations to CSV files
-# path <- paste0("../data/simulations_BR/sim_", ngrid, "s_", length(temp), "t/")
-# save_simulations(BR, ngrid, n.BR, path)
-
+# save simulations to CSV files
 save_simulations(BR, ngrid, n.BR,
                  folder = "./data/simulations_BR/",
                  file = "rain_br")
@@ -71,5 +67,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/sim_br/br_25s_adv_4.gif"),
+                       "/simu_gif/sim_br/br_25s_adv_5.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")

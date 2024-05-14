@@ -222,7 +222,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   # z is the third dimension (time in our case)
   # (adv1, adv2) advection coordinates vector
   ## Setup
-  RandomFields::RFoptions(spConform = FALSE, install="no")
+  RandomFields::RFoptions(spConform = FALSE, install = "no")
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal
