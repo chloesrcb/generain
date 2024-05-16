@@ -7,13 +7,13 @@ library(animation)
 # Simulate data using the rpareto model
 ngrid <- 20
 spa <- 1:ngrid
-temp <- 1:30
+temp <- 1:100
 n.res <- 1
-beta1 <- 0.3
-beta2 <- 0.1
-alpha1 <- 1.5
+beta1 <- 0.2
+beta2 <- 0.2
+alpha1 <- 1
 alpha2 <- 0.2
-adv <- c(2, 0.5)
+adv <- c(0.5, 0.5)
 
 simu_rpar <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp,
                           n.res, adv = adv)
@@ -69,5 +69,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/variations_adv_new/rpar_400s_adv_5.gif"),
+                       "/simu_gif/variations_adv_new/rpar_400s_adv_8.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
