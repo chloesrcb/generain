@@ -33,8 +33,8 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   lt <- length(st <- seq_along(t))  # temporal
   ## Model-Variogram BuhlCklu
   modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2) #+
+                  #  RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
 
   ## Construct grid
   Nxy <- lx * ly
@@ -65,11 +65,16 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+    norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
     # compute variogram for each combination
+    # result <- RandomFields::RFvariogram(modelBuhlCklu,
+    #             x = combi$dx_adv,
+    #             y = combi$dy_adv,
+    #             z = combi$dt
+    #           )
     result <- RandomFields::RFvariogram(modelBuhlCklu,
-                x = combi$dx_adv,
-                y = combi$dy_adv,
-                z = combi$dt
+                x = norm_h,
+                y = combi$dt
               )
     return(result)
     }, array(NA_real_, dim = c(lx, ly, lt)))
@@ -220,8 +225,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   lt <- length(st <- seq_along(t))  # temporal
   ## Model-Variogram BuhlCklu
   modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2) #+
+                  #  RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
 
   ## Construct grid
   Nxy <- lx * ly # spatial grid size
@@ -253,11 +258,16 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+    norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
     # compute variogram for each combination
+    # result <- RandomFields::RFvariogram(modelBuhlCklu,
+    #             x = combi$dx_adv,
+    #             y = combi$dy_adv,
+    #             z = combi$dt
+    #           )
     result <- RandomFields::RFvariogram(modelBuhlCklu,
-                x = combi$dx_adv,
-                y = combi$dy_adv,
-                z = combi$dt
+                x = norm_h,
+                y = combi$dt
               )
     return(result)
     }, array(NA_real_, dim = c(lx, ly, lt)))

@@ -13,6 +13,48 @@ source("load_libraries.R")
 library(generain)
 
 ################################################################################
+# functions --------------------------------------------------------------------
+
+boxplot_optim <- function(df_result, true_param, filename) {
+  # plot the results
+  p <- ggplot(df_result) +
+    geom_boxplot(aes(x = factor(1), y = beta1), fill = btfgreen,
+                 color = "black") +
+    geom_boxplot(aes(x = factor(2), y = beta2), fill = btfgreen,
+                 color = "black") +
+    geom_boxplot(aes(x = factor(3), y = alpha1), fill = btfgreen,
+                 color = "black") +
+    geom_boxplot(aes(x = factor(4), y = alpha2), fill = btfgreen,
+                 color = "black") +
+    btf_theme +
+    ylab("Estimates") +
+    xlab("") +
+    scale_x_discrete(labels = c(TeX("$\\widehat{\\beta}_1$"),
+                                TeX("$\\widehat{\\beta}_2$"),
+                                TeX("$\\widehat{\\alpha}_1$"),
+                                TeX("$\\widehat{\\alpha}_2$"))) +
+    geom_point(aes(x = factor(1), y = true_param[1]), color = "darkred",
+                shape = 4, size = 3) +
+    geom_text(aes(x = factor(1), y = true_param[1], label = true_param[1]),
+              color = "darkred", hjust = -0.8) +
+    geom_point(aes(x = factor(2), y = true_param[2]), color = "darkred",
+                shape = 4, size = 3) +
+    geom_text(aes(x = factor(2), y = true_param[2], label = true_param[2]),
+              color = "darkred", hjust = -0.8) +
+    geom_point(aes(x = factor(3), y = true_param[3]), color = "darkred",
+                shape = 4, size = 3) +
+    geom_text(aes(x = factor(3), y = true_param[3], label = true_param[3]),
+              color = "darkred", hjust = -0.8) +
+    geom_point(aes(x = factor(4), y = true_param[4]), color = "darkred",
+                shape = 4, size = 3) +
+    geom_text(aes(x = factor(4), y = true_param[4], label = true_param[4]),
+            color = "darkred", hjust = -2)
+
+  
+  ggsave(plot = p, filename = filename, width = 10, height = 10)
+}
+
+################################################################################
 # Test on exponential ----------------------------------------------------------
 ################################################################################
 
@@ -65,6 +107,7 @@ df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             parscale = c(0.01, 0.01, 1, 1))
 
 df_valid_1 <- get_criterion(df_result, param)
+
 
 # simu with more sites and less time -------------------------------------------
 
@@ -156,3 +199,26 @@ phd_extremes_im <- "../../phd_extremes/thesis/resources/images"
 
 filename <- paste0(phd_extremes_im, "/validation/boxplot_depmodel_400s_50t.png")
 ggsave(plot = p, filename = filename, width = 10, height = 10)
+
+
+################################################################################
+# new br process
+################################################################################
+
+file_path <- paste0("./data/simulations_BR/rain_br_1.csv")
+simulation_data <- read.csv(file_path)
+ngrid <- sqrt(ncol(simulation_data))
+adv <- c(0, 0) # advection
+tau <- 1:100 # temporal lags
+BR_df <-  simulation_data # first simulation
+nsites <- ncol(BR_df) # number of sites
+df_dist <- distances_regular_grid(nsites) # distance matrix
+h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
+
+# for one simulation
+excesses <- empirical_excesses(BR_df, 0.8, tau, h_vect, df_dist, nmin = 5)
+result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
+                excesses = excesses, simu = BR_df, quantile = 0.8,
+                h_vect = h_vect, tau = tau, df_dist = df_dist,
+                method = "CG",
+                control = list(parscale = c(0.1, 0.1, 1, 1)))

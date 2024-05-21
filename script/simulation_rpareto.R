@@ -15,13 +15,14 @@ alpha1 <- 1
 alpha2 <- 0.2
 adv <- c(0.5, 0.5)
 
+# Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp,
                           n.res, adv = adv)
 
+# Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
                  folder = "./data/simulations_rpar/test/",
                  file = "rain_rpar_test")
-
 
 file_path <- paste0("./data/simulations_rpar/test/rain_rpar_test_1.csv")
 simulation_data <- read.csv(file_path)

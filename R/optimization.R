@@ -14,9 +14,9 @@
 #'
 #' @return A list with n_vect the number of excesses and N_vect the number of
 #' possible excesses ie the number of observations for each pair of sites.
-#' 
+#'
 #' @import tidyr
-#' 
+#'
 #' @export
 empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
                                 nmin = 5) {
@@ -50,9 +50,14 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
         # check excess above a threshold q
         cp_cond <- rain_unif[rain_unif[, 2] > q, ]
 
-        # nb of simultaneous excesses
-        excess_count <- sum(cp_cond[, 1] > q)
+        if (length(class(cp_cond)) == 1 && class(cp_cond) == "numeric") {
+          # if only one excess
+          cp_cond <- t(as.matrix(cp_cond))
+        }
 
+        # nb of conditional excesses
+        excess_count <- sum(cp_cond[, 1] > q)
+        
         n_vect <- c(n_vect, excess_count)
         N_vect <- c(N_vect, nrow(cp_cond))
       }

@@ -1,18 +1,19 @@
 library(generain)
-
+library(reshape2)
+library(ggplot2)
 # spatial and temporal structures
-ngrid <- 5
+ngrid <- 7
 spa <- 1:ngrid
-temp <- 1:30
+temp <- 1:100
 
 # beta1, beta2, alpha1, alpha2
-param <- c(0.6, 0.2, 1.5, 0.4) # true parameters for the variogram
+param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
 n.BR <- 1
-adv <- c(-0.5, -0.5)
+adv <- c(0, 0)
 
 BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
 
@@ -60,6 +61,7 @@ for (i in unique(simulation_data_long$Time)) {
   plots[[i]] <- p
 }
 
+library(animation)
 # Save the plots as a gif
 ani.options(interval = 0.5) # time between frames
 saveGIF({
@@ -67,5 +69,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/sim_br/br_25s_adv_5.gif"),
+                       "/simu_gif/sim_br/test.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
