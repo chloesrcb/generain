@@ -61,7 +61,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   Varm1 <- vapply(seq_len(N), function(n) {
     dx <- sx - grid[n, 1] # spatial lags
     dy <- sy - grid[n, 2] # spatial lags
-    dt <- st - grid[n, 3] # temporal lags
+    dt <- abs(st - grid[n, 3]) # temporal lags
     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
@@ -254,7 +254,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   Varm1 <- vapply(seq_len(N), function(n) {
     dx <- sx - grid[n, 1] # spatial lags
     dy <- sy - grid[n, 2] # spatial lags
-    dt <- st - grid[n, 3] # temporal lags
+    dt <- abs(st - grid[n, 3]) # temporal lags
     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
