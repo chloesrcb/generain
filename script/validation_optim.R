@@ -277,7 +277,7 @@ result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
                 excesses = excesses, simu = BR_df, quantile = 0.9,
                 h_vect = h_vect, tau = tau, df_dist = df_dist,
                 method = "CG",
-                control = list(parscale = c(0.1, 0.1, 1, 1)))
+                control = list(parscale = c(0.1, 0.1, 1.5, 1)))
 
 
 result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
