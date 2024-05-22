@@ -192,20 +192,20 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
   df_dist_new <- df_dist
   print(params)
 
-  if (length(params) == 6) {
-    adv <- params[5:6]
-    nsites <- length(unique(df_dist$X))
-    df_dist_new <- distances_regular_grid(nsites, adv = adv, tau = tau)
-    h_vect <- get_h_vect(df_dist_new, sqrt(17))
-    excesses <- empirical_excesses(simu, quantile, tau, h_vect, df_dist,
-                                    nmin = nmin)
-  }
+  # if (length(params) == 6) {
+  #   adv <- params[5:6]
+  #   nsites <- length(unique(df_dist$X))
+  #   df_dist_new <- distances_regular_grid(nsites, adv = adv, tau = tau)
+  #   h_vect <- get_h_vect(df_dist_new, sqrt(17))
+  #   excesses <- empirical_excesses(simu, quantile, tau, h_vect, df_dist,
+  #                                   nmin = nmin)
+  # }
 
   if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
     abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.0001 || abs(beta2) <= 0.0001 ||
     alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
     alpha1 >= 2 || alpha2 >= 2) {
-      return(Inf)
+      return(1000000)
   }
 
   N_vect <- excesses$N_vect # number of observations
@@ -220,7 +220,6 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
   ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
   # negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
-#   print(nll)
   return(nll)
 }
 
@@ -369,17 +368,22 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                             hmax = NA, method = "CG", nmin = 5,
                             parscale = c(1, 1, 1, 1)) {
-  # if there is advection
-  if (length(true_param) == 6) {
-    adv <- params[5:6]
-    nsites <- length(unique(df_dist$X))
-    df_dist <- distances_regular_grid(nsites, adv = adv, tau = tau)
-  }
+
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
   df_result <- data.frame(beta1 = rep(NA, n_res), beta2 = rep(NA, n_res),
                           alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
+
+  # if there is advection
+  if (length(true_param) == 6) {
+    adv <- true_param[5:6]
+    nsites <- length(unique(df_dist$X))
+    df_dist <- distances_regular_grid(nsites, adv = adv, tau = tau)
+    df_result$adv1 <- rep(NA, n_res)
+    df_result$adv2 <- rep(NA, n_res)
+  }
+
   h_vect <- get_h_vect(df_dist, sqrt(17))
   # for all simulations
   for (n in 1:n_res) {
@@ -389,7 +393,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                                    nmin)
     # optimize the negative log-likelihood function
     tryCatch({
-        result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
+        result <- optim(par = true_param, fn = neg_ll,
             excesses = excesses, h_vect = h_vect, tau = tau,
             df_dist = df_dist, method = method,
             control = list(parscale = parscale))
@@ -398,6 +402,10 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
         df_result$beta2[n] <- params[2]
         df_result$alpha1[n] <- params[3]
         df_result$alpha2[n] <- params[4]
+        if (length(true_param) == 6) {
+            df_result$adv1[n] <- params[5]
+            df_result$adv2[n] <- params[6]
+        }
     }, error = function(e) {
         # Handle the error (e.g., print an error message)
         print(paste("Error occurred for simulation", n))

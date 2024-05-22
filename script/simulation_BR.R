@@ -4,7 +4,7 @@ library(ggplot2)
 # spatial and temporal structures
 ngrid <- 7
 spa <- 1:ngrid
-temp <- 1:100
+temp <- 1:300
 
 # beta1, beta2, alpha1, alpha2
 param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
@@ -12,14 +12,14 @@ beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-n.BR <- 1
+n.BR <- 2
 adv <- c(0, 0)
 
 BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
 
 # save simulations to CSV files
 save_simulations(BR, ngrid, n.BR,
-                 folder = "./data/simulations_BR/",
+                 folder = "../data/simulations_BR/sim_49s_300t/",
                  file = "rain_br")
 
 file_path <- paste0("./data/simulations_BR/rain_br_1.csv")
