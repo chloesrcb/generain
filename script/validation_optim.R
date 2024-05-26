@@ -117,13 +117,13 @@ df_valid_exp <- get_criterion(df_result, true_param) # get RMSE, MAE, Mean
 
 # true parameters
 # beta1, beta2, alpha1, alpha2
-true_param <- c(0.4, 0.2, 1.5, 1)
+true_param <- c(0.4, 0.2, 1.5, 1, 0.5, 0.5)
 
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:100) {
+for (i in 1:2) {
   file_path <- paste0(
-          "../../phd_extremes/data/simulations_BR/sim_49s_300t/rainBR_", i,
+          "../../phd_extremes/data/simulations_BR/sim_25s_300t_adv/rainBR_", i,
                       ".csv")
   df <- read.csv(file_path)
   list_BR[[i]] <- df
@@ -136,12 +136,10 @@ h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist,
-                            parscale = c(1, 1, 0.1, 0.1))
+                            parscale = c(1, 1, 0.1, 0.1, 1, 1))
 
 df_res <- na.omit(df_result)
 df_valid_1 <- get_criterion(df_res, true_param)
-
-
 
 grad_test <- gHgenb(par = c(0.4, 0.2, 1.5, 1),
           fn = function(par) {
@@ -161,16 +159,17 @@ result <- Rcgmin(par = c(0.4, 0.2, 1.5, 1), gr = "grfwd",
             }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
                 upper = c(Inf, Inf, 1.999, 1.999))
 
-scaling <- c(0.4, 0.2, 1.5, 1)
-p.scale <- parscale.parameters(true_param, scaling)
+# scaling <- c(0.4, 0.2, 1.5, 1)
+# p.scale <- parscale.parameters(true_param, scaling)
 
-result <- optimr(par = c(0.4, 0.2, 1.5, 1), method = "Rcgmin", gr = "grfwd",
+result <- optimr(par = true_param,
+                  method = "Rcgmin", gr = "grfwd",
           fn = function(par) {
             neg_ll(par, excesses = excesses, quantile = 0.9,
-                    h_vect = h_vect, tau = tau, df_dist = df_dist)
-            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
-                upper = c(Inf, Inf, 1.999, 1.999),
-                control = list(parscale = c(1, 1, 0.1, 0.1),
+                    h_vect = h_vect, tau = tau, df_dist = df_dist, simu=BR_df)
+            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+                upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+                control = list(parscale = c(1, 1, 0.1, 0.1, 0.1, 0.1),
                                 maxit = 1000))
 
 

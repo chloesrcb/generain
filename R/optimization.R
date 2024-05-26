@@ -373,8 +373,8 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(true_param) == 6) {
-    lower <- c(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6)
-    upper <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+    lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf)
+    upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
   }
   # get the number of simulations
   n_res <- length(list_simu)
@@ -413,7 +413,8 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
         result <- optimr(par = true_param, method = "Rcgmin",
                   gr = "grfwd", fn = function(par) {
                   neg_ll(par, excesses = excesses, quantile = 0.9,
-                        h_vect = h_vect, tau = tau, df_dist = df_dist)
+                        h_vect = h_vect, tau = tau, df_dist = df_dist,
+                        simu = simu_df)
                   }, lower = lower.bound, upper = upper.bound,
                   control = list(parscale = parscale, maxit = 1000))
         if (result$convergence == 0) { # if it converges
