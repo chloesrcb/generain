@@ -185,12 +185,12 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
                    simu = NA, quantile = 0.9, nmin = 5) {
   # params conditions
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
+  # beta1 <- params[1]
+  # beta2 <- params[2]
+  # alpha1 <- params[3]
+  # alpha2 <- params[4]
   df_dist_new <- df_dist
-  print(params)
+  # print(params)
 
   if (length(params) == 6) {
     adv <- params[5:6]
@@ -202,12 +202,12 @@ neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
                                     nmin = nmin)
   }
 
-  if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
-    abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.0001 || abs(beta2) <= 0.0001 ||
-    alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
-    alpha1 >= 2 || alpha2 >= 2) {
-      return(1000000)
-  }
+  # if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
+  #   abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.0001 || abs(beta2) <= 0.0001 ||
+  #   alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
+  #   alpha1 >= 2 || alpha2 >= 2) {
+  #     return(Inf)
+  # }
 
   N_vect <- excesses$N_vect # number of observations
   n_vect <- excesses$n_vect # number of excesses
@@ -370,6 +370,12 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                             hmax = NA, method = "CG", nmin = 5,
                             parscale = c(1, 1, 1, 1)) {
 
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(true_param) == 6) {
+    lower <- c(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6)
+    upper <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+  }
   # get the number of simulations
   n_res <- length(list_simu)
   # create a dataframe to store the results
@@ -394,18 +400,34 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                                    nmin)
     # optimize the negative log-likelihood function
     tryCatch({
-        result <- optim(par = true_param, fn = neg_ll,
-            excesses = excesses, h_vect = h_vect, tau = tau,
-            df_dist = df_dist, method = method,
-            control = list(parscale = parscale))
-        params <- result$par
-        df_result$beta1[n] <- params[1]
-        df_result$beta2[n] <- params[2]
-        df_result$alpha1[n] <- params[3]
-        df_result$alpha2[n] <- params[4]
-        if (length(true_param) == 6) {
-            df_result$adv1[n] <- params[5]
-            df_result$adv2[n] <- params[6]
+        # result <- optim(par = true_param, fn = neg_ll,
+        #     excesses = excesses, h_vect = h_vect, tau = tau,
+        #     df_dist = df_dist, method = method, quantile = quantile,
+        #     control = list(parscale = parscale))
+        # result <- Rcgmin(par = true_param, gr = "grfwd",
+        #         fn = function(par) {
+        #           neg_ll(par, excesses = excesses, quantile = quantile,
+        #             h_vect = h_vect, tau = tau, df_dist = df_dist)
+        #         }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
+        #         upper = c(Inf, Inf, 1.999, 1.999))
+        result <- optimr(par = true_param, method = "Rcgmin",
+                  gr = "grfwd", fn = function(par) {
+                  neg_ll(par, excesses = excesses, quantile = 0.9,
+                        h_vect = h_vect, tau = tau, df_dist = df_dist)
+                  }, lower = lower.bound, upper = upper.bound,
+                  control = list(parscale = parscale, maxit = 1000))
+        if (result$convergence == 0) { # if it converges
+          params <- result$par
+          df_result$beta1[n] <- params[1]
+          df_result$beta2[n] <- params[2]
+          df_result$alpha1[n] <- params[3]
+          df_result$alpha2[n] <- params[4]
+          if (length(true_param) == 6) {
+              df_result$adv1[n] <- params[5]
+              df_result$adv2[n] <- params[6]
+          }
+        } else {
+          print(n)
         }
     }, error = function(e) {
         # Handle the error (e.g., print an error message)

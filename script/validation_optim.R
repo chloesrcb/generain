@@ -11,6 +11,8 @@ setwd("./script")
 # load libraries
 source("load_libraries.R")
 library(generain)
+library(optimx)
+
 
 ################################################################################
 # functions --------------------------------------------------------------------
@@ -18,13 +20,13 @@ library(generain)
 boxplot_optim <- function(df_result, true_param, filename) {
   # plot the results
   p <- ggplot(df_result) +
-    geom_boxplot(aes(x = factor(1), y = true_param[1]), fill = btfgreen,
+    geom_boxplot(aes(x = factor(1), y = beta1), fill = btfgreen,
                  color = "black") +
-    geom_boxplot(aes(x = factor(2), y = true_param[2]), fill = btfgreen,
+    geom_boxplot(aes(x = factor(2), y = beta2), fill = btfgreen,
                  color = "black") +
-    geom_boxplot(aes(x = factor(3), y = true_param[3]), fill = btfgreen,
+    geom_boxplot(aes(x = factor(3), y = alpha1), fill = btfgreen,
                  color = "black") +
-    geom_boxplot(aes(x = factor(4), y = true_param[4]), fill = btfgreen,
+    geom_boxplot(aes(x = factor(4), y = alpha2), fill = btfgreen,
                  color = "black") +
     btf_theme +
     ylab("Estimates") +
@@ -51,6 +53,35 @@ boxplot_optim <- function(df_result, true_param, filename) {
             color = "darkred", hjust = -2)
 
   ggsave(plot = p, filename = filename, width = 10, height = 10)
+}
+
+parscale.parameters <- function(par, scale, fix = 1){
+  # check if length of scale is equal to par
+  if(length(par) !=  length(scale)){
+    stop("parscale.parameters has parameter and scaling vectors of different sizes.")
+  }
+
+  if(any(scale == 0)){
+    scale[scale == 0] <- 1
+  }
+  # parscale fixes the larged par/parscale value to deviate only 10 percent,
+  # others can then vary get fixed and maximal value
+  fix.value <- par[fix]
+  if(fix.value == 0){
+    fix.value <- 1
+  }
+
+  max.value <- abs(par[which.max(abs(par))[1]])
+  if(max.value == 0){
+    print("Warning: Vector contains only zeroes. Scaling is set to a default of 1.")
+    max.value <- 1
+  }
+
+  #fill in scaling vector
+  par.scale <- scale / (0.1 * fix.value * max.value)
+  par.scale[fix] <- 1 / max.value
+
+  return(abs(par.scale))
 }
 
 ################################################################################
@@ -90,8 +121,9 @@ true_param <- c(0.4, 0.2, 1.5, 1)
 
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:2) {
-  file_path <- paste0("../data/simulations_BR/sim_25s_300t/new_rain_br_", i,
+for (i in 1:100) {
+  file_path <- paste0(
+          "../../phd_extremes/data/simulations_BR/sim_49s_300t/rainBR_", i,
                       ".csv")
   df <- read.csv(file_path)
   list_BR[[i]] <- df
@@ -104,9 +136,49 @@ h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist,
-                            parscale = c(0.01, 0.01, 1, 1))
+                            parscale = c(1, 1, 0.1, 0.1))
 
-df_valid_1 <- get_criterion(df_result, true_param)
+df_res <- na.omit(df_result)
+df_valid_1 <- get_criterion(df_res, true_param)
+
+
+
+grad_test <- gHgenb(par = c(0.4, 0.2, 1.5, 1),
+          fn = function(par) {
+            neg_ll(par, excesses = excesses, simu = BR_df, quantile = 0.9,
+                    h_vect = h_vect, tau = tau, df_dist = df_dist)
+            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
+                upper = c(Inf, Inf, 1.999, 1.999))
+
+
+
+excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
+# conjugate gradient algorithm with the Dai and Yuan update (2001)
+result <- Rcgmin(par = c(0.4, 0.2, 1.5, 1), gr = "grfwd",
+          fn = function(par) {
+            neg_ll(par, excesses = excesses, quantile = 0.9,
+                    h_vect = h_vect, tau = tau, df_dist = df_dist)
+            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
+                upper = c(Inf, Inf, 1.999, 1.999))
+
+scaling <- c(0.4, 0.2, 1.5, 1)
+p.scale <- parscale.parameters(true_param, scaling)
+
+result <- optimr(par = c(0.4, 0.2, 1.5, 1), method = "Rcgmin", gr = "grfwd",
+          fn = function(par) {
+            neg_ll(par, excesses = excesses, quantile = 0.9,
+                    h_vect = h_vect, tau = tau, df_dist = df_dist)
+            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
+                upper = c(Inf, Inf, 1.999, 1.999),
+                control = list(parscale = c(1, 1, 0.1, 0.1),
+                                maxit = 1000))
+
+
+# compute the Hessian
+optimHess(result$par, fn = function(par) {
+            neg_ll(par, excesses = excesses, quantile = 0.9,
+                    h_vect = h_vect, tau = tau, df_dist = df_dist)
+            })
 
 
 # simu with more sites and less time -------------------------------------------
@@ -118,35 +190,38 @@ true_param <- c(0.4, 0.2, 1.5, 1)
 
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:2) {
-  file_path <- paste0("../data/simulations_BR/sim_49s_300t/rain_br_", i, ".csv")
+for (i in 1:100) {
+  file_path <- paste0(
+          "../../phd_extremes/data/simulations_BR/sim_25s_300t/rainBR_", i,
+                      ".csv")
   df <- read.csv(file_path)
   list_BR[[i]] <- df
 }
 
-BR_df <- list_BR[[1]] # first simulation
+BR_df <- list_BR[[5]] # first simulation
 nsites <- ncol(BR_df) # number of sites
 df_dist <- distances_regular_grid(nsites) # distance matrix
 h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 # # for one simulation
 excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
+excesses$n_vect
 result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
                 h_vect = h_vect, df_dist = df_dist, quantile = 0.9, tau = 1:10,
                 nmin = 5, method = "CG",
-                control = list(parscale = c(1, 1, 1, 1)))
+                control = list(parscale = c(0.1, 1, 1, 1), maxit = 1000))
 
 # result$par # estimated parameters
 
 # for all simulations
 start_time <- Sys.time()
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
-                            tau = 1:10, df_dist = df_dist, method = "CG",
-                            nmin = 5, parscale = c(0.01, 0.01, 1, 1))
+                            tau = 1:10, df_dist = df_dist,
+                            nmin = 5, parscale = c(1, 1, 0.1, 0.1))
 end_time <- Sys.time()
 print(end_time - start_time)
 # get RMSE, MAE, Mean
-df_valid_2 <- get_criterion(df_result, param)
+df_valid_2 <- get_criterion(df_result, true_param)
 
 # simu with advection ----------------------------------------------------------
 
@@ -172,7 +247,6 @@ result <- optim(par = c(0.4, 0.2, 1.5, 1, adv), fn = neg_ll,
                 h_vect = h_vect, tau = tau, df_dist = df_dist,
                 method = "CG",
                 control = list(parscale = c(0.1, 0.1, 1, 1, 0.01, 0.01)))
-
 
 # Plot the results -------------------------------------------------------------
 
@@ -224,15 +298,17 @@ p <- ggplot(nll_data) +
 p
 # save plot
 file_path <- paste0("../../phd_extremes/thesis/resources/images/loglike_optim/",
-                    "nll_04_02_alpha1_1_25s_300t.png")
+                    "boxplot_50_optimr_49s_300t.png")
 ggsave(file_path, plot = p, width = 7, height = 7, dpi = 300)
 
+
+boxplot_optim(df_res, true_param, filename = file_path)
 
 # Plot the results -------------------------------------------------------------
 
 # Load the ggplot2 library
 library(ggplot2)
-df_result <- df_result_400
+df_result <- df_res
 # Create the boxplot using ggplot
 p <- ggplot(df_result) +
     geom_boxplot(aes(x = factor(1), y = beta1), fill = btfgreen,
@@ -286,3 +362,30 @@ result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
                 method = "L-BFGS-B", lower = c(0, 0, 1e-6, 1e-6),
                 upper = c(Inf, Inf, 2, 2),
                 control = list(parscale = c(0.1, 0.1, 1, 1)))
+
+# test another optim function
+library(mev)
+library(alabama)
+# constrained optimization for the parameters
+hin <- function(par, ...) {
+  c(-1e-3 + par[1], # beta1 > 0
+    -1e-3 + par[2], # beta2 > 0
+    2 - par[3], # alpha1 < 2
+    -1e-5 + par[3], # alpha1 > 0
+    2 - par[4], # alpha2 < 2
+    -1e-3 + par[4]) # alpha2 > 0
+}
+
+tau = 1:10
+
+excesses <- empirical_excesses(BR_df, 0.9, tau, h_vect, df_dist, nmin = 5)
+
+opt <- alabama::auglag(
+  par = c(0.4, 0.2, 1.5, 1),
+  hin = hin,
+  control.optim = list(parscale = c(0.01, 0.01, 1, 1)),
+  fn = function(par) {
+    neg_ll(par, excesses = excesses, simu = BR_df, quantile = 0.9,
+          h_vect = h_vect, tau = tau, df_dist = df_dist)
+  }
+)
