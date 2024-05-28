@@ -13,6 +13,6 @@ get_df_long_params_egpd(df_params)
 A long format dataframe.
 }
 \description{
-This function takes a dataframe of parameters and returns a long format 
+This function takes a dataframe of parameters and returns a long format
 dataframe for EGPD estimates.
 }

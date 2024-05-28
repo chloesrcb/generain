@@ -364,6 +364,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #'
 #' @import spam
 #' @import stats
+#' @import optimx
 #'
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
