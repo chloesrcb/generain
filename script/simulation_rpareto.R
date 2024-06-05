@@ -13,7 +13,7 @@ beta1 <- 0.4
 beta2 <- 0.2
 alpha1 <- 1
 alpha2 <- 0.2
-adv <- c(0.2, 0.2)
+adv <- c(0.5, 0.5)
 
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp,
@@ -70,5 +70,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/variations_adv_new/rpar_400s_adv_9.gif"),
+                       "/simu_gif/variations_adv_new/rpar_400s_adv_10.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
