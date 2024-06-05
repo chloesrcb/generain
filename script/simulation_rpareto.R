@@ -9,10 +9,10 @@ ngrid <- 20
 spa <- 1:ngrid
 temp <- 1:100
 n.res <- 1
-beta1 <- 0.4
-beta2 <- 0.2
-alpha1 <- 1
-alpha2 <- 0.2
+beta1 <- 0.2
+beta2 <- 0.1
+alpha1 <- 1.5
+alpha2 <- 0.5
 adv <- c(0.5, 0.5)
 
 # Simulate spatio-temporal r-Pareto process
@@ -21,10 +21,10 @@ simu_rpar <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp,
 
 # Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
-                 folder = "../data/simulations_rpar/test/",
+                 folder = "./data/simulations_rpar/test/",
                  file = "rain_rpar_test")
 
-file_path <- paste0("../data/simulations_rpar/test/rain_rpar_test_1.csv")
+file_path <- paste0("./data/simulations_rpar/test/rain_rpar_test_1.csv")
 simulation_data <- read.csv(file_path)
 ngrid <- sqrt(ncol(simulation_data))  # Number of grid points in each dimension
 
@@ -70,5 +70,5 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/variations_adv_new/rpar_400s_adv_10.gif"),
+                       "/simu_gif/variations_adv_new/rpar_400s_adv_15.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
