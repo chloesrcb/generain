@@ -7,8 +7,8 @@ library(units)
 library(generain)
 
 # load data
-df_comephore <- read.csv("../data/comephore/inside_zoom.csv", sep = ",")
-loc_px <- read.csv("../data/comephore/loc_pixels_zoom.csv", sep = ",")
+df_comephore <- read.csv("./data/comephore/inside_HF.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_pixels_HF.csv", sep = ",")
 
 comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix
@@ -172,4 +172,28 @@ chispa_eta_estim
 ################################################################################
 
 # estimates
-param <- c(beta1, beta2, alpha1, alpha2)
+param <- c(beta1, beta2, alpha1, alpha2, 0.001, 0.001)
+
+h_vect <- get_h_vect(df_dist, hmax = 6000)
+tau_vect <- 1:10
+
+excesses_com <- empirical_excesses(comephore, quantile = 0.99, tau = tau_vect,
+                df_dist = df_dist, h_vect = h_vect)
+
+parscale <- c(1,1,1,1,1,1)  # scale parameters
+# get the variogram
+result <- optim(par = param, fn = neg_ll,
+                  excesses = excesses_com, control = list(parscale = parscale),
+                  h_vect = h_vect, tau = tau_vect,
+                  df_dist = df_dist,
+                  quantile = 0.99)
+library(optimx)
+lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf)
+upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+result <- optimr(par = param, method = "Rcgmin",
+                  gr = "grfwd", fn = function(par) {
+                  neg_ll(par, excesses = excesses_com, quantile = 0.99,
+                        h_vect = h_vect, tau = tau_vect, df_dist = df_dist,
+                        simu = comephore)
+                  }, lower = lower.bound, upper = upper.bound,
+                  control = list(parscale = parscale, maxit = 1000))

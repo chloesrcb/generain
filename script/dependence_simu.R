@@ -13,34 +13,34 @@ param <- c(0.4, 0.2, 1.5, 1)
 # Simulation with 25 sites and 300 times
 list_BR_25_300 <- list()
 for (i in 1:100) {
-  file_path <- paste0("../data/simulations_BR/sim_25s_300t/rainBR_", i, ".csv")
+  file_path <- paste0("./data/simulations_BR/sim_25s_300t/rainBR_", i, ".csv")
   df <- read.csv(file_path)
   list_BR_25_300[[i]] <- df
 }
 
 # Simulation with 49 sites and 100 times
-list_BR_49_100 <- list()
+list_BR_49_300 <- list()
 for (i in 1:100) {
-  file_path <- paste0("../data/simulations_BR/sim_49s_100t/rainBR_", i, ".csv")
+  file_path <- paste0("./data/simulations_BR/sim_49s_300t/rainBR_", i, ".csv")
   df <- read.csv(file_path)
-  list_BR_49_100[[i]] <- df
+  list_BR_49_300[[i]] <- df
 }
 
 # Simulation with 400 sites and 50 times
-list_BR_400_50 <- list()
+list_BR_400_100 <- list()
 for (i in 1:100) {
-  file_path <- paste0("../data/simulations_BR/sim_400s_50t/rainBR_", i, ".csv")
+  file_path <- paste0("./data/simulations_BR/sim_400s_100t/rainBR_", i, ".csv")
   df <- read.csv(file_path)
-  list_BR_400_50[[i]] <- df
+  list_BR_400_100[[i]] <- df
 }
 
 # Simulation with 9 sites and 50 times and advection
-list_BR_adv_9_50 <- list()
-for (i in 1:10) {
-  file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i, ".csv")
-  df <- read.csv(file_path)
-  list_BR_adv_9_50[[i]] <- df
-}
+# list_BR_adv_9_50 <- list()
+# for (i in 1:10) {
+#   file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i, ".csv")
+#   df <- read.csv(file_path)
+#   list_BR_adv_9_50[[i]] <- df
+# }
 
 # Evaluation of the dependence model
 

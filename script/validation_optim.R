@@ -121,7 +121,7 @@ true_param <- c(0.4, 0.2, 1.5, 1, 0.5, 0.5)
 
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:2) {
+for (i in 1:100) {
   file_path <- paste0(
           "../../phd_extremes/data/simulations_BR/sim_25s_300t_adv/rainBR_", i,
                       ".csv")
@@ -134,9 +134,13 @@ nsites <- ncol(BR_df) # number of sites
 df_dist <- distances_regular_grid(nsites) # distance matrix
 h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
+start_time <- Sys.time()
+# for all simulations
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, df_dist = df_dist,
                             parscale = c(1, 1, 0.1, 0.1, 1, 1))
+end_time <- Sys.time()
+print(end_time - start_time)
 
 df_res <- na.omit(df_result)
 df_valid_1 <- get_criterion(df_res, true_param)
@@ -387,4 +391,4 @@ opt <- alabama::auglag(
     neg_ll(par, excesses = excesses, simu = BR_df, quantile = 0.9,
           h_vect = h_vect, tau = tau, df_dist = df_dist)
   }
-)
+)$value

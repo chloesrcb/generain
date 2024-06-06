@@ -2,27 +2,27 @@ library(generain)
 library(reshape2)
 library(ggplot2)
 # spatial and temporal structures
-ngrid <- 7
+ngrid <- 5
 spa <- 1:ngrid
 temp <- 1:300
 
 # beta1, beta2, alpha1, alpha2
 param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
-beta1 <- param[1]
-beta2 <- param[2]
+beta1 <- param[1] / 2
+beta2 <- param[2] / 2
 alpha1 <- param[3]
 alpha2 <- param[4]
 n.BR <- 2
 adv <- c(0, 0)
-
+true_param <- c(beta1, beta2, alpha1, alpha2)
 BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
 
 # save simulations to CSV files
 save_simulations(BR, ngrid, n.BR,
-                 folder = "../data/simulations_BR/sim_49s_300t/",
+                 folder = "./data/simulations_BR/sim_25s_100t/",
                  file = "rain_br")
 
-file_path <- paste0("./data/simulations_BR/rain_br_1.csv")
+file_path <- paste0("./data/simulations_BR/sim_25s_100t/rain_br_2.csv")
 simulation_data <- read.csv(file_path)
 ngrid <- sqrt(ncol(simulation_data))  # Number of grid points in each dimension
 
@@ -71,3 +71,53 @@ saveGIF({
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
                        "/simu_gif/sim_br/test.gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
+
+
+# Simulation
+list_BR <- list()
+for (i in 1:n.BR) {
+  file_path <- paste0("./data/simulations_BR/sim_25s_100t/rain_br_", i, ".csv")
+  df <- read.csv(file_path)
+  list_BR[[i]] <- df
+}
+
+# dependece buhl
+simu_df <- list_BR[[1]] # first simulation
+nsites <- ncol(simu_df) # number of sites
+df_dist <- distances_regular_grid(nsites) # distance matrix
+
+# Evaluate the estimates
+spa_estim_25 <- evaluate_vario_estimates(list_BR, 0.6,
+                                  spatial = TRUE, df_dist = df_dist,
+                                  hmax = sqrt(17))
+
+temp_estim_25 <- evaluate_vario_estimates(list_BR, 0.9,
+                                          spatial = FALSE, tmax = 10)
+
+df_result <- cbind(spa_estim_25, temp_estim_25)
+colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+
+df_valid <- get_criterion(df_result, true_param)
+
+
+# get the number of simulations
+n_res <- length(list_BR)
+# create a dataframe to store the results
+df_result <- data.frame(beta = rep(NA, n_res), alpha = rep(NA, n_res))
+# for all simulations
+for (n in 1:n_res) {
+  simu_df <- as.data.frame(list_BR[[n]])
+  if (spatial) {
+    chi <- spatial_chi_alldist(df_dist, simu_df, quantile = 0.9,
+                                hmax = hmax)
+    print(n)
+    params <- get_estimate_variospa(chi, weights = "none", summary = TRUE)
+    print(n)
+  } else {
+    chi <- temporal_chi(simu_df, tmax = tmax, quantile = 0.9)
+    params <- get_estimate_variotemp(chi, tmax, npoints = ncol(simu_df),
+                                    weights = "exp", summary = FALSE)
+  }
+  df_result$beta[n] <- params[1]
+  df_result$alpha[n] <- params[2]
+}
