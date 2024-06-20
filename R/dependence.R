@@ -187,11 +187,11 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
   # final temporal variogram parameters
   alpha_temp <- df_wls_temp$Estimate[2]
   c_temp <- df_wls_temp$Estimate[1]
-  theta_temp <- exp(c_temp)
+  beta_temp <- exp(c_temp) # beta
   if (summary) {
-    return(list(theta_temp, alpha_temp, sum_wls_temp))
+    return(list(beta_temp, alpha_temp, sum_wls_temp))
   } else {
-    return(c(theta_temp, alpha_temp))
+    return(c(beta_temp, alpha_temp))
   }
 }
 
@@ -398,11 +398,11 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
 
   alpha_spa <- wls_coef$Estimate[2]
   c_spa <- wls_coef$Estimate[1]
-  theta_spa <- exp(c_spa)
+  beta_spa <- exp(c_spa)
   if (summary) {
-    return(list(theta_spa, alpha_spa, sum_wls_lag))
+    return(list(beta_spa, alpha_spa, sum_wls_lag))
   } else {
-    return(c(theta_spa, alpha_spa))
+    return(c(beta_spa, alpha_spa))
   }
 }
 
@@ -642,7 +642,6 @@ calculate_rmse <- function(true_values, predicted_values) {
 #'
 #' @param list_simu The list of dataframes containing the simulations.
 #' @param quantile The quantile for the chiplot.
-#' @param true_param The true parameters of the simulations (beta, alpha).
 #' @param spatial Logical indicating whether to use spatial chi.
 #' @param df_dist The dataframe containing the distances between the sites for
 #'               spatial chi.
@@ -654,7 +653,7 @@ calculate_rmse <- function(true_values, predicted_values) {
 #' @import lmtest
 #'
 #' @export
-evaluate_vario_estimates <- function(list_simu, quantile, true_param,
+evaluate_vario_estimates <- function(list_simu, quantile,
                                     spatial = TRUE, df_dist = NA,
                                     tmax = NA, hmax = NA) {
   # get the number of simulations
@@ -665,7 +664,6 @@ evaluate_vario_estimates <- function(list_simu, quantile, true_param,
   for (n in 1:n_res) {
     simu_df <- as.data.frame(list_simu[[n]])
     if (spatial) {
-    
       chi <- spatial_chi_alldist(df_dist, simu_df, quantile = quantile,
                                  hmax = hmax)
       print(n)

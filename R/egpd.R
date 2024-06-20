@@ -49,10 +49,12 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
     } else {
       censore <- left_censoring
     }
+    png("egpd_fit_cnrs.png", width = 700, height = 400)
     egpd.fit <- fit.extgp(y, model = 1, method = "mle",
                           init = c(kappa_0, sigma_0, xi_0),
-                          censoring = c(censore, Inf), plots = FALSE,
-                          confint = FALSE, ncpus = 7, R = 1000)
+                          censoring = c(0.35, Inf), plots = TRUE,
+                          confint = TRUE, ncpus = 7, R = 1000)
+    dev.off()
     param <- egpd.fit$fit$mle
     kappa <- c(kappa, param[1])
     sigma <- c(sigma, param[2])
