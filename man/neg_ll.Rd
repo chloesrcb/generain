@@ -6,29 +6,35 @@
 \usage{
 neg_ll(
   params,
-  excesses,
+  simu,
   h_vect,
   tau,
-  df_dist,
-  simu_exp = FALSE,
-  simu = NA,
+  locations,
+  latlon = FALSE,
   quantile = 0.9,
-  nmin = 5
+  nmin = 5,
+  simu_exp = FALSE,
+  excesses = NULL
 )
 }
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}
 
-\item{excesses}{List of excesses (N_vect, n_vect).}
-
 \item{h_vect}{The spatial lag vector.}
 
 \item{tau}{The temporal lag vector.}
 
-\item{df_dist}{The distances long dataframe.}
+\item{locations}{The locations dataframe.}
+
+\item{latlon}{A boolean value to indicate if the locations are in latitude
+and longitude. Default is FALSE.}
 
 \item{simu_exp}{A boolean value to indicate if the data is simulated with
 an exponential distribution.}
+
+\item{excesses}{List of excesses (N_vect, n_vect).}
+
+\item{df_dist}{The distances long dataframe.}
 }
 \value{
 The negative log-likelihood value.

@@ -7,7 +7,6 @@
 evaluate_vario_estimates(
   list_simu,
   quantile,
-  true_param,
   spatial = TRUE,
   df_dist = NA,
   tmax = NA,
@@ -18,8 +17,6 @@ evaluate_vario_estimates(
 \item{list_simu}{The list of dataframes containing the simulations.}
 
 \item{quantile}{The quantile for the chiplot.}
-
-\item{true_param}{The true parameters of the simulations (beta, alpha).}
 
 \item{spatial}{Logical indicating whether to use spatial chi.}
 

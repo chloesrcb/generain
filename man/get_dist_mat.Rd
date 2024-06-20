@@ -2,9 +2,16 @@
 % Please edit documentation in R/distances.R
 \name{get_dist_mat}
 \alias{get_dist_mat}
-\title{Compute the distance matrix between locations}
+\title{This function reshapes a distance matrix into a long dataframe.}
 \usage{
-get_dist_mat(locations, dmax = NA, latlon = TRUE)
+get_dist_mat(
+  locations,
+  dmax = NA,
+  latlon = TRUE,
+  adv = c(0, 0),
+  tau = 1:10,
+  alpha_spa = 1.5
+)
 }
 \arguments{
 \item{locations}{A matrix or data frame containing the coordinates of the
@@ -13,12 +20,17 @@ locations.}
 \item{dmax}{The maximum distance threshold if specified.}
 
 \item{latlon}{Logical indicating whether the coordinates are in latitude and
-longitude format.}
+longitude format. Default is TRUE.}
+
+\item{adv}{A vector of advection values. Default is c(0, 0).}
+
+\item{tau}{A vector of temporal lags. Default is 1:10.}
+
+\item{alpha_spa}{The spatial lag exponent. Default is 1.5.}
 }
 \value{
-A distance matrix where each element represents the distance between
-two locations.
+A distance matrix containing the reshaped distances.
 }
 \description{
-This function computes the distance matrix between a set of locations.
+This function reshapes a distance matrix into a long dataframe.
 }

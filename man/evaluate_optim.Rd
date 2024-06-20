@@ -10,10 +10,11 @@ evaluate_optim(
   true_param,
   tau,
   df_dist,
-  hmax = NA,
-  method = "CG",
+  locations,
+  hmax = sqrt(17),
   nmin = 5,
-  parscale = c(1, 1, 1, 1)
+  parscale = c(1, 1, 1, 1),
+  latlon = FALSE
 )
 }
 \arguments{
@@ -27,15 +28,20 @@ evaluate_optim(
 
 \item{df_dist}{The distances long dataframe}
 
-\item{hmax}{The maximum spatial lag value. Default is NA.}
+\item{locations}{The locations dataframe}
 
-\item{method}{The optimization method to use "CG", "Nelder-Mead",
-"BFGS", "SANN", "Brent" (default is "CG")}
+\item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
 
 \item{nmin}{The minimum number of observations to consider}
 
 \item{parscale}{The scaling parameter for the optimization process. Default
 is c(1, 1, 1, 1).}
+
+\item{latlon}{A boolean value to indicate if the locations are in latitude
+and longitude. Default is FALSE.}
+
+\item{method}{The optimization method to use "CG", "Nelder-Mead",
+"BFGS", "SANN", "Brent" (default is "CG")}
 }
 \value{
 The result of the optimization process as a dataframe.
