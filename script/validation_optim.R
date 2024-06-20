@@ -129,18 +129,36 @@ for (i in 1:100) {
   list_BR[[i]] <- df
 }
 
+file_path <- paste0("../data/simulations_BR/br_3D_100s_100t_1.csv")
+BR_df <- read.csv(file_path)
+
 BR_df <- list_BR[[1]] # first simulation
 nsites <- ncol(BR_df) # number of sites
-df_dist <- distances_regular_grid(nsites) # distance matrix
+
+sites_coords <- generate_grid_coords(sqrt(nsites))
+dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
+                         latlon = FALSE) # distance matrix
+df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
 
 start_time <- Sys.time()
 # for all simulations
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
-                            tau = 1:10, df_dist = df_dist,
-                            parscale = c(1, 1, 0.1, 0.1, 1, 1))
+                            tau = 1:10, df_dist = df_dist, nmin = 5,
+                            locations = sites_coords,
+                            parscale = c(1, 1, 0.1, 0.1))
 end_time <- Sys.time()
 print(end_time - start_time)
+
+excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
+
+result <- optim(par = c(true_param), fn = neg_ll, excesses = excesses,
+                        quantile = 0.8,
+                        h_vect = h_vect, tau = tau,
+                        locations = sites_coords, df_dist = df_dist,
+                        simu = simu_df, method = "CG",
+                        control = list(parscale = c(1, 1, 0.1, 0.1)))
+
 
 df_res <- na.omit(df_result)
 df_valid_1 <- get_criterion(df_res, true_param)
@@ -158,22 +176,25 @@ excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
 # conjugate gradient algorithm with the Dai and Yuan update (2001)
 result <- Rcgmin(par = c(0.4, 0.2, 1.5, 1), gr = "grfwd",
           fn = function(par) {
-            neg_ll(par, excesses = excesses, quantile = 0.9,
-                    h_vect = h_vect, tau = tau, df_dist = df_dist)
+            neg_ll(par, excesses = excesses, quantile = 0.9, 
+            locations = sites_coords,simu = BR_df, h_vect = h_vect, tau = tau, 
+            df_dist = df_dist)
             }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
                 upper = c(Inf, Inf, 1.999, 1.999))
 
 # scaling <- c(0.4, 0.2, 1.5, 1)
 # p.scale <- parscale.parameters(true_param, scaling)
 
-result <- optimr(par = true_param,
+param <- c(0.5, 0.1, 1.4, 1.1)
+result <- optimr(par = param,
                   method = "Rcgmin", gr = "grfwd",
           fn = function(par) {
             neg_ll(par, excesses = excesses, quantile = 0.9,
+                    locations = sites_coords,
                     h_vect = h_vect, tau = tau, df_dist = df_dist, simu=BR_df)
-            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-                upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                control = list(parscale = c(1, 1, 0.1, 0.1, 0.1, 0.1),
+            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
+                upper = c(Inf, Inf, 1.999, 1.999),
+                control = list(parscale = c(1, 1, 0.1, 0.1),
                                 maxit = 1000))
 
 
@@ -183,73 +204,6 @@ optimHess(result$par, fn = function(par) {
                     h_vect = h_vect, tau = tau, df_dist = df_dist)
             })
 
-
-# simu with more sites and less time -------------------------------------------
-
-# true parameters
-# beta1, beta2, alpha1, alpha2
-
-true_param <- c(0.4, 0.2, 1.5, 1)
-
-# Iterate through files from 1 to 100
-list_BR <- list()
-for (i in 1:100) {
-  file_path <- paste0(
-          "../../phd_extremes/data/simulations_BR/sim_25s_300t/rainBR_", i,
-                      ".csv")
-  df <- read.csv(file_path)
-  list_BR[[i]] <- df
-}
-
-BR_df <- list_BR[[5]] # first simulation
-nsites <- ncol(BR_df) # number of sites
-df_dist <- distances_regular_grid(nsites) # distance matrix
-h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
-
-# # for one simulation
-excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
-excesses$n_vect
-result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll, excesses = excesses,
-                h_vect = h_vect, df_dist = df_dist, quantile = 0.9, tau = 1:10,
-                nmin = 5, method = "CG",
-                control = list(parscale = c(0.1, 1, 1, 1), maxit = 1000))
-
-# result$par # estimated parameters
-
-# for all simulations
-start_time <- Sys.time()
-df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
-                            tau = 1:10, df_dist = df_dist,
-                            nmin = 5, parscale = c(1, 1, 0.1, 0.1))
-end_time <- Sys.time()
-print(end_time - start_time)
-# get RMSE, MAE, Mean
-df_valid_2 <- get_criterion(df_result, true_param)
-
-# simu with advection ----------------------------------------------------------
-
-# Simulation with 9 sites and 50 times and advection
-list_BR_adv_9_50 <- list()
-for (i in 1:10) {
-  file_path <- paste0("../data/simulations_BR/sim_adv_9s_50t_10/rainBR_", i,
-                      ".csv")
-  df <- read.csv(file_path)
-  list_BR_adv_9_50[[i]] <- df
-}
-adv <- c(0.05, 0.05) # advection
-tau <- 1:5 # temporal lags
-BR_df <- list_BR_adv_9_50[[1]] # first simulation
-nsites <- ncol(BR_df) # number of sites
-df_dist <- distances_regular_grid(nsites) # distance matrix
-h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
-
-# for one simulation
-excesses <- empirical_excesses(BR_df, 0.6, tau, h_vect, df_dist, nmin = 5)
-result <- optim(par = c(0.4, 0.2, 1.5, 1, adv), fn = neg_ll,
-                excesses = excesses, simu = BR_df, quantile = 0.6,
-                h_vect = h_vect, tau = tau, df_dist = df_dist,
-                method = "CG",
-                control = list(parscale = c(0.1, 0.1, 1, 1, 0.01, 0.01)))
 
 # Plot the results -------------------------------------------------------------
 
@@ -366,29 +320,169 @@ result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
                 upper = c(Inf, Inf, 2, 2),
                 control = list(parscale = c(0.1, 0.1, 1, 1)))
 
-# test another optim function
-library(mev)
-library(alabama)
-# constrained optimization for the parameters
-hin <- function(par, ...) {
-  c(-1e-3 + par[1], # beta1 > 0
-    -1e-3 + par[2], # beta2 > 0
-    2 - par[3], # alpha1 < 2
-    -1e-5 + par[3], # alpha1 > 0
-    2 - par[4], # alpha2 < 2
-    -1e-3 + par[4]) # alpha2 > 0
-}
-
-tau = 1:10
-
-excesses <- empirical_excesses(BR_df, 0.9, tau, h_vect, df_dist, nmin = 5)
-
-opt <- alabama::auglag(
-  par = c(0.4, 0.2, 1.5, 1),
-  hin = hin,
-  control.optim = list(parscale = c(0.01, 0.01, 1, 1)),
+param <- c(0.4, 0.2, 1.5, 1)
+result <- optimr(
+  par = true_param,
+  method = "Rcgmin",
+  gr = "grfwd",
   fn = function(par) {
-    neg_ll(par, excesses = excesses, simu = BR_df, quantile = 0.9,
-          h_vect = h_vect, tau = tau, df_dist = df_dist)
-  }
-)$value
+    neg_ll(par, simu = simu_df, quantile = quantile, h_vect = h_vect,
+           tau = tau, locations = sites_coords, df_dist = df_dist,
+           excesses = excesses)
+  },
+  control = list(parscale = c(1, 1, 1, 1),
+                 maxit = 10000,
+                 trace = 1
+                 )
+)
+
+
+
+
+################################################################################
+# simu rpareto -----------------------------------------------------------------
+################################################################################
+
+# true parameters
+ngrid <- 5
+temp <- 1:300
+param <- c(0.2, 0.2, 1.5, 0.8) # true parameters for the variogram
+beta1 <- param[1] / 2
+beta2 <- param[2] / 2
+alpha1 <- param[3]
+alpha2 <- param[4]
+adv <- c(0.1, 0.1)
+
+file_path <- paste0("../data/simulations_rpar/rpar_", ngrid^2, "s_",
+                                length(temp), "t_1.csv")
+simu_df <- read.csv(file_path)
+
+params <- c(0.4, 0.2, 1.5, 1, 0.1, 0.1)
+nsites <- ncol(simu_df) # number of sites
+# get grid coordinates
+sites_coords <- generate_grid_coords(sqrt(nsites))
+# sites_coords$id <- 1:nsites
+h_vect <- get_lag_vectors(sites_coords, params,
+                          hmax = sqrt(17), tau_vect = 1:10) # lag vectors
+
+# distance matrix for the grid
+# dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
+#                          latlon = FALSE)
+# df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+
+# hmax <- sqrt(17)
+# h_vect <- get_h_vect(df_dist, hmax) # spatial lags
+
+tau <- 1:10 # temporal lags
+quantile <- 0.9
+nmin <- 5
+
+# get the empirical excesses
+excesses <- empirical_excesses(simu_df, quantile, tau, h_vect,
+                              nmin)
+
+parscale <- c(1, 1, 1, 1, 1, 1)  # scale parameters
+lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf)
+upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+
+result <- optimr(par = true_param, method = "Rcgmin",
+                  gr = "grfwd", fn = function(par) {
+                  neg_ll(par, simu = simu_df, quantile = quantile,
+                        h_vect = h_vect, tau = tau,
+                        locations = sites_coords)
+                  }, lower = lower.bound, upper = upper.bound,
+                  control = list(parscale = parscale,
+                                 maxit = 10000))
+
+# Conjugate gradient method
+result <- optim(par = true_param, fn = neg_ll, quantile = 0.9,
+                h_vect = h_vect, tau = tau,
+                locations = sites_coords,
+                simu = simu_df, method = "CG",
+                control = list(parscale = parscale))
+
+# Fix all parameters except adv2
+param = true_param
+fixed_params <- c(beta1 = param[1], beta2 = param[2], alpha1 = param[3],
+                alpha2 = param[4], adv1 = param[5], adv2 = param[6])
+
+# Function to plot neg_ll with fixed parameters
+values <- seq(0.1, 0.5, 0.01)
+neg_ll_vector <- numeric(0)
+for (i in values) {
+  fixed_params[6] <- i
+  neg_ll_values <- neg_ll(fixed_params, quantile = quantile, h_vect = h_vect, tau = tau,
+                locations = sites_coords, simu = simu_df)
+  neg_ll_vector <- c(neg_ll_vector, neg_ll_values)
+}
+plot(values, neg_ll_vector, type = "l", xlab = "adv2", ylab = "neg_ll")
+
+
+par_names <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+par_values <- result$par
+
+latex_table <- data.frame(Parameter = par_names, Value = par_values)
+latex_table <- transform(latex_table, Value = round(Value, 3))
+
+latex_table <- paste0(latex_table$Parameter, " & ", latex_table$Value, " \\\\")
+latex_table <- paste(latex_table, collapse = "\n")
+
+cat(latex_table)
+
+
+# parscale <- c(0.1, 0.1, 1, 0.5, 0.05, 0.05)
+# result <- optim(par = c(param, adv), method = "L-BFGS-B",
+#                 fn = function(par) {
+#                   neg_ll(par, quantile = quantile,
+#                         h_vect = h_vect, tau = tau,
+#                         locations = sites_coords,
+#                         df_dist = df_dist,
+#                         simu = simu_df)
+#                 }, lower = lower.bound, upper = upper.bound,
+#                 control = list(parscale = parscale,
+#                               maxit = 10000))
+
+
+parscale <- c(1,1,1,1,1,1)  # scale parameters
+lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6)
+upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+
+result <- optimr(
+  par = c(param, adv),
+  method = "Rcgmin",
+  fn = function(par) {
+    neg_ll(par, simu = simu_df, quantile = quantile, h_vect = h_vect,
+           tau = tau, locations = sites_coords, df_dist = df_dist)
+  },
+  gr = function(par) {
+    grad_neg_ll(par, simu = simu_df, quantile = quantile, h_vect = h_vect,
+                tau = tau, df_dist = df_dist, locations = sites_coords)
+  },
+  control = list(parscale = parscale,
+                 maxit = 10000,
+                 trace = 1,
+                 reltol = 1e-8,
+                 abstol = 1e-8
+                 ),
+  lower = lower.bound, upper = upper.bound
+)
+
+
+result <- optimr(
+  par = c(param, adv),
+  method = "CG",
+  fn = function(par) {
+    neg_ll(par, simu = simu_df, quantile = quantile, h_vect = h_vect,
+           tau = tau, locations = sites_coords, df_dist = df_dist)
+  },
+  gr = function(par) {
+    grad_neg_ll(par, simu = simu_df, quantile = quantile, h_vect = h_vect,
+                tau = tau, df_dist = df_dist, locations = sites_coords)
+  },
+  control = list(parscale = parscale,
+                 maxit = 10000,
+                 trace = 1,
+                 reltol = 1e-8,
+                 abstol = 1e-8
+                 )
+)

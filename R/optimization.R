@@ -8,9 +8,8 @@
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
 #' @param tau The temporal lag vector.
-#' @param h_vect The spatial lag vector.
-#' @param df_dist The distances inside a long dataframe.
-#' @param nmin The minimum number of observations to consider.
+#' @param h_vect The spatial lag vectors and distances dataframe.
+#' @param nmin The minimum number of observations to consider. Default is 5.
 #'
 #' @return A list with n_vect the number of excesses and N_vect the number of
 #' possible excesses ie the number of observations for each pair of sites.
@@ -18,19 +17,27 @@
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
+empirical_excesses <- function(data_rain, quantile, tau, h_vect,
                                 nmin = 5) {
   Tmax <- nrow(data_rain) # number of time steps
   q <- quantile # quantile
-  df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
-  npairs <- nrow(df_dist)
-  N_vect <- c() # number of observations
-  n_vect <- c() # number of excesses (sum)
-  for (t in tau) {
-    for (i in 1:npairs) {
+  # h_norms <- unique(h_vectors$hnorm)
+  # df_dist$h <- ifelse(df_dist$value %in% h_norms, df_dist$value, NA)
+  # N_vect <- c() # number of observations
+  # n_vect <- c() # number of excesses (sum)
+  # if it is an only spatial matrix
+  # df_dist$tau <- ifelse(is.null(df_dist$tau), 0, df_dist$tau)
+  tau_vect <- h_vect$tau
+  h_vect$N_vect <- NA
+  h_vect$n_vect <- NA
+  for (t in unique(tau_vect)) {
+    # df_dist_t <- df_dist[df_dist$tau == t, ]
+    df_h_t <- h_vect[h_vect$tau == t, ]
+    for (i in seq_len(nrow(df_h_t))) {
       # get index pairs
-      ind_s2 <- as.numeric(as.character(df_dist$X[i]))
-      ind_s1 <- df_dist$Y[i]
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- df_h_t$s1[i]
+      # get the couple of sites
       rain_cp <- drop_na(data_rain[, c(ind_s1, ind_s2)])
       colnames(rain_cp) <- c("s1", "s2")
       rains1 <- rain_cp$s1
@@ -40,10 +47,8 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
       rain_lag <- rains2[(1 + t):Tmax] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get final couple
       n <- nrow(data_cp)
-      if (n < nmin) { # if not enough data
-        n_vect <- c(n_vect, NA)
-        N_vect <- c(N_vect, NA)
-      } else {
+
+      if (n >= nmin) {
         rain_unif <- cbind(rank(data_cp[, 1]) / (n + 1),
                           rank(data_cp[, 2]) / (n + 1))
 
@@ -57,13 +62,16 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, df_dist,
 
         # nb of conditional excesses
         excess_count <- sum(cp_cond[, 1] > q)
-        
-        n_vect <- c(n_vect, excess_count)
-        N_vect <- c(N_vect, nrow(cp_cond))
+        # n_vect <- c(n_vect, excess_count)
+        # N_vect <- c(N_vect, nrow(cp_cond))
+        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t,
+                                                      ]$n_vect <- excess_count
+        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t,
+                                                      ]$N_vect <- nrow(cp_cond)
       }
     }
   }
-  return(list(n_vect = n_vect, N_vect = N_vect))
+  return(h_vect)
 }
 
 # THEORICAL CHI ----------------------------------------------------------------
@@ -97,6 +105,25 @@ theorical_chi_ind <- function(params, h, tau) {
   return(chival)
 }
 
+# theorical_chi_ind <- function(params, h, tau, adv) {
+#   # get variogram parameter
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   # beta3 <- params[3]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   # alpha3 <- params[6]
+#   h1_adv <- abs(h1 + adv[1] * tau)
+#   h2_adv <- abs(h2 + adv[2] * tau)
+#   hnorm <- norm_Lp(h1_adv, h2_adv, p = alpha1)
+#   # Get vario and chi for each lagtemp
+#   varioval <- 2 * (beta1 * hnorm^alpha1 + beta2 * tau^alpha2)
+#   phi <- pnorm(sqrt(0.5 * varioval))
+#   chival <- 2 * (1 - phi)
+
+#   return(chival)
+# }
+
 
 #' Compute the theoretical chi matrix.
 #'
@@ -113,16 +140,53 @@ theorical_chi_ind <- function(params, h, tau) {
 theorical_chi_mat <- function(params, h_vect, tau) {
   # Init matrix
   chi <- matrix(0, nrow = length(tau), ncol = length(h_vect))
-
+  adv <- params[5:6]
   # for each spatial lag
   for (j in seq_along(h_vect)) {
       # Get vario and chi for each lagtemp
       h <- h_vect[j]
       for (t in seq_along(tau)) {
-          chi[t, j] <- theorical_chi_ind(params, h, tau[t])
+          chi[t, j] <- theorical_chi_ind(params, h, tau[t], adv)
       }
   }
   return(chi)
+}
+
+
+#' Compute the theoretical chi dataframe.
+#'
+#' This function calculates the theoretical chi dataframe. based on the given
+#' parameters.
+#'
+#' @param params A vector of parameters.
+#' @param h_vectors A dataframe with spatial lag values.
+#' @param tau A vector of temporal lag values.
+#'
+#' @return The theoretical chi matrix.
+#'
+#' @export
+theorical_chi <- function(params, h_vectors, tau) {
+  # Init data frame
+  lx <- nrow(h_vectors)
+  lt <- length(tau)
+
+  chi_df <- data.frame(
+    hnorm = rep(h_vectors$hnorm, each = lt),
+    tau = rep(tau, times = lx),
+    chi = rep(0, times = lx * lt)
+  )
+
+  # for each spatial lag
+  for (i in 1:nrow(h_vectors)) {
+    h <- h_vectors$hnorm[i]
+    tau <- h_vectors$tau[i]
+    for (t in seq_along(tau)) {
+      chi_value <- theorical_chi_ind(params, h, tau[t])
+      chi_df$chi[(i - 1) * lt + t] <- chi_value
+    }
+  }
+
+  return(chi_df)
 }
 
 #' get_chi_vect function
@@ -176,53 +240,294 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param h_vect The spatial lag vector.
 #' @param tau The temporal lag vector.
 #' @param df_dist The distances long dataframe.
+#' @param locations The locations dataframe.
+#' @param latlon A boolean value to indicate if the locations are in latitude
+#'               and longitude. Default is FALSE.
 #' @param simu_exp A boolean value to indicate if the data is simulated with
 #'                 an exponential distribution.
 #'
 #' @return The negative log-likelihood value.
 #'
 #' @export
-neg_ll <- function(params, excesses, h_vect, tau, df_dist, simu_exp = FALSE,
-                   simu = NA, quantile = 0.9, nmin = 5) {
-  # params conditions
-  # beta1 <- params[1]
-  # beta2 <- params[2]
-  # alpha1 <- params[3]
-  # alpha2 <- params[4]
-  df_dist_new <- df_dist
-  # print(params)
+neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
+                  latlon = FALSE, quantile = 0.9, nmin = 5,
+                  simu_exp = FALSE, excesses = NULL) {
+  hmax <- max(h_vect$hnorm)
+  # df_dist_new <- df_dist
+  print(params)
+  if (is.null(excesses)) {
+    excesses <- empirical_excesses(simu, quantile, tau, h_vect,
+                                  nmin)
+  }
+
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -1e-6, -1e-6)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    print("out of bounds")
+    return(1e8)
+  }
+
+  # h_vect_new <- h_vect
 
   if (length(params) == 6) {
     adv <- params[5:6]
-    nsites <- length(unique(df_dist$X))
-    # change for each advection (can be long)
-    df_dist_new <- distances_regular_grid(nsites, adv = adv, tau = tau)
-    h_vect <- get_h_vect(df_dist_new, sqrt(17))
-    excesses <- empirical_excesses(simu, quantile, tau, h_vect, df_dist,
-                                    nmin = nmin)
+    # change for each advection
+    # dist_mat <- get_dist_mat(locations, adv = adv, tau = tau, latlon = latlon)
+    # df_dist_new <- reshape_distances(dist_mat) # reshape the distance matrix
+    # Create dataframe from h_adv
+    # h_vect <- get_h_vect(df_dist_new, hmax)
+    h_vect <- get_lag_vectors(locations, params, tau = tau, hmax = hmax)
+    if (nrow(h_vect) <= 20) {
+      return(1e8)
+    }
+    excesses <- empirical_excesses(simu, quantile, tau, h_vect, nmin = nmin)
   }
-
-  # if (abs(alpha1) < 0.001 || abs(alpha2) < 0.001 ||  abs(alpha1 - 2) < 0.001 ||
-  #   abs(alpha2 - 2) < 0.001 || abs(beta1) < 0.0001 || abs(beta2) <= 0.0001 ||
-  #   alpha1 <= 0 || alpha2 <= 0 || beta1 <= 0 || beta2 <= 0 ||
-  #   alpha1 >= 2 || alpha2 >= 2) {
-  #     return(Inf)
-  # }
 
   N_vect <- excesses$N_vect # number of observations
   n_vect <- excesses$n_vect # number of excesses
-  chi <- theorical_chi_mat(params, h_vect, tau) # get chi matrix
+  chi <- theorical_chi(params, h_vect, tau) # get chi matrix
   # transform in chi vector
-  chi_vect <- get_chi_vect(chi, h_vect, tau, df_dist_new)
+  # chi_vect <- get_chi_vect(chi, h_vect$hnorm, tau)
+  chi_vect <- as.vector(chi$chi)
+  chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect)
 
-  logC <- lchoose(N_vect, n_vect) # log binomial coefficient
+  # logC <- lchoose(N_vect, n_vect) # log binomial coefficient
   non_excesses <- N_vect - n_vect # number of non-excesses
   # log-likelihood vector
-  ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
+  # ll_vect <- logC + n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
+  ll_vect <- n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
+
   # negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
   return(nll)
 }
+
+
+# GRADIENT ---------------------------------------------------------------------
+
+#' Compute the derivative of the extremogram with respect to beta1.
+#'
+#' This function calculates the derivative of the extremogram with respect to 
+#' beta1.
+#'
+#' @param params a vector of variogram parameters.
+#' @param hnorm a vector of spatial lags.
+#' @param tau a vector of temporal lags.
+#'
+#' @return The derivative of the extremogram with respect to beta1.
+#'
+#' @examples
+#' dchi_dbeta1(params = c(1, 2, 3), hnorm = 0.5, tau = 0.1)
+#'
+dchi_dbeta1 <- function(params, hnorm, tau) {
+  # if adv is present it appaers in hnorm
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+
+  semivario <- beta1 * hnorm^alpha1 + beta2 * tau^alpha2
+  phi <- pnorm(sqrt(semivario))
+  dphi_dvarioval <- dnorm(sqrt(semivario)) * (1 / sqrt(semivario))
+
+  dvarioval_dbeta1 <- 2 * hnorm^alpha1
+  dchi_dbeta1 <- -2 * dphi_dvarioval * dvarioval_dbeta1
+  return(dchi_dbeta1)
+}
+
+#' Compute the derivative of the extremogram function with respect to beta2.
+#'
+#' This function calculates the derivative of the extremogram function with
+#' respect to beta2.
+#'
+#' @param params a vector of variogram parameters.
+#' @param hnorm a vector of spatial lags.
+#' @param tau a vector of temporal lags.
+#'
+#' @return The derivative of the extremogram function with respect to beta2.
+#'
+#' @examples
+#' params <- c(1, 2)
+#' hnorm <- c(0.1, 0.2, 0.3, 0.4)
+#' tau <- 0.5
+#' dchi_dbeta2(params, hnorm, tau)
+#'
+#' @export
+dchi_dbeta2 <- function(params, hnorm, tau) {
+  # if adv is present it appaers in hnorm
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+
+  semivario <- beta1 * hnorm^alpha1 + beta2 * tau^alpha2
+  phi <- pnorm(sqrt(semivario))
+  dphi_dvarioval <- dnorm(sqrt(semivario)) * (1 / sqrt(semivario))
+
+  dvarioval_dbeta2 <- 2 * tau^alpha2
+  dchi_dbeta2 <- -2 * dphi_dvarioval * dvarioval_dbeta2
+  return(dchi_dbeta2)
+}
+
+#' Compute the derivative of the extremogram with respect to alpha1.
+#'
+#' This function calculates the derivative of theextremogram with respect to
+#' alpha1.
+#'
+#' @param params a vector of variogram parameters.
+#' @param hnorm a vector of spatial lags.
+#' @param tau a vector of temporal lags.
+#'
+#' @return The derivative of the extremogram with respect to alpha1.
+#'
+#' @examples
+#' params <- c(0.5, 0.8)
+#' hnorm <- 0.2
+#' tau <- 0.1
+#' dchi_dalpha1(params, hnorm, tau)
+#'
+#' @export
+dchi_dalpha1 <- function(params, hnorm, tau) {
+  # if adv is present it appaers in hnorm
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+
+  semivario <- beta1 * hnorm^alpha1 + beta2 * tau^alpha2
+  phi <- pnorm(sqrt(semivario))
+  dphi_dvarioval <- dnorm(sqrt(semivario)) * (1 / sqrt(semivario))
+
+  dvarioval_dalpha1 <- 2 * beta1 * hnorm^alpha1 * log(hnorm)
+  dchi_dalpha1 <- -2 * dphi_dvarioval * dvarioval_dalpha1
+  return(dchi_dalpha1)
+}
+
+
+#' Compute the derivative of the extremogram with respect to alpha2.
+#'
+#' This function calculates the derivative of the extremogram with respect
+#' to alpha2.
+#'
+#' @param params a vector of variogram parameters.
+#' @param hnorm a vector of spatial lags.
+#' @param tau a vector of temporal lags.
+#'
+#' @return The derivative of the extremogram with respect to alpha2
+#'
+#' @examples
+#' params <- c(0.5, 0.2)
+#' hnorm <- c(0.1, 0.3, 0.2, 0.4)
+#' tau <- 0.5
+#' dchi_dalpha2(params, hnorm, tau)
+#'
+#' @export
+dchi_dalpha2 <- function(params, hnorm, tau) {
+  # if adv is present it appaers in hnorm
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+
+  semivario <- beta1 * hnorm^alpha1 + beta2 * tau^alpha2
+  phi <- pnorm(sqrt(semivario))
+  dphi_dvarioval <- dnorm(sqrt(semivario)) * (1 / sqrt(semivario))
+
+  dvarioval_dalpha2 <- 2 * beta2 * tau^alpha2 * log(tau)
+  dchi_dalpha2 <- -2 * dphi_dvarioval * dvarioval_dalpha2
+  return(dchi_dalpha2)
+}
+
+
+#' Compute the gradient of the negative log-likelihood function
+#'
+#' This function computes the gradient of the negative log-likelihood function
+#' given a set of parameters, simulated data, bandwidth vector, tau value,
+#' degrees of freedom for the distribution, and locations.
+#'
+#' @param params a vector of variogram parameters
+#' @param simu a dataframe of simulated data
+#' @param h_vect a vector of spatial lag values
+#' @param tau a vector of temporal lag values
+#' @param df_dist a numeric value representing the degrees of freedom for the
+#'                distribution
+#' @param locations a matrix of locations
+#'
+#' @return a vector representing the gradient of the negative
+#'         log-likelihood function
+#'
+#' @export
+grad_neg_ll <- function(params, simu, h_vect, tau, df_dist, locations, # nolint
+                       latlon = FALSE, quantile = 0.9, nmin = 5,
+                       simu_exp = FALSE, excesses = NULL) {
+  grad <- numeric(length(params))
+  hmax <- max(h_vect)
+
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(rep(0, length(params)))
+  }
+
+  if (is.null(excesses)) {
+    excesses <- empirical_excesses(simu, quantile, tau, h_vect, df_dist,
+                              nmin)
+  }
+
+  df_dist_new <- df_dist
+
+  if (length(params) == 6) { # if advection is present
+    adv <- params[5:6]
+    dist_mat <- get_dist_mat(locations, adv = adv, tau = tau, latlon = latlon)
+    df_dist_new <- reshape_distances(dist_mat)
+    h_vect <- get_h_vect(df_dist_new, hmax)
+    excesses <- empirical_excesses(simu, quantile, tau, h_vect,
+                                   df_dist_new, nmin = nmin)
+  }
+
+  N_vect <- excesses$N_vect
+  n_vect <- excesses$n_vect
+  chi <- theorical_chi_mat(params, h_vect, tau)
+  chi_vect <- get_chi_vect(chi, h_vect, tau, df_dist_new)
+
+  non_excesses <- N_vect - n_vect
+  # ll_vect <- n_vect * log(chi_vect) + non_excesses * log(1 - chi_vect)
+
+  # Compute the gradient
+  for (i in 1:length(params)) {
+    dchi_dparam <- matrix(0, nrow = length(tau), ncol = length(h_vect))
+
+    for (j in seq_along(h_vect)) {
+      for (t in seq_along(tau)) {
+        if (i == 1) {
+          dchi_dparam[t, j] <- dchi_dbeta1(params, h_vect[j], tau[t])
+        } else if (i == 2) {
+          dchi_dparam[t, j] <- dchi_dbeta2(params, h_vect[j], tau[t])
+        } else if (i == 3) {
+          dchi_dparam[t, j] <- dchi_dalpha1(params, h_vect[j], tau[t])
+        } else if (i == 4) {
+          dchi_dparam[t, j] <- dchi_dalpha2(params, h_vect[j], tau[t])
+        }
+      }
+    }
+
+    dchi_dparam_vect <- get_chi_vect(dchi_dparam, h_vect, tau, df_dist_new)
+    grad[i] <- -sum((n_vect / chi_vect - non_excesses / (1 - chi_vect)) * dchi_dparam_vect, na.rm = TRUE) # nolint
+  }
+
+  return(grad)
+}
+
 
 # SIMU -------------------------------------------------------------------------
 
@@ -353,12 +658,15 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param tau The temporal lag vector
 #' @param df_dist The distances long dataframe
-#' @param hmax The maximum spatial lag value. Default is NA.
+#' @param locations The locations dataframe
+#' @param hmax The maximum spatial lag value. Default is sqrt(17).
 #' @param method The optimization method to use "CG", "Nelder-Mead",
 #'               "BFGS", "SANN", "Brent" (default is "CG")
 #' @param nmin The minimum number of observations to consider
 #' @param parscale The scaling parameter for the optimization process. Default
 #'                 is c(1, 1, 1, 1).
+#' @param latlon A boolean value to indicate if the locations are in latitude
+#'              and longitude. Default is FALSE.
 #'
 #' @return The result of the optimization process as a dataframe.
 #'
@@ -368,14 +676,15 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #'
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
-                            hmax = NA, method = "CG", nmin = 5,
-                            parscale = c(1, 1, 1, 1)) {
+                           locations, hmax = sqrt(17), nmin = 5,
+                           parscale = c(1, 1, 1, 1), latlon = FALSE) {
 
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(true_param) == 6) {
-    lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf)
-    upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+    parscale <- c(parscale, 1, 1)
   }
   # get the number of simulations
   n_res <- length(list_simu)
@@ -385,40 +694,31 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
 
   # if there is advection
   if (length(true_param) == 6) {
-    adv <- true_param[5:6]
-    nsites <- length(unique(df_dist$X))
-    df_dist <- distances_regular_grid(nsites, adv = adv, tau = tau)
     df_result$adv1 <- rep(NA, n_res)
     df_result$adv2 <- rep(NA, n_res)
   }
 
-  h_vect <- get_h_vect(df_dist, sqrt(17))
+  h_vect <- get_lag_vectors(locations, true_param, tau = tau, hmax = hmax)
+  count_cv <- 0
   # for all simulations
   for (n in 1:n_res) {
     simu_df <- as.data.frame(list_simu[[n]]) # get the simulation dataframe
     # get the empirical excesses
-    excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist,
-                                   nmin)
+    # excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist,
+    #                                nmin)
     # optimize the negative log-likelihood function
     tryCatch({
-        # result <- optim(par = true_param, fn = neg_ll,
-        #     excesses = excesses, h_vect = h_vect, tau = tau,
-        #     df_dist = df_dist, method = method, quantile = quantile,
-        #     control = list(parscale = parscale))
-        # result <- Rcgmin(par = true_param, gr = "grfwd",
-        #         fn = function(par) {
-        #           neg_ll(par, excesses = excesses, quantile = quantile,
-        #             h_vect = h_vect, tau = tau, df_dist = df_dist)
-        #         }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
-        #         upper = c(Inf, Inf, 1.999, 1.999))
         result <- optimr(par = true_param, method = "Rcgmin",
                   gr = "grfwd", fn = function(par) {
-                  neg_ll(par, excesses = excesses, quantile = 0.9,
-                        h_vect = h_vect, tau = tau, df_dist = df_dist,
-                        simu = simu_df)
+                  neg_ll(par, simu = simu_df, quantile = quantile,
+                        h_vect = h_vect, tau = tau,
+                        locations = locations)
                   }, lower = lower.bound, upper = upper.bound,
-                  control = list(parscale = parscale, maxit = 1000))
+                  control = list(parscale = parscale,
+                                 maxit = 10000))
+
         if (result$convergence == 0) { # if it converges
+          count_cv <- count_cv + 1
           params <- result$par
           df_result$beta1[n] <- params[1]
           df_result$beta2[n] <- params[2]
@@ -436,6 +736,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
         print(paste("Error occurred for simulation", n))
     })
   }
+  print(paste0("Number of convergence: ", count_cv))
   return(df_result)
 }
 
