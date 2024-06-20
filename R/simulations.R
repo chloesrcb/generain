@@ -31,50 +31,31 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal
-  ## Model-Variogram BuhlCklu
+
+  ## Model-Variogram BuhlCklu (fractional Brownian motion)
   modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2) #+
-                  #  RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
 
   ## Construct grid
-  Nxy <- lx * ly
-  N <- Nxy * lt
-  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
-
-  # fill the first column with x coordinates
-  for (i in sx)
-    for (j in seq_len(ly * lt))
-      grid[i + (j - 1) * ly, 1] <- i
-
-  # fill the second column with y coordinates
-  for (i in sy)
-    for (j in sx)
-      for (k in st)
-        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
-
-  # fill the third column with temporal t coordinates
-  for (i in st)
-    for (j in seq_len(Nxy))
-      grid[j + Nxy * (i - 1), 3] <- i
+  Nxy <- lx * ly # spatial grid size
+  N <- Nxy * lt # spatio-temporal grid size
+  grid <- expand.grid(x = x, y = y, t = t)
 
   ## Construct shifted variogram
   Varm1 <- vapply(seq_len(N), function(n) {
     dx <- sx - grid[n, 1] # spatial lags
     dy <- sy - grid[n, 2] # spatial lags
-    dt <- abs(st - grid[n, 3]) # temporal lags
+    dt <- st - grid[n, 3] # temporal lags
     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
-    norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
+    # norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
     # compute variogram for each combination
-    # result <- RandomFields::RFvariogram(modelBuhlCklu,
-    #             x = combi$dx_adv,
-    #             y = combi$dy_adv,
-    #             z = combi$dt
-    #           )
     result <- RandomFields::RFvariogram(modelBuhlCklu,
-                x = norm_h,
-                y = combi$dt
+                x = combi$dx_adv,
+                y = combi$dy_adv,
+                z = combi$dt
               )
     return(result)
     }, array(NA_real_, dim = c(lx, ly, lt)))
@@ -86,9 +67,9 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   for (i in seq_len(n.BR)) {
     # for n = 1
     V <- 1 / E[i, 1] # poisson process
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # gaussian process
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
     Y <- exp(W - W[1] - Varm1[,,, 1])
-    Z[,,, i] <- V * Y
+    Z[,,,i] <- V * Y
 
     # n in {2,..,N}
     for (n in 2:N) {
@@ -97,7 +78,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
       while(V > Z[N * (i - 1) + n]) {
         W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t)
         Y <- exp(W - W[n] - Varm1[,,, n])
-        if (all(V * Y[seq_len(n-1)] < Z[(N * (i-1) + 1):(N * (i-1) + (n-1))])) {
+        if (all(V * Y[seq_len(n - 1)] < Z[(N * (i - 1) + 1):(N * (i - 1) + (n - 1))])) {
           Z[,,, i] <- pmax(V * Y, Z[,,, i])
         }
         Exp <- Exp + rexp(1)
@@ -108,6 +89,77 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
   ## Return
   Z
 }
+
+
+
+# sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
+#   # beta1, beta2, alpha1, alpha2 are variogram parameters
+#   # x is the first dimension (spatial x in our case)
+#   # y is the second dimension (spatial y in our case)
+#   # z is the third dimension (time in our case)
+#   # (adv1, adv2) advection coordinates vector
+#   ## Setup
+#   RandomFields::RFoptions(spConform = FALSE, install = "no")
+#   lx <- length(sx <- seq_along(x))  # spatial
+#   ly <- length(sy <- seq_along(y))  # spatial
+#   lt <- length(st <- seq_along(t))  # temporal
+
+#   ## Model-Variogram BuhlCklu (fractional Brownian motion)
+#   modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+#                    RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2)
+
+#   ## Construct grid
+#   Nxy <- lx * ly # spatial grid size
+#   N <- Nxy * lt # spatio-temporal grid size
+#   grid <- expand.grid(x = x, y = y, t = t)
+
+#   ## Construct shifted variogram
+#   Varm1 <- vapply(seq_len(N), function(n) {
+#     dx <- sx - grid[n, 1] # spatial lags
+#     dy <- sy - grid[n, 2] # spatial lags
+#     dt <- st - grid[n, 3] # temporal lags
+#     combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
+#     combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
+#     combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+#     norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
+#     # compute variogram for each combination
+#     result <- RandomFields::RFvariogram(modelBuhlCklu,
+#                 x = norm_h,
+#                 y = combi$dt
+#               )
+#     return(result)
+#     }, array(NA_real_, dim = c(lx, ly, lt)))
+
+#   ## Main
+#   Z <- array(, dim = c(lx, ly, lt, n.BR)) # 3d array
+#   E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
+
+#   for (i in seq_len(n.BR)) {
+#     # for n = 1
+#     V <- 1 / E[i, 1] # poisson process
+#     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
+#     Y <- exp(W - W[1] - Varm1[,,, 1])
+#     Z[,,,i] <- V * Y
+
+#     # n in {2,..,N}
+#     for (n in 2:N) {
+#       Exp <- E[i, n]
+#       V <- 1 / Exp
+#       while(V > Z[N * (i - 1) + n]) {
+#         W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t)
+#         Y <- exp(W - W[n] - Varm1[,,, n])
+#         if (all(V * Y[seq_len(n - 1)] < Z[(N * (i - 1) + 1):(N * (i - 1) + (n - 1))])) {
+#           Z[,,, i] <- pmax(V * Y, Z[,,, i])
+#         }
+#         Exp <- Exp + rexp(1)
+#         V <- 1 / Exp
+#       }
+#     }
+#   }
+#   ## Return
+#   Z
+# }
+
 
 
 #' sim_BR_parallel function
@@ -141,6 +193,85 @@ sim_BR_parallel <- function(params, n.BR, spa, temp) {
   stopCluster(cl)
   simulations
 }
+
+
+#' sim_rpareto function
+#'
+#' This function performs a simulation of a spatio-temporal r-Pareto process
+#' using a fractionnal Brownian motion model and based on the David Leber code.
+#'
+#' @param beta1 The value of beta1.
+#' @param beta2 The value of beta2.
+#' @param alpha1 The value of alpha1.
+#' @param alpha2 The value of alpha2.
+#' @param x Vector for the first dimension (spatial x in our case).
+#' @param y Vector for the second dimension (spatial y in our case)
+#' @param t Vector for the third dimension (time in our case).
+#' @param n.res The number of simulations to perform.
+#' @param adv The advection coordinates vector. Default is c(0, 0).
+#'
+#' @return The result of the simulation.
+#'
+#' @import RandomFields
+#' @import stats
+#'
+#' @export
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
+                        adv = c(0, 0)) {
+  # beta1, beta2, alpha1, alpha2 are variogram parameters
+  # x is the first dimension (spatial x in our case)
+  # y is the second dimension (spatial y in our case)
+  # z is the third dimension (time in our case)
+  # (adv1, adv2) advection coordinates vector
+  ## Setup
+  RandomFields::RFoptions(spConform = FALSE, install = "no")
+  lx <- length(sx <- seq_along(x))  # spatial
+  ly <- length(sy <- seq_along(y))  # spatial
+  lt <- length(st <- seq_along(t))  # temporal
+  ## Model-Variogram BuhlCklu
+  # modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+  #                  RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2)
+  
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+
+  ## Construct grid
+  Nxy <- lx * ly # spatial grid size
+  N <- Nxy * lt # spatio-temporal grid size
+  grid <- expand.grid(x = x, y = y, t = t)
+
+  ## Construct shifted variogram
+  Varm1 <- vapply(seq_len(N), function(n) {
+    dx <- sx - grid[n, 1] # spatial lags
+    dy <- sy - grid[n, 2] # spatial lags
+    dt <- st - grid[n, 3] # temporal lags
+    combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
+    combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
+    combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
+    # norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
+    # compute variogram for each combination
+    result <- RandomFields::RFvariogram(modelBuhlCklu,
+                x = combi$dx_adv,
+                y = combi$dy_adv,
+                z = combi$dt
+              )
+    return(result)
+    }, array(NA_real_, dim = c(lx, ly, lt)))
+  ## => (lx, ly, lt, N)-array
+  
+  # Main
+  Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
+  for (i in seq_len(n.res)) {
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
+    Y <- exp(W - W[1] - Varm1[,,, 1])
+    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+    Z[,,, i] <- R * Y
+  }
+  # Return
+  Z
+}
+
 
 #' save_simulations function
 #'
@@ -187,103 +318,4 @@ save_simulations <- function(BR, ngrid, n.BR, folder, file = "rainBR") {
     filename <- paste0(folder, file, "_", i, ".csv")
     write.csv(df, file = filename, row.names = FALSE)
   }
-}
-
-
-#' sim_rpareto function
-#'
-#' This function performs a simulation of a spatio-temporal r-Pareto process
-#' using a fractionnal Brownian motion model and based on the David Leber code.
-#'
-#' @param beta1 The value of beta1.
-#' @param beta2 The value of beta2.
-#' @param alpha1 The value of alpha1.
-#' @param alpha2 The value of alpha2.
-#' @param x Vector for the first dimension (spatial x in our case).
-#' @param y Vector for the second dimension (spatial y in our case)
-#' @param t Vector for the third dimension (time in our case).
-#' @param n.res The number of simulations to perform.
-#' @param adv The advection coordinates vector. Default is c(0, 0).
-#'
-#' @return The result of the simulation.
-#'
-#' @import RandomFields
-#' @import stats
-#'
-#' @export
-sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
-                        adv = c(0, 0)) {
-  # beta1, beta2, alpha1, alpha2 are variogram parameters
-  # x is the first dimension (spatial x in our case)
-  # y is the second dimension (spatial y in our case)
-  # z is the third dimension (time in our case)
-  # (adv1, adv2) advection coordinates vector
-  ## Setup
-  RandomFields::RFoptions(spConform = FALSE, install = "no")
-  lx <- length(sx <- seq_along(x))  # spatial
-  ly <- length(sy <- seq_along(y))  # spatial
-  lt <- length(st <- seq_along(t))  # temporal
-  ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 2) #+
-                  #  RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
-
-  ## Construct grid
-  Nxy <- lx * ly # spatial grid size
-  N <- Nxy * lt # spatio-temporal grid size
-  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
-
-  # fill the first column with x coordinates
-  for (i in sx)
-    for (j in seq_len(ly * lt))
-      grid[i + (j - 1) * ly, 1] <- i
-
-  # fill the second column with y coordinates
-  for (i in sy)
-    for (j in sx)
-      for (k in st)
-        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
-
-  # fill the third column with temporal t coordinates
-  for (i in st)
-    for (j in seq_len(Nxy))
-      grid[j + Nxy * (i - 1), 3] <- i
-
-
-  ## Construct shifted variogram
-  Varm1 <- vapply(seq_len(N), function(n) {
-    dx <- sx - grid[n, 1] # spatial lags
-    dy <- sy - grid[n, 2] # spatial lags
-    dt <- abs(st - grid[n, 3]) # temporal lags
-    combi <- expand.grid(dx = dx, dy = dy, dt = dt) # combinations of lags
-    combi$dx_adv <- combi$dx - adv[1] * combi$dt # adding advection on x
-    combi$dy_adv <- combi$dy - adv[2] * combi$dt # adding advection on y
-    norm_h <- sqrt(combi$dx_adv^2 + combi$dy_adv^2)
-    # compute variogram for each combination
-    # result <- RandomFields::RFvariogram(modelBuhlCklu,
-    #             x = combi$dx_adv,
-    #             y = combi$dy_adv,
-    #             z = combi$dt
-    #           )
-    result <- RandomFields::RFvariogram(modelBuhlCklu,
-                x = norm_h,
-                y = combi$dt
-              )
-    return(result)
-    }, array(NA_real_, dim = c(lx, ly, lt)))
-
-  ## => (lx, ly, lt, N)-array
-
-  # Main
-  Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
-  set.seed(1234)
-  for (i in seq_len(n.res)) {
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # gaussian process
-    s0 <- 1 # reference point
-    Y <- exp(W - W[s0] - Varm1[,,, s0])
-    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
-    Z[,,, i] <- R * Y
-  }
-  # Return
-  Z
 }
