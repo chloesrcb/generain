@@ -12,11 +12,21 @@ setwd("./script")
 library(generain)
 source("load_libraries.R")
 
+################################################################################
+# DATA ---------------------------------------------------------------------
+################################################################################
+
+load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+rownames(rain) <- rain$dates
+rain_new <- rain[-1] # remove dates column
+
+
 # get censoring
 censores <- seq(0, 10, 0.05)
 df_score_com <- choose_censore(rain_com, censores, nb_simu = 100)
-censores <- seq(0, 0.5, 0.1)
-df_score_ohsm <- choose_censore(rain_new, censores, nb_simu = 100)
+censores <- seq(0.2, 0.6, 0.001)
+df_score_ohsm <- choose_censore(rain_new[, c("cnrs", "poly")], censores, nb_simu = 100)
 
 c_left_5min <- 0.25
 c_left_1hour <- 60 * c_left_5min / 5
