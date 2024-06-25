@@ -64,10 +64,8 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect,
         excess_count <- sum(cp_cond[, 1] > q)
         # n_vect <- c(n_vect, excess_count)
         # N_vect <- c(N_vect, nrow(cp_cond))
-        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t,
-                                                      ]$n_vect <- excess_count
-        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t,
-                                                      ]$N_vect <- nrow(cp_cond)
+        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t, ]$n_vect <- excess_count
+        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t, ]$N_vect <- nrow(cp_cond)
       }
     }
   }
@@ -282,7 +280,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
     # Create dataframe from h_adv
     # h_vect <- get_h_vect(df_dist_new, hmax)
     h_vect <- get_lag_vectors(locations, params, tau = tau, hmax = hmax)
-    if (nrow(h_vect) <= 20) {
+    if (nrow(h_vect) <= 10) {
       return(1e8)
     }
     excesses <- empirical_excesses(simu, quantile, tau, h_vect, nmin = nmin)
@@ -675,14 +673,14 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
 #' @import optimx
 #'
 #' @export
-evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
-                           locations, hmax = sqrt(17), nmin = 5,
+evaluate_optim <- function(list_simu, quantile, true_param, tau, hmax,
+                           locations, nmin = 5,
                            parscale = c(1, 1, 1, 1), latlon = FALSE) {
 
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(true_param) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
+    lower.bound <- c(lower.bound, -1e-6, -1e-6)
     upper.bound <- c(upper.bound, Inf, Inf)
     parscale <- c(parscale, 1, 1)
   }
@@ -712,7 +710,8 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, df_dist,
                   gr = "grfwd", fn = function(par) {
                   neg_ll(par, simu = simu_df, quantile = quantile,
                         h_vect = h_vect, tau = tau,
-                        locations = locations)
+                        locations = locations, latlon = latlon,
+                        nmin = nmin, excesses = NULL)
                   }, lower = lower.bound, upper = upper.bound,
                   control = list(parscale = parscale,
                                  maxit = 10000))

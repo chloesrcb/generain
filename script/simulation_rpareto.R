@@ -5,11 +5,11 @@ library(reshape2)
 library(animation)
 
 # Simulate data using the rpareto model
-ngrid <- 3
+ngrid <- 5
 spa <- 1:ngrid
-temp <- 1:50
+temp <- 1:300
 n.res <- 2
-param <- c(0.2, 0.2, 1.5, 0.8) # true parameters for the variogram
+param <- c(0.4, 0.2, 1.5, 0.8) # true parameters for the variogram
 beta1 <- param[1] / 2
 beta2 <- param[2] / 2
 alpha1 <- param[3]
@@ -19,7 +19,7 @@ adv <- c(0.1, 0.1)
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
                           n.res, adv = adv)
-plot(simu_rpar[1,,,], main = "BR simulation")
+plot(simu_rpar[5,5,,1], main = "BR simulation")
 # Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
                  folder = "../data/simulations_rpar/",
@@ -79,7 +79,7 @@ saveGIF({
 
 
 
-# validation 
+# validation
 
 # Simulation
 list_rpar <- list()
@@ -97,23 +97,37 @@ nsites <- ncol(simu_df) # number of sites
 # get grid coordinates
 sites_coords <- generate_grid_coords(sqrt(nsites))
 
-# df_dist <- distances_regular_grid(nsites) # distance matrix
-dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10, latlon=FALSE) # distance matrix
-df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+params <- c(param, adv)
 
-# # Evaluate the estimates
-# spa_estim_25 <- evaluate_vario_estimates(list_rpar, 0.9,
-#                                   spatial = TRUE, df_dist = df_dist,
-#                                   hmax = sqrt(17))
+h_vect <- get_lag_vectors(sites_coords, params,
+                          hmax = sqrt(17), tau_vect = 1:10) # lag vectors
 
-# temp_estim_25 <- evaluate_vario_estimates(list_rpar, 0.9,
-#                                           spatial = FALSE, tmax = 10)
+tau <- 1:10 # temporal lags
+quantile <- 0.9
+nmin <- 5
 
-# df_result <- cbind(spa_estim_25, temp_estim_25)
-# colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+# get the empirical excesses
+excesses <- empirical_excesses(simu_df, quantile, tau, h_vect,
+                              nmin)
 
-# df_valid <- get_criterion(df_result, true_param)
+parscale <- c(1, 1, 1, 1, 1, 1)  # scale parameters
+lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -1e-6, -1e-6)
+upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
 
-# optim
+result <- optimr(par = params, method = "Rcgmin",
+                  gr = "grfwd", fn = function(par) {
+                  neg_ll(par, simu = simu_df, quantile = quantile,
+                        h_vect = h_vect, tau = tau,
+                        locations = sites_coords)
+                  }, lower = lower.bound, upper = upper.bound,
+                  control = list(parscale = parscale,
+                                 maxit = 10000))
 
-# df_dist <- distances_regular_grid(nsites) # distance matrix
+
+result <- optimr(par = params, method = "CG", fn = function(par) {
+                  neg_ll(par, simu = simu_df, quantile = quantile,
+                        h_vect = h_vect, tau = tau,
+                        locations = sites_coords)
+                  },
+                  control = list(parscale = parscale,
+                                 maxit = 10000, maximise = FALSE))

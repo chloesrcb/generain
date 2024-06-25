@@ -9,9 +9,8 @@ evaluate_optim(
   quantile,
   true_param,
   tau,
-  df_dist,
+  hmax,
   locations,
-  hmax = sqrt(17),
   nmin = 5,
   parscale = c(1, 1, 1, 1),
   latlon = FALSE
@@ -26,11 +25,9 @@ evaluate_optim(
 
 \item{tau}{The temporal lag vector}
 
-\item{df_dist}{The distances long dataframe}
+\item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
 
 \item{locations}{The locations dataframe}
-
-\item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
 
 \item{nmin}{The minimum number of observations to consider}
 
@@ -39,6 +36,8 @@ is c(1, 1, 1, 1).}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
+
+\item{df_dist}{The distances long dataframe}
 
 \item{method}{The optimization method to use "CG", "Nelder-Mead",
 "BFGS", "SANN", "Brent" (default is "CG")}

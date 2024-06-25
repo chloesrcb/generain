@@ -4,7 +4,7 @@
 \alias{save_simulations}
 \title{save_simulations function}
 \usage{
-save_simulations(BR, ngrid, n.BR, folder, file = "rainBR")
+save_simulations(BR, ngrid, n.BR, folder, file = "rainBR", forcedind = NA)
 }
 \arguments{
 \item{BR}{The BR simulationsas array.}
@@ -16,6 +16,8 @@ save_simulations(BR, ngrid, n.BR, folder, file = "rainBR")
 \item{folder}{The folder path.}
 
 \item{file}{The filename without extension, default is "rainBR".}
+
+\item{forcedind}{The index of the simulation to save, default is NA.}
 }
 \value{
 None

@@ -4,16 +4,16 @@
 \alias{sim_BR_parallel}
 \title{sim_BR_parallel function}
 \usage{
-sim_BR_parallel(params, n.BR, spa, temp)
+sim_BR_parallel(params, num_iterations, spa, temp, folder)
 }
 \arguments{
 \item{params}{The parameters for the simulation.}
 
-\item{n.BR}{The number of BR simulations to perform.}
-
 \item{spa}{The spatial data for the simulation.}
 
 \item{temp}{The temporal data for the simulation.}
+
+\item{n.BR}{The number of BR simulations to perform.}
 }
 \value{
 The results of the parallel simulations.

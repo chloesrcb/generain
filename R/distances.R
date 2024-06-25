@@ -15,20 +15,20 @@
 # #' @importFrom stats dist
 # #'
 # #' @export
-# get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
-#   # get longitude and latitude in a dataframe to get distance between points
-#   loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
-#   # get distance matrix
-#   if(latlon) {
-#     dist_mat <- geodist(loc, measure = "haversine") # meters by default
-#   } else {
-#     dist_mat <- as.matrix(dist(loc))
-#   }
-#   if (!is.na(dmax)) {
-#     dist_mat[dist_mat > dmax] <- 0
-#   }
-#   return(dist_mat)
-# }
+get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
+  # get longitude and latitude in a dataframe to get distance between points
+  loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
+  # get distance matrix
+  if(latlon) {
+    dist_mat <- geodist(loc, measure = "haversine") # meters by default
+  } else {
+    dist_mat <- as.matrix(dist(loc))
+  }
+  if (!is.na(dmax)) {
+    dist_mat[dist_mat > dmax] <- 0
+  }
+  return(dist_mat)
+}
 
 
 #' This function reshapes a distance matrix into a long dataframe.
@@ -74,8 +74,8 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE,
         for (j in 1:ncol(dist_mat)) {
           h <- c(locations$Longitude[j] - locations$Longitude[i],
                  locations$Latitude[j] - locations$Latitude[i])
-          # dist_mat_adv[i, j] <- sqrt(sum((h - adv_t)^2))
-          dist_mat_adv <- norm_Lp(h[1] - adv_t[1], h[2] - adv_t[2], alpha_spa)
+          dist_mat_adv[i, j] <- sqrt(sum((h - adv_t)^2))
+          # dist_mat_adv[i, j] <- norm_Lp(h[1] - adv_t[1], h[2] - adv_t[2], alpha_spa)
         }
       }
 
@@ -138,6 +138,28 @@ reshape_distances <- function(dist_mat) {
       # df_dist[[paste0("t", t)]] <- df_dist_t
     }
   }
+  return(df_dist)
+}
+
+reshape_distances <- function(dist_mat) {
+  # convert distance matrix into a dataframe
+  df_dist <- as.data.frame(dist_mat)
+  n <- nrow(df_dist)
+  colnames(df_dist) <- c(1:n)
+  rownames(df_dist) <- c(1:n)
+
+  # Make a triangle
+  df_dist[lower.tri(df_dist)] <- NA
+
+  # Convert to a data frame, and add tenure labels
+  df_dist <- as.data.frame(df_dist)
+  df_dist$Y <- 1:n
+
+  # Reshape to suit ggplot, remove NAs, and sort the labels
+  df_dist <- na.omit(reshape2::melt(df_dist, "Y", variable_name = "X"))
+  colnames(df_dist) <- c("Y", "X", "value")
+  df_dist$X <- factor(df_dist$X, levels = rev(levels(df_dist$X)))
+
   return(df_dist)
 }
 

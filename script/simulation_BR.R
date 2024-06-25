@@ -1,11 +1,15 @@
 library(generain)
 library(reshape2)
 library(ggplot2)
+setwd("./script")
+# load libraries
+source("load_libraries.R")
+
 # spatial and temporal structures
-ngrid <- 5
+ngrid <- 7
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:300
+temp <- 1:100
 
 # beta1, beta2, alpha1, alpha2
 param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
@@ -15,23 +19,44 @@ beta2 <- param[2] / 2
 alpha1 <- param[3]
 alpha2 <- param[4]
 # alpha3 <- param[4]
-n.BR <- 10
-adv <- c(2, 1)
+
+adv <- c(0, 0)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv)
-BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
-BR <- sim_BR_3D(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, adv)
 
-plot(BR[5,4,,1], main = "BR simulation")
+library(foreach)
+library(doParallel)
+
+n.BR <- 1
+num_iterations <- 100
+
+# Create a parallel backend with the desired number of cores
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+# Run the simulation in parallel
+results <- foreach(i = 1:num_iterations, .combine = "c") %dopar% {
+  library(generain)
+  BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR, 
+               adv)
+  save_simulations(BR, ngrid, n.BR,
+                  folder = paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/"),
+                  file = paste0("br_", ngrid^2, "s_",
+                                length(temp), "t"), forcedind = i)
+
+}
+
+# Stop the parallel backend
+stopCluster(cl)
 
 
-
-
+# plot(BR[5,4,,1], main = "BR simulation")
 
 
 # save simulations to CSV files
 save_simulations(BR, ngrid, n.BR,
                  folder = "../data/simulations_BR/",
-                 file = paste0("br_3D_adv_", ngrid^2, "s_",
+                 file = paste0("br_", ngrid^2, "s_",
                                 length(temp), "t"))
 
 file_path <- paste0("../data/simulations_BR/br_3D_adv_", ngrid^2, "s_",
@@ -84,32 +109,34 @@ saveGIF({
     print(plots[[i]])
   }
 }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                       "/simu_gif/sim_br/br_3D_adv_", ngrid^2, "s_",
+                       "/simu_gif/sim_br/br_", ngrid^2, "s_",
                                 length(temp), ".gif"),
     ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
 
 
 # Simulation
+num_iterations <- 100
 list_BR <- list()
-for (i in 1:n.BR) {
-  file_path <- paste0("../data/simulations_BR/br_3D_adv_", ngrid^2, "s_",
-                                length(temp), "t_", i, ".csv")
+for (i in 1:num_iterations) {
+  file_path <- paste0("../data/simulations_BR/sim_25s_300t_adv/br_",
+                      ngrid^2, "s_", length(temp), "t_", i, ".csv")
   df <- read.csv(file_path)
   list_BR[[i]] <- df
 }
 
 # dependece buhl
-simu_df <- BR
+# simu_df <- BR
 simu_df <- list_BR[[1]] # first simulation
 nsites <- ncol(simu_df) # number of sites
+plot(simu_df[, 1])
 # get grid coordinates
 sites_coords <- generate_grid_coords(sqrt(nsites))
-dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
+dist_mat <- get_dist_mat(sites_coords,
                          latlon = FALSE) # distance matrix
 df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 
 
-params <- c(0.4, 0.2, 1.5, 1, 0.1, 0.1)
+params <- true_param
 nsites <- ncol(simu_df) # number of sites
 # get grid coordinates
 sites_coords <- generate_grid_coords(sqrt(nsites))
@@ -118,38 +145,22 @@ h_vect <- get_lag_vectors(sites_coords, params,
                           hmax = sqrt(17), tau_vect = 1:10)
 
 # Evaluate the estimates with Buhl method
-spa_estim_25 <- evaluate_vario_estimates(list_BR, 0.8,
+spa_estim <- evaluate_vario_estimates(list_BR, 0.6,
                                   spatial = TRUE, df_dist = df_dist,
                                   hmax = sqrt(17))
 
-temp_estim_25 <- evaluate_vario_estimates(list_BR, 0.7,
+temp_estim <- evaluate_vario_estimates(list_BR, 0.9,
                                           spatial = FALSE, tmax = 10)
 
-df_result <- cbind(spa_estim_25, temp_estim_25)
+df_result <- cbind(spa_estim, temp_estim)
 colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
 
 df_valid <- get_criterion(df_result, true_param)
 
 
-# get the number of simulations
-n_res <- length(list_BR)
-# create a dataframe to store the results
-df_result <- data.frame(beta = rep(NA, n_res), alpha = rep(NA, n_res))
-# for all simulations
-for (n in 1:n_res) {
-  simu_df <- as.data.frame(list_BR[[n]])
-  if (spatial) {
-    chi <- spatial_chi_alldist(df_dist, simu_df, quantile = 0.9,
-                                hmax = hmax)
-    print(n)
-    params <- get_estimate_variospa(chi, weights = "none", summary = TRUE)
-    print(n)
-  } else {
-    chi <- temporal_chi(simu_df, tmax = tmax, quantile = 0.9)
-    params <- get_estimate_variotemp(chi, tmax, npoints = ncol(simu_df),
-                                    weights = "exp", summary = FALSE)
-  }
-  df_result$beta[n] <- params[1]
-  df_result$alpha[n] <- params[2]
-}
-
+# save the results in latex table
+write.table(round(df_valid, 3), file = "valid_br.tex",
+            row.names = c("Beta1", "Alpha1", "Beta2", "Alpha2"),
+            col.names = c("Mean", "RMSE", "MAE"),
+            quote = FALSE)
+ 

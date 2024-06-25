@@ -352,6 +352,46 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
   return(chispa_df)
 }
 
+spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
+                                comephore = FALSE) {
+  chi_slag <- c()
+  q <- quantile
+  # initialize values
+  if (comephore) {
+    df_dist$value <- ceiling(df_dist$value / 100) * 100 / 1000 # in km
+  }
+  # get unique distances from rad_mat
+  h_vect <- sort(df_dist$value)
+  h_vect <- unique(h_vect[h_vect > 0])
+  if (!is.na(hmax)) {
+    h_vect <- h_vect[h_vect <= hmax]
+  }
+
+  for (h in h_vect) {
+    print(paste0("h = ", h))
+    chi_val <- c()
+    # get index pairs
+    df_dist_h <- df_dist[df_dist$value == h, ]
+    ind_s2 <- as.numeric(as.character(df_dist_h$X))
+    ind_s1 <- df_dist_h$Y
+    for (i in seq_along(ind_s1)){
+      rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
+      colnames(rain_cp) <- c("s1", "s2")
+      print(c(ind_s1[i], ind_s2[i]))
+      if (length(quantile) > 1) {
+        q <- quantile[ind_s1[i], ind_s2[i]]
+      }
+      chi_val <- c(chi_val, get_chiq(rain_cp, q))
+    }
+    chi_val[chi_val <= 0] <- 0.0000001
+    chi_val[chi_val == 1] <- 0.9999999
+    chi_slag <- c(chi_slag, mean(na.omit(chi_val)))
+  }
+
+  chispa_df <- data.frame(chi = chi_slag, lagspa = h_vect)
+  return(chispa_df)
+}
+
 
 #' Calculate the estimate of the spatial variogram parameters
 #'
@@ -666,8 +706,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
     if (spatial) {
       chi <- spatial_chi_alldist(df_dist, simu_df, quantile = quantile,
                                  hmax = hmax)
-      print(n)
-      params <- get_estimate_variospa(chi, weights = "exp", summary = FALSE)
+      params <- get_estimate_variospa(chi, weights = "exp", summary = TRUE)
       print(n)
     } else {
       chi <- temporal_chi(simu_df, tmax = tmax, quantile = quantile)
