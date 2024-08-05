@@ -38,7 +38,7 @@ library(doParallel)
 n.BR <- 1
 num_iterations <- 100
 
-# Create a parallel backend with the desired number of cores
+# Create a parallel backend
 cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
