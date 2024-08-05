@@ -93,18 +93,23 @@ parscale.parameters <- function(par, scale, fix = 1) {
 # create a distance matrix
 nsites <- 25
 df_dist <- distances_regular_grid(nsites) # distance matrix
+sites_coords <- generate_grid_coords(sqrt(nsites)) # grid coordinates
 npairs <- nrow(df_dist) # number of pairs
-h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
+
 tau_vect <- 1:10 # temporal lags
 nconfig <- npairs * length(tau_vect) # number of configurations
 Tmax <- 100 # number of time steps
 
-chi <- theorical_chi_mat(c(0.4, 0.2, 1.5, 1), h_vect, tau_vect) # chi matrix
+h_vect <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 1:10) # lag vectors
+
+# chi <- theorical_chi_mat(c(0.4, 0.2, 1.5, 1), h_vect, tau_vect) # chi matrix
+chi <- theorical_chi(true_param, h_vect) # chi matrix
 
 # simulate expo and optimize
-n_res <- 10 # number of simulations
-df_result <- evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
-                                    nconfig)
+n_res <- 100 # number of simulations
+df_result <- evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi,
+                                    sites_coords, nconfig)
 
 true_param <- c(0.4, 0.2, 1.5, 1) # true parameters
 df_valid_exp <- get_criterion(df_result, true_param) # get RMSE, MAE, Mean
@@ -117,47 +122,103 @@ df_valid_exp <- get_criterion(df_result, true_param) # get RMSE, MAE, Mean
 
 # true parameters
 # beta1, beta2, alpha1, alpha2
-true_param <- c(0.4, 0.2, 1.5, 1, 0.5, 0.5)
+true_param <- c(0.4, 0.2, 1.5, 1)
 
+nsites <- 25
+ntimes <- 300
+
+file_name <- paste0("../../phd_extremes/data/simulations_BR/sim_", nsites,
+                    "s_", ntimes, "t/br_", nsites, "s_", ntimes, "t_")
+
+file_name <- paste0("../data/simulations_BR/sim_", nsites,
+                    "s_", ntimes, "t/br_", nsites, "s_", ntimes, "t_")
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:100) {
+for (i in 1:10) {
   file_path <- paste0(
-          "../../phd_extremes/data/simulations_BR/sim_25s_300t_adv/rainBR_", i,
-                      ".csv")
+          file_name, i, ".csv")
   df <- read.csv(file_path)
   list_BR[[i]] <- df
 }
 
-file_path <- paste0("../data/simulations_BR/br_3D_100s_100t_1.csv")
-BR_df <- read.csv(file_path)
 
 BR_df <- list_BR[[1]] # first simulation
+plot(BR_df$S2)
 nsites <- ncol(BR_df) # number of sites
 
 sites_coords <- generate_grid_coords(sqrt(nsites))
-dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
-                         latlon = FALSE) # distance matrix
-df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
-h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
+# dist_mat <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
+#                          latlon = FALSE) # distance matrix
+# df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+# h_vect <- get_h_vect(df_dist, sqrt(17)) # spatial lags
+
+h_vect <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 1:10) # lag vectors
 
 start_time <- Sys.time()
 # for all simulations
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau = 1:10, hmax = sqrt(17), nmin = 5,
                             locations = sites_coords,
-                            parscale = c(1, 1, 1, 1, 1, 1))
+                            parscale = c(0.1, 0.1, 1, 1))
 end_time <- Sys.time()
 print(end_time - start_time)
 
-excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
+q <- 0.9
+BR_df <- list_BR[[1]]
+excesses <- empirical_excesses(BR_df, q, 1:10, h_vect, nmin = 5)
 
-result <- optim(par = c(true_param), fn = neg_ll, excesses = excesses,
-                        quantile = 0.8,
+excesses_filtered <- excesses$n_vect[excesses$n_vect > 0]
+density_plot <- ggplot(data.frame(x = excesses_filtered), aes(x)) +
+  geom_density() +
+  labs(
+    title = "Density plot of the number of excesses",
+    x = "Number of excesses",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+# Display the plot
+print(density_plot)
+
+# Save the plot to a file
+ggsave("../images/optim/density_plot_25s_300t_90.png", plot = density_plot, width = 8,
+       height = 6)
+
+
+
+beta1 <- 0.4
+beta2 <- 0.2
+alpha1 <- seq(0.2, 1.99, 0.01)
+alpha2 <- 1
+
+
+q <- 0.87
+BR_df <- list_BR[[1]]
+excesses <- empirical_excesses(BR_df, q, 1:10, h_vect, nmin = 5)
+
+nll <- c()
+for (i in seq_along(alpha1)) {
+  nll[i] <- neg_ll(c(beta1, beta2, alpha1[i], alpha2), simu = BR_df,
+                   excesses = excesses, h_vect = h_vect, tau = tau,
+                   locations = sites_coords, quantile = q)
+}
+
+par(mfrow = c(1, 1))
+png("../images/optim/nll_25s_300t_alpha1.png", width = 800, height = 600)
+plot(alpha1, nll, type = "l")
+dev.off()
+
+true_param <- c(0.4, 0.2, 1.5, 1)
+result <- optim(par = c(true_param), fn = neg_ll,
+                        simu = BR_df,
+                        quantile = q,
+                        excesses = excesses,
                         h_vect = h_vect, tau = tau,
-                        locations = sites_coords, df_dist = df_dist,
-                        simu = simu_df, method = "CG",
-                        control = list(parscale = c(1, 1, 0.1, 0.1)))
+                        locations = sites_coords,
+                        method = "CG",
+                        control = list(parscale = c(1, 1, 1, 1),
+                                        maxit = 10000))
 
 
 df_res <- na.omit(df_result)
@@ -186,14 +247,13 @@ result <- Rcgmin(par = c(0.4, 0.2, 1.5, 1), gr = "grfwd",
 # p.scale <- parscale.parameters(true_param, scaling)
 
 param <- c(0.5, 0.1, 1.4, 1.1)
-result <- optimr(par = param,
-                  method = "Rcgmin", gr = "grfwd",
+result <- optimr(par = true_param,
+                  method = "CG", 
           fn = function(par) {
-            neg_ll(par, excesses = excesses, quantile = 0.9,
+            neg_ll(par, excesses = excesses, quantile = 0.96,
                     locations = sites_coords,
-                    h_vect = h_vect, tau = tau, df_dist = df_dist, simu=BR_df)
-            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
-                upper = c(Inf, Inf, 1.999, 1.999),
+                    h_vect = h_vect, tau = tau, simu = BR_df)
+            }, 
                 control = list(parscale = c(1, 1, 0.1, 0.1),
                                 maxit = 1000))
 
@@ -335,8 +395,6 @@ result <- optimr(
                  trace = 1
                  )
 )
-
-
 
 
 ################################################################################

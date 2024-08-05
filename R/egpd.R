@@ -49,12 +49,12 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
     } else {
       censore <- left_censoring
     }
-    png("egpd_fit_cnrs.png", width = 700, height = 400)
+    # png("egpd_fit_cnrs.png", width = 700, height = 400)
     egpd.fit <- fit.extgp(y, model = 1, method = "mle",
                           init = c(kappa_0, sigma_0, xi_0),
-                          censoring = c(0.35, Inf), plots = TRUE,
-                          confint = TRUE, ncpus = 7, R = 1000)
-    dev.off()
+                          censoring = c(censore, Inf), plots = FALSE,
+                          confint = FALSE, ncpus = 7, R = 1000)
+    # dev.off()
     param <- egpd.fit$fit$mle
     kappa <- c(kappa, param[1])
     sigma <- c(sigma, param[2])
@@ -131,63 +131,57 @@ dgpdExt1 <- function(x, kappa, sigma, gamma) {
 #'
 #'
 #' @export
-choose_censore <- function(rain_df, censore, nb_simu = 100) {
+choose_censore <- function(rain_df, censores, n_samples = 100) {
   df_score <- data.frame(locations = seq_along(rain_df))
   df_score$RMSE <- Inf
-  df_score$NRMSE <- Inf
-  NRMSEs <- c()
-  # df_score$CRPS <- Inf
+  df_score$CRPS <- Inf
   df_score$censoreRMSE <- NA
-  df_score$censoreNRMSE <- NA
-  # df_score$censoreCRPS <- NA
-  for (c in seq_along(censore)) {
+  df_score$censoreCRPS <- NA
+
+  for (c in seq_along(censores)) {
+    censore <- censores[c]
     params <- as.data.frame(get_egpd_estimates(rain_df,
-                            left_censoring = censore[c]))
+                            left_censoring = censore))
     # RMSEs <- c()
     for (i in seq_along(rain_df)){
       y <- na.omit(rain_df[, i])
-      y <- y[y > censore[c]]
+      y <- y[y > 0]
+      y.sort <- sort(y)
+
+      # y <- y[y > censore]
       # Quantile
-      qextgp <- qextgp(p = seq_along(y) / (length(y) + 1), type = 1,
+      p <- (1:length(y)) / (length(y) + 1)
+      qextgp <- qextgp(p = p, type = 1,
                     kappa = params$kappa[i], sigma = params$sigma[i],
                     xi = params$xi[i])
+
+      # qqplot(y.sort, qextgp, asp=1)
+      # abline(0, 1)
+
       # sort values
-      y.sort <- sort(y)
-      n <- length(y)
       # RMSE
       RMSE <- sqrt(mean((y.sort - qextgp)^2))
       # RMSEs <- c(RMSEs, RMSE)
       if (RMSE <= df_score$RMSE[i]) {
         df_score$RMSE[i] <- RMSE
-        df_score$censoreRMSE[i] <- censore[c]
+        df_score$censoreRMSE[i] <- censores[c]
       }
 
-      NRMSE <- RMSE / mean(y)
-      # NRMSEs <- c(NRMSEs, NRMSE)
-      if (NRMSE <= df_score$NRMSE[i]) {
-        df_score$NRMSE[i] <- NRMSE
-        df_score$censoreNRMSE[i] <- censore[c]
+      # Generate the samples
+      samples <- rextgp(n_samples, kappa = params$kappa[i],
+                        sigma = params$sigma[i], xi = params$xi[i])
+
+      # Compute the CRPS for each observation
+      crps_values <- sapply(y, function(obs) {
+          crps_sample(y = obs, dat = samples)
+      })
+
+      mean_crps <- mean(crps_values)
+      if (mean_crps <= df_score$CRPS[i]) {
+         df_score$CRPS[i] <- mean_crps
+         df_score$censoreCRPS[i] <- censores[c]
       }
 
-    #   CRPSs <- rep(NA, nb_simu)
-    #   for (j in 1:nb_simu) {
-    #     # simulation with param estimators
-    #     X.mle <- rextgp(n, kappa = params$kappa[i], sigma = params$sigma[i],
-    #                 xi = params$xi[i])
-
-    #     # CRPS
-    #     dat <- t(matrix(rep(X.mle, n), ncol=n))
-    #     crps_val <- crps_sample(y, dat)
-    #     CRPSs[j] <- mean(crps_val)
-    #   }
-    #   # get mean of CRPSs
-    #   mean_CRPS <- mean(CRPSs)
-    #   print(mean_CRPS)
-    #   print(censore[c])
-    #   if (mean_CRPS <= df_score$CRPS[i]) {
-    #      df_score$CRPS[i] <- mean_CRPS
-    #     df_score$censoreCRPS[i] <- censore[c]
-    #   }
     }
   }
   return(df_score)

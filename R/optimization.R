@@ -17,20 +17,16 @@
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, tau, h_vect,
+empirical_excesses <- function(data_rain, quantile, h_vect,
                                 nmin = 5) {
   Tmax <- nrow(data_rain) # number of time steps
   q <- quantile # quantile
-  # h_norms <- unique(h_vectors$hnorm)
-  # df_dist$h <- ifelse(df_dist$value %in% h_norms, df_dist$value, NA)
-  # N_vect <- c() # number of observations
-  # n_vect <- c() # number of excesses (sum)
-  # if it is an only spatial matrix
-  # df_dist$tau <- ifelse(is.null(df_dist$tau), 0, df_dist$tau)
-  tau_vect <- h_vect$tau
+
+  unique_tau <- unique(h_vect$tau)
+
   h_vect$N_vect <- NA
   h_vect$n_vect <- NA
-  for (t in unique(tau_vect)) {
+  for (t in unique_tau) {
     # df_dist_t <- df_dist[df_dist$tau == t, ]
     df_h_t <- h_vect[h_vect$tau == t, ]
     for (i in seq_len(nrow(df_h_t))) {
@@ -71,6 +67,46 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect,
   }
   return(h_vect)
 }
+
+
+empirical_excesses <- function(data_rain, quantile, tau, h_vect, nmin = 5) {
+  Tmax <- nrow(data_rain) # number of time steps
+  q <- quantile # quantile
+
+  unique_tau <- unique(h_vect$tau)
+
+  for (t in unique_tau) {
+    df_h_t <- h_vect[h_vect$tau == t, ]
+
+    for (i in seq_len(nrow(df_h_t))) {
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- df_h_t$s1[i]
+
+      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- na.omit(rain_cp)
+      colnames(rain_cp) <- c("s1", "s2")
+
+      rain_nolag <- rain_cp$s1[1:(Tmax - t)]
+      rain_lag <- rain_cp$s2[(1 + t):Tmax]
+
+      n <- length(rain_nolag)
+
+      if (n >= nmin) {
+        rain_unif <- cbind(rank(rain_nolag) / (n + 1), rank(rain_lag) / (n + 1))
+        cp_cond <- rain_unif[rain_unif[, 2] > q, , drop = FALSE]
+
+        excess_count <- sum(cp_cond[, 1] > q)
+        num_cond_excesses <- nrow(cp_cond)
+
+        h_vect$N_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- num_cond_excesses
+        h_vect$n_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- excess_count
+      }
+    }
+  }
+  
+  return(h_vect)
+}
+
 
 # THEORICAL CHI ----------------------------------------------------------------
 
@@ -138,13 +174,14 @@ theorical_chi_ind <- function(params, h, tau) {
 theorical_chi_mat <- function(params, h_vect, tau) {
   # Init matrix
   chi <- matrix(0, nrow = length(tau), ncol = length(h_vect))
-  adv <- params[5:6]
+
   # for each spatial lag
-  for (j in seq_along(h_vect)) {
+  h_vect_unique <- unique(h_vect$hnorm)
+  for (j in seq_along(h_vect_unique)) {
       # Get vario and chi for each lagtemp
-      h <- h_vect[j]
+      h <- h_vect_unique[j]
       for (t in seq_along(tau)) {
-          chi[t, j] <- theorical_chi_ind(params, h, tau[t], adv)
+          chi[t, j] <- theorical_chi_ind(params, h, tau[t])
       }
   }
   return(chi)
@@ -163,27 +200,13 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' @return The theoretical chi matrix.
 #'
 #' @export
-theorical_chi <- function(params, h_vectors, tau) {
-  # Init data frame
-  lx <- nrow(h_vectors)
-  lt <- length(tau)
+theorical_chi <- function(params, h_vect) {
+  chi_df <- h_vect
+  tau <- unique(h_vect$tau)
+  h_vectors <- unique(h_vect$hnorm)
 
-  chi_df <- data.frame(
-    hnorm = rep(h_vectors$hnorm, each = lt),
-    tau = rep(tau, times = lx),
-    chi = rep(0, times = lx * lt)
-  )
-
-  # for each spatial lag
-  for (i in 1:nrow(h_vectors)) {
-    h <- h_vectors$hnorm[i]
-    tau <- h_vectors$tau[i]
-    for (t in seq_along(tau)) {
-      chi_value <- theorical_chi_ind(params, h, tau[t])
-      chi_df$chi[(i - 1) * lt + t] <- chi_value
-    }
-  }
-
+  chi_df$chi <- theorical_chi_ind(params, h_vect$hnorm, h_vect$tau)
+  
   return(chi_df)
 }
 
@@ -288,7 +311,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
 
   N_vect <- excesses$N_vect # number of observations
   n_vect <- excesses$n_vect # number of excesses
-  chi <- theorical_chi(params, h_vect, tau) # get chi matrix
+  chi <- theorical_chi(params, h_vect) # get chi matrix
   # transform in chi vector
   # chi_vect <- get_chi_vect(chi, h_vect$hnorm, tau)
   chi_vect <- as.vector(chi$chi)
@@ -547,7 +570,7 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
   # simulate excesses following a binomial distribution
   vect_E <- rbinom(Tmax, 1, chi_h_t)
   return(vect_E)
-}
+} 
 
 #' Simulate excesses
 #'
@@ -563,36 +586,19 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
 #' @return The simulated excesses matrix and the chi vector.
 #'
 #' @export
-simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
-  df_dist$h <- ifelse(df_dist$value %in% h_vect, df_dist$value, NA)
-  # create excesses matrix
-  npairs <- nrow(df_dist) # number of pairs
-  nconfig <- npairs * length(tau) # number of configurations
-  mat_E <- matrix(nrow = Tmax, ncol = nconfig) # init excesses matrix
-  h_vect_all <- rep(df_dist$h, times = length(tau)) # repeat h for each tau
-  tau_all <- rep(tau, each = npairs) # repeat tau for each pair
-  chi_vect <- numeric(length = nconfig) # init chi vector
-  # for each configuration
-  for (p in 1:nconfig) {
-    h <- h_vect_all[p] # get h for each configuration
-    if (is.na(h)) { # if NA then chi = NA and excesses = NA
-      mat_E[, p] <- rep(NA, Tmax)
-      chi_vect[p] <- NA
-    } else {
-      tau <- tau_all[p] # get tau for each configuration
-      h_ind <- which(h_vect == h) # get index of h
-      if (chi[tau, h_ind] <= 0) {
-        # if chi <= 0 then chi = 0.000001 and excesses = 0
-        mat_E[, p] <- rep(0, Tmax)
-        chi_vect[p] <- 0.000001 # avoid future error
-      } else {
-        vect_E <- simulate_excess_ind(Tmax, chi[tau, h_ind]) # simulate excesses
-        mat_E[, p] <- vect_E # add excesses to matrix
-        chi_vect[p] <- chi[tau, h_ind] # add chi value to vector
-      }
-    }
+simulate_excesses <- function(Tmax, tau, h_vect, chi) {
+
+  excesses_df <- chi
+  excesses_df$probaN <- runif(nrow(excesses_df), 0, 1)
+  excesses_df$N_vect <- rep(NA, nrow(excesses_df))
+  excesses_df$n_vect <- rep(NA, nrow(excesses_df))
+  for (i in 1:nrow(excesses_df)) {
+
+    excesses_df$N_vect[i] <- rbinom(1, Tmax, excesses_df$probaN[i])
+    excesses_df$n_vect[i] <- rbinom(1, excesses_df$N_vect[i],
+                                    excesses_df$chi[i])
   }
-  return(list(mat_E = mat_E, chi_vect = chi_vect))
+  return(excesses_df)
 }
 
 # VALIDATION -------------------------------------------------------------------
@@ -617,22 +623,21 @@ simulate_excesses <- function(Tmax, tau, h_vect, chi, df_dist) {
 #' @return The result of the optimization process as a dataframe.
 #'
 #' @export
-evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi, df_dist,
-                                   nconfig) {
+evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
+                                   locations, nconfig) {
   df_result <- data.frame(beta1 = rep(NA, n_res), beta2 = rep(NA, n_res),
                       alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
 
   for (n in 1:n_res){
-    simu_E <- simulate_excesses(Tmax, tau_vect, h_vect, chi, df_dist)
-    mat_E <- simu_E$mat_E
-    N_vect <- rep(Tmax, nconfig)
-    n_vect <- colSums(mat_E)
+    simu_E <- simulate_excesses(Tmax, tau_vect, h_vect, chi)
+    N_vect <-  simu_E$N_vect
+    n_vect <-  simu_E$n_vect
     excesses <- list(N_vect = N_vect, n_vect = n_vect) # simu of excesses
-
     # Conjugate gradient method
     result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
-                    excesses = excesses,
-                    h_vect = h_vect, tau = tau_vect, df_dist = df_dist,
+                    excesses = excesses, quantile = 0.9,
+                    h_vect = h_vect, tau = tau_vect,
+                    locations = locations,
                     method = "CG")
 
     params <- result$par
@@ -702,20 +707,34 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, hmax,
   for (n in 1:n_res) {
     simu_df <- as.data.frame(list_simu[[n]]) # get the simulation dataframe
     # get the empirical excesses
-    # excesses <- empirical_excesses(simu_df, quantile, tau, h_vect, df_dist,
-    #                                nmin)
+    if (length(true_param) == 6) {
+      excesses <- NULL
+    } else {
+      excesses <- empirical_excesses(simu_df, quantile, tau, h_vect,
+                                   nmin)
+    }
     # optimize the negative log-likelihood function
     tryCatch({
-        result <- optimr(par = true_param, method = "Rcgmin",
-                  gr = "grfwd", fn = function(par) {
-                  neg_ll(par, simu = simu_df, quantile = quantile,
-                        h_vect = h_vect, tau = tau,
-                        locations = locations, latlon = latlon,
-                        nmin = nmin, excesses = NULL)
-                  }, lower = lower.bound, upper = upper.bound,
-                  control = list(parscale = parscale,
-                                 maxit = 10000))
+        # result <- optimr(par = true_param, method = "Rcgmin",
+        #           gr = "grfwd", fn = function(par) {
+        #           neg_ll(par, simu = simu_df, quantile = quantile,
+        #                 h_vect = h_vect, tau = tau,
+        #                 locations = locations, latlon = latlon,
+        #                 nmin = nmin, excesses = NULL)
+        #           }, lower = lower.bound, upper = upper.bound,
+        #           control = list(parscale = parscale,
+        #                          maxit = 10000))
 
+
+          result <- optim(par = true_param, fn = neg_ll,
+                      excesses = excesses, quantile = quantile,
+                      h_vect = h_vect, tau = tau,
+                      locations = locations, simu = simu_df,
+                      method = "CG",
+                      control = list(parscale = parscale,
+                                    maxit = 10000))
+
+        print(result$convergence)
         if (result$convergence == 0) { # if it converges
           count_cv <- count_cv + 1
           params <- result$par

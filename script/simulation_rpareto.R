@@ -9,17 +9,18 @@ ngrid <- 5
 spa <- 1:ngrid
 temp <- 1:300
 n.res <- 2
-param <- c(0.4, 0.2, 1.5, 0.8) # true parameters for the variogram
+param <- c(0.2, 0.1, 1.5, 0.8) # true parameters for the variogram
 beta1 <- param[1] / 2
 beta2 <- param[2] / 2
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(0.1, 0.1)
+adv <- c(0.1, 0.5)
 
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
                           n.res, adv = adv)
-plot(simu_rpar[5,5,,1], main = "BR simulation")
+plot(simu_rpar[1,2,,1], main = "rpar simulation")
+
 # Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
                  folder = "../data/simulations_rpar/",
@@ -131,3 +132,23 @@ result <- optimr(par = params, method = "CG", fn = function(par) {
                   },
                   control = list(parscale = parscale,
                                  maxit = 10000, maximise = FALSE))
+
+
+################################################################################
+# Verification
+################################################################################
+
+
+rpar <- simulation_data$S8
+threshold <- quantile(rpar, probs = 0.95)
+rpar_exc <- rpar[rpar > threshold]
+fit_gpd <- gpd.fit(rpar, threshold)
+sigma <- fit_gpd$mle[1]
+xi <- fit_gpd$mle[2]
+
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+                       shape=xi, scale=sigma)
+
+qqplot(rpar_exc, theorical_qgpd, main = "GPD Q-Q plot",
+  xlab = "Empirical quantiles",
+  ylab = "Theoretical quantiles")
