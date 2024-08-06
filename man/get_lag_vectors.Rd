@@ -9,11 +9,11 @@ get_lag_vectors(df_coords, params, hmax = NA, tau_vect = 1:10)
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
 
+\item{params}{A vector of parameters.}
+
 \item{hmax}{The maximum distance threshold. Default is NA.}
 
-\item{tau_vect}{A vector of temporal lags. Default is NA.}
-
-\item{adv}{A vector of advection values. Default is c(0, 0).}
+\item{tau_vect}{A vector of temporal lags. Default is 1:10.}
 }
 \value{
 A dataframe containing the lag vectors.

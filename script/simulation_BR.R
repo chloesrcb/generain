@@ -23,20 +23,20 @@ alpha2 <- param[4]
 adv <- c(0, 0)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv)
 
-BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, 1,
-               adv)
-save_simulations(BR, ngrid, 1,
-                  folder = paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t/"),
-                  file = paste0("br_", ngrid^2, "s_",
-                                length(temp), "t"), forcedind = 1)
+# BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, 1,
+#                adv)
+# save_simulations(BR, ngrid, 1,
+#                   folder = paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t/"),
+#                   file = paste0("br_", ngrid^2, "s_",
+#                                 length(temp), "t"), forcedind = 1)
 
 
 library(foreach)
 library(doParallel)
 
 n.BR <- 1
-num_iterations <- 100
+num_iterations <- 5
 
 # Create a parallel backend
 cl <- makeCluster(detectCores())

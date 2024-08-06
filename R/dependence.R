@@ -165,7 +165,6 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @import tidyr
 #' @import lmtest
 #'
-#' 
 #' @export
 get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
                                   summary = FALSE) {
@@ -230,7 +229,7 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
 #'
 #' This function calculates the spatial extremogram for a given lags vector and
 #' and radius matrix and rainfall data.
-#' 
+#'
 #' @param rad_mat The matrix of radii.
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
@@ -352,6 +351,23 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
   return(chispa_df)
 }
 
+
+#' Calculate the estimate of the spatial variogram parameters
+#'
+#' This function calculates the estimate of the spatial variogram parameters
+#' based on the given spatial chi values. It uses the Weighted Least Squares
+#' Estimation (WLSE) method to estimate the parameters.
+#'
+#' @param df_dist The distance dataframe.
+#' @param data_rain The rainfall data.
+#' @param quantile The quantile value.
+#' @param hmax The maximum spatial lag value (optional).
+#' @param comephore Logical value indicating whether we work on the COMEPHORE
+#'                 dataset. Default is FALSE.
+#'
+#' @return The estimated spatial variogram parameters.
+#'
+#' @export
 spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
                                 comephore = FALSE) {
   chi_slag <- c()

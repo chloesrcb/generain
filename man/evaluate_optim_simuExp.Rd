@@ -4,7 +4,7 @@
 \alias{evaluate_optim_simuExp}
 \title{Evaluate optimization using simulated binomial experiments}
 \usage{
-evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist, nconfig)
+evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, locations, nconfig)
 }
 \arguments{
 \item{n_res}{The number of realizations}
@@ -17,9 +17,9 @@ evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, df_dist, nconfig)
 
 \item{chi}{The spatio-temporal extremogram matrix}
 
-\item{df_dist}{The distances long dataframe}
-
 \item{nconfig}{The number of configurations}
+
+\item{df_dist}{The distances long dataframe}
 }
 \value{
 The result of the optimization process as a dataframe.

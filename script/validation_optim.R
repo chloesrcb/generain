@@ -158,7 +158,7 @@ h_vect <- get_lag_vectors(sites_coords, true_param,
 start_time <- Sys.time()
 # for all simulations
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
-                            tau = 1:10, hmax = sqrt(17), nmin = 5,
+                            tau_vect = 1:10, hmax = sqrt(17), nmin = 5,
                             locations = sites_coords,
                             parscale = c(0.1, 0.1, 1, 1))
 end_time <- Sys.time()

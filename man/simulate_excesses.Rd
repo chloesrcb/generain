@@ -4,7 +4,7 @@
 \alias{simulate_excesses}
 \title{Simulate excesses}
 \usage{
-simulate_excesses(Tmax, tau, h_vect, chi, df_dist)
+simulate_excesses(Tmax, tau, h_vect, chi)
 }
 \arguments{
 \item{Tmax}{The maximum time observation.}

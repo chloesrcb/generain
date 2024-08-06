@@ -1,36 +1,3 @@
-
-# #' Compute the distance matrix between locations
-# #'
-# #' This function computes the distance matrix between a set of locations.
-# #'
-# #' @param locations A matrix or data frame containing the coordinates of the
-# #' locations.
-# #' @param dmax The maximum distance threshold if specified.
-# #' @param latlon Logical indicating whether the coordinates are in latitude and
-# #' longitude format.
-# #' @return A distance matrix where each element represents the distance between
-# #' two locations.
-# #'
-# #' @import geodist
-# #' @importFrom stats dist
-# #'
-# #' @export
-get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
-  # get longitude and latitude in a dataframe to get distance between points
-  loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
-  # get distance matrix
-  if(latlon) {
-    dist_mat <- geodist(loc, measure = "haversine") # meters by default
-  } else {
-    dist_mat <- as.matrix(dist(loc))
-  }
-  if (!is.na(dmax)) {
-    dist_mat[dist_mat > dmax] <- 0
-  }
-  return(dist_mat)
-}
-
-
 #' This function reshapes a distance matrix into a long dataframe.
 #'
 #' @param locations A matrix or data frame containing the coordinates of the
@@ -96,53 +63,6 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE,
 #' @export
 reshape_distances <- function(dist_mat) {
   # convert distance matrix into a dataframe
-  tmax <- length(names(dist_mat))
-  if (tmax == 0) {
-    df_dist <- as.data.frame(dist_mat)
-    n <- nrow(df_dist)
-    colnames(df_dist) <- c(1:n)
-    rownames(df_dist) <- c(1:n)
-
-    # Make a triangle
-    df_dist[lower.tri(df_dist)] <- NA
-
-    # Convert to a data frame, and add tenure labels
-    df_dist <- as.data.frame(df_dist)
-    df_dist$Y <- 1:n
-
-    # Reshape to suit ggplot, remove NAs, and sort the labels
-    df_dist <- na.omit(reshape2::melt(df_dist, "Y", variable_name = "X"))
-    colnames(df_dist) <- c("Y", "X", "value")
-    df_dist$X <- factor(df_dist$X, levels = rev(levels(df_dist$X)))
-  } else { # with advection
-    df_dist <- data.frame()
-    for (i in 1:tmax) {
-      df_dist_t <- as.data.frame(dist_mat[i])
-      n <- nrow(df_dist_t)
-      colnames(df_dist_t) <- c(1:n)
-      rownames(df_dist_t) <- c(1:n)
-
-      # Make a triangle
-      df_dist_t[lower.tri(df_dist_t)] <- NA
-
-      # Convert to a data frame, and add tenure labels
-      df_dist_t <- as.data.frame(df_dist_t)
-      df_dist_t$Y <- 1:n
-
-      # Reshape to suit ggplot, remove NAs, and sort the labels
-      df_dist_t <- na.omit(reshape2::melt(df_dist_t, "Y", variable_name = "X"))
-      colnames(df_dist_t) <- c("Y", "X", "value")
-      df_dist_t$X <- factor(df_dist_t$X, levels = rev(levels(df_dist_t$X)))
-      df_dist_t$tau <- i
-      df_dist <- rbind(df_dist, df_dist_t)
-      # df_dist[[paste0("t", t)]] <- df_dist_t
-    }
-  }
-  return(df_dist)
-}
-
-reshape_distances <- function(dist_mat) {
-  # convert distance matrix into a dataframe
   df_dist <- as.data.frame(dist_mat)
   n <- nrow(df_dist)
   colnames(df_dist) <- c(1:n)
@@ -193,9 +113,9 @@ get_h_vect <- function(dist, hmax = NA, intervals = FALSE) {
 
 
 #' norm_Lp function
-#' 
+#'
 #' This function calculates the Lp norm of two vectors.
-#' 
+#'
 #' @param x The first vector.
 #' @param y The second vector.
 #' @param p The exponent value.
@@ -203,7 +123,7 @@ get_h_vect <- function(dist, hmax = NA, intervals = FALSE) {
 #'
 #' @export
 norm_Lp <- function(x, y, p) {
-  return((abs(x)^p + abs(y)^p)^(1/p))
+  return((abs(x)^p + abs(y)^p)^(1 / p))
 }
 
 #' get_lag_vectors function
@@ -211,61 +131,16 @@ norm_Lp <- function(x, y, p) {
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
+#' @param params A vector of parameters.
 #' @param hmax The maximum distance threshold. Default is NA.
-#' @param tau_vect A vector of temporal lags. Default is NA.
-#' @param adv A vector of advection values. Default is c(0, 0).
+#' @param tau_vect A vector of temporal lags. Default is 1:10.
 #'
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
 get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
   alpha_spa <- params[3]
-  if (length(params) != 6) {
-    adv <- c(0, 0)
-  } else {
-    adv <- params[5:6]
-  }
 
-  n <- nrow(df_coords)
-  lags <- data.frame()
-
-  for (i in 1:(n - 1)) { # Loop over all pairs of points
-    for (j in (i + 1):n) {
-      for (tau in tau_vect) { # Loop over tau values
-        # Calculate lag vector without advection
-        lag_latitude <- df_coords$Latitude[j] - df_coords$Latitude[i]
-        lag_longitude <- df_coords$Longitude[j] - df_coords$Longitude[i]
-
-        # Calculate lag vector with advection
-        adv_latitude <- lag_latitude - adv[2] * tau
-        adv_longitude <- lag_longitude - adv[1] * tau
-        # hnorm <- sqrt(adv_latitude^2 + adv_longitude^2) # Distance
-        hnorm <- norm_Lp(adv_latitude, adv_longitude, alpha_spa)
-
-        # Add results to a new row in the dataframe
-        if (hnorm <= hmax) {
-          new_row <- data.frame(
-            s1 = i,
-            s2 = j,
-            h1 = lag_latitude,
-            h2 = lag_longitude,
-            h1_adv = adv_latitude,
-            h2_adv = adv_longitude,
-            tau = tau,
-            hnorm = hnorm
-          )
-          lags <- bind_rows(lags, new_row)
-        }
-      }
-    }
-  }
-  return(lags)
-}
-
-
-get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
-  alpha_spa <- params[3]
-  
   if (length(params) != 6) {
     adv <- c(0, 0)
   } else {
@@ -275,7 +150,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
   n <- nrow(df_coords)
   tau_len <- length(tau_vect)
   total_combinations <- (n * (n - 1) / 2) * tau_len
-  
+
   # Preallocate the dataframe
   lags <- data.frame(
     s1 = integer(total_combinations),
@@ -307,7 +182,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
       }
     }
   }
-  
+
   # Remove the unused preallocated space
   lags <- lags[1:(idx - 1), ]
 

@@ -8,7 +8,7 @@ evaluate_optim(
   list_simu,
   quantile,
   true_param,
-  tau,
+  tau_vect,
   hmax,
   locations,
   nmin = 5,
@@ -23,7 +23,7 @@ evaluate_optim(
 
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
-\item{tau}{The temporal lag vector}
+\item{tau_vect}{The temporal lag vector}
 
 \item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
 
@@ -36,11 +36,6 @@ is c(1, 1, 1, 1).}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
-
-\item{df_dist}{The distances long dataframe}
-
-\item{method}{The optimization method to use "CG", "Nelder-Mead",
-"BFGS", "SANN", "Brent" (default is "CG")}
 }
 \value{
 The result of the optimization process as a dataframe.

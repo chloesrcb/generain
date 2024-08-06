@@ -17,58 +17,6 @@
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, h_vect,
-                                nmin = 5) {
-  Tmax <- nrow(data_rain) # number of time steps
-  q <- quantile # quantile
-
-  unique_tau <- unique(h_vect$tau)
-
-  h_vect$N_vect <- NA
-  h_vect$n_vect <- NA
-  for (t in unique_tau) {
-    # df_dist_t <- df_dist[df_dist$tau == t, ]
-    df_h_t <- h_vect[h_vect$tau == t, ]
-    for (i in seq_len(nrow(df_h_t))) {
-      # get index pairs
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      ind_s1 <- df_h_t$s1[i]
-      # get the couple of sites
-      rain_cp <- drop_na(data_rain[, c(ind_s1, ind_s2)])
-      colnames(rain_cp) <- c("s1", "s2")
-      rains1 <- rain_cp$s1
-      rains2 <- rain_cp$s2
-
-      rain_nolag <- rains1[1:(Tmax - t)] # without lag (in t_k)
-      rain_lag <- rains2[(1 + t):Tmax] # with lag t (in t_k + t)
-      data_cp <- cbind(rain_nolag, rain_lag) # get final couple
-      n <- nrow(data_cp)
-
-      if (n >= nmin) {
-        rain_unif <- cbind(rank(data_cp[, 1]) / (n + 1),
-                          rank(data_cp[, 2]) / (n + 1))
-
-        # check excess above a threshold q
-        cp_cond <- rain_unif[rain_unif[, 2] > q, ]
-
-        if (length(class(cp_cond)) == 1 && class(cp_cond) == "numeric") {
-          # if only one excess
-          cp_cond <- t(as.matrix(cp_cond))
-        }
-
-        # nb of conditional excesses
-        excess_count <- sum(cp_cond[, 1] > q)
-        # n_vect <- c(n_vect, excess_count)
-        # N_vect <- c(N_vect, nrow(cp_cond))
-        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t, ]$n_vect <- excess_count
-        h_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t, ]$N_vect <- nrow(cp_cond)
-      }
-    }
-  }
-  return(h_vect)
-}
-
-
 empirical_excesses <- function(data_rain, quantile, tau, h_vect, nmin = 5) {
   Tmax <- nrow(data_rain) # number of time steps
   q <- quantile # quantile
@@ -103,7 +51,7 @@ empirical_excesses <- function(data_rain, quantile, tau, h_vect, nmin = 5) {
       }
     }
   }
-  
+
   return(h_vect)
 }
 
@@ -138,26 +86,6 @@ theorical_chi_ind <- function(params, h, tau) {
 
   return(chival)
 }
-
-# theorical_chi_ind <- function(params, h, tau, adv) {
-#   # get variogram parameter
-#   beta1 <- params[1]
-#   beta2 <- params[2]
-#   # beta3 <- params[3]
-#   alpha1 <- params[3]
-#   alpha2 <- params[4]
-#   # alpha3 <- params[6]
-#   h1_adv <- abs(h1 + adv[1] * tau)
-#   h2_adv <- abs(h2 + adv[2] * tau)
-#   hnorm <- norm_Lp(h1_adv, h2_adv, p = alpha1)
-#   # Get vario and chi for each lagtemp
-#   varioval <- 2 * (beta1 * hnorm^alpha1 + beta2 * tau^alpha2)
-#   phi <- pnorm(sqrt(0.5 * varioval))
-#   chival <- 2 * (1 - phi)
-
-#   return(chival)
-# }
-
 
 #' Compute the theoretical chi matrix.
 #'
@@ -202,11 +130,11 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' @export
 theorical_chi <- function(params, h_vect) {
   chi_df <- h_vect
-  tau <- unique(h_vect$tau)
-  h_vectors <- unique(h_vect$hnorm)
+  # tau <- unique(h_vect$tau)
+  # h_vectors <- unique(h_vect$hnorm)
 
   chi_df$chi <- theorical_chi_ind(params, h_vect$hnorm, h_vect$tau)
-  
+
   return(chi_df)
 }
 
@@ -296,7 +224,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
   # h_vect_new <- h_vect
 
   if (length(params) == 6) {
-    adv <- params[5:6]
+    # adv <- params[5:6]
     # change for each advection
     # dist_mat <- get_dist_mat(locations, adv = adv, tau = tau, latlon = latlon)
     # df_dist_new <- reshape_distances(dist_mat) # reshape the distance matrix
@@ -570,7 +498,7 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
   # simulate excesses following a binomial distribution
   vect_E <- rbinom(Tmax, 1, chi_h_t)
   return(vect_E)
-} 
+}
 
 #' Simulate excesses
 #'
@@ -659,12 +587,9 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #' @param list_simu A list of simulated data
 #' @param quantile The quantile value
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
-#' @param tau The temporal lag vector
-#' @param df_dist The distances long dataframe
+#' @param tau_vect The temporal lag vector
 #' @param locations The locations dataframe
 #' @param hmax The maximum spatial lag value. Default is sqrt(17).
-#' @param method The optimization method to use "CG", "Nelder-Mead",
-#'               "BFGS", "SANN", "Brent" (default is "CG")
 #' @param nmin The minimum number of observations to consider
 #' @param parscale The scaling parameter for the optimization process. Default
 #'                 is c(1, 1, 1, 1).
@@ -675,10 +600,9 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #'
 #' @import spam
 #' @import stats
-#' @import optimx
 #'
 #' @export
-evaluate_optim <- function(list_simu, quantile, true_param, tau, hmax,
+evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
                            locations, nmin = 5,
                            parscale = c(1, 1, 1, 1), latlon = FALSE) {
 
@@ -689,75 +613,67 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau, hmax,
     upper.bound <- c(upper.bound, Inf, Inf)
     parscale <- c(parscale, 1, 1)
   }
-  # get the number of simulations
+
   n_res <- length(list_simu)
-  # create a dataframe to store the results
   df_result <- data.frame(beta1 = rep(NA, n_res), beta2 = rep(NA, n_res),
                           alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
 
-  # if there is advection
   if (length(true_param) == 6) {
     df_result$adv1 <- rep(NA, n_res)
     df_result$adv2 <- rep(NA, n_res)
   }
 
-  h_vect <- get_lag_vectors(locations, true_param, tau = tau, hmax = hmax)
+  h_vect <- get_lag_vectors(locations, true_param, tau = tau_vect, hmax = hmax)
   count_cv <- 0
-  # for all simulations
-  for (n in 1:n_res) {
-    simu_df <- as.data.frame(list_simu[[n]]) # get the simulation dataframe
-    # get the empirical excesses
+
+  cl <- makeCluster(detectCores() - 1)
+  clusterEvalQ(cl, library(generain))
+  clusterExport(cl, c("list_simu", "neg_ll", "true_param", "quantile",
+            "tau_vect", "hmax", "locations", "nmin", "parscale", "latlon",
+            "lower.bound","upper.bound", "h_vect", "empirical_excesses",
+            "optim"))
+
+  results <- parLapply(cl, 1:n_res, function(n) {
+    library(generain)
+    simu_df <- as.data.frame(list_simu[[n]])
+
     if (length(true_param) == 6) {
       excesses <- NULL
     } else {
-      excesses <- empirical_excesses(simu_df, quantile, tau, h_vect,
-                                   nmin)
+      excesses <- empirical_excesses(simu_df, quantile, tau_vect, h_vect, nmin)
     }
-    # optimize the negative log-likelihood function
-    tryCatch({
-        # result <- optimr(par = true_param, method = "Rcgmin",
-        #           gr = "grfwd", fn = function(par) {
-        #           neg_ll(par, simu = simu_df, quantile = quantile,
-        #                 h_vect = h_vect, tau = tau,
-        #                 locations = locations, latlon = latlon,
-        #                 nmin = nmin, excesses = NULL)
-        #           }, lower = lower.bound, upper = upper.bound,
-        #           control = list(parscale = parscale,
-        #                          maxit = 10000))
 
-
-          result <- optim(par = true_param, fn = neg_ll,
-                      excesses = excesses, quantile = quantile,
-                      h_vect = h_vect, tau = tau,
-                      locations = locations, simu = simu_df,
-                      method = "CG",
-                      control = list(parscale = parscale,
-                                    maxit = 10000))
-
-        print(result$convergence)
-        if (result$convergence == 0) { # if it converges
-          count_cv <- count_cv + 1
-          params <- result$par
-          df_result$beta1[n] <- params[1]
-          df_result$beta2[n] <- params[2]
-          df_result$alpha1[n] <- params[3]
-          df_result$alpha2[n] <- params[4]
-          if (length(true_param) == 6) {
-              df_result$adv1[n] <- params[5]
-              df_result$adv2[n] <- params[6]
-          }
-        } else {
-          print(n)
-        }
+    result <- tryCatch({
+      optim(par = true_param, fn = neg_ll, excesses = excesses,
+            quantile = quantile,
+            h_vect = h_vect, tau = tau_vect, locations = locations,
+            simu = simu_df,
+            method = "CG", control = list(parscale = parscale, maxit = 10000))
     }, error = function(e) {
-        # Handle the error (e.g., print an error message)
-        print(paste("Error occurred for simulation", n))
+      NULL
     })
+
+    if (!is.null(result) && result$convergence == 0) {
+      params <- result$par
+      return(c(params, TRUE))
+    } else {
+      return(rep(NA, length(true_param) + 1))
+    }
+  })
+
+  stopCluster(cl)
+
+  for (n in 1:n_res) {
+    res <- results[[n]]
+    if (!is.na(res[length(res)])) {
+      count_cv <- count_cv + 1
+      df_result[n, 1:length(true_param)] <- res[1:length(true_param)]
+    }
   }
+
   print(paste0("Number of convergence: ", count_cv))
   return(df_result)
 }
-
 
 #' get_criterion function
 #'

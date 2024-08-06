@@ -4,7 +4,7 @@
 \alias{theorical_chi}
 \title{Compute the theoretical chi dataframe.}
 \usage{
-theorical_chi(params, h_vectors, tau)
+theorical_chi(params, h_vect)
 }
 \arguments{
 \item{params}{A vector of parameters.}

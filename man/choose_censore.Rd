@@ -4,7 +4,7 @@
 \alias{choose_censore}
 \title{choose_censore function}
 \usage{
-choose_censore(rain_df, censore, nb_simu = 100)
+choose_censore(rain_df, censores, n_samples = 100)
 }
 \arguments{
 \item{rain_df}{The input dataframe containing the rain data.}

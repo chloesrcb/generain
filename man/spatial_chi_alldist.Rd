@@ -5,6 +5,8 @@
 \title{Calculate spatial chi-squared distances}
 \usage{
 spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
+
+spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
 }
 \arguments{
 \item{df_dist}{The distance dataframe.}
@@ -15,13 +17,19 @@ spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
 
 \item{hmax}{The maximum spatial lag value (optional).}
 
-\item{comephore}{Logical value indicating whether we work on the COMEPHORE 
+\item{comephore}{Logical value indicating whether we work on the COMEPHORE
 dataset. Default is FALSE.}
 }
 \value{
 The spatial chi-squared distances.
+
+The estimated spatial variogram parameters.
 }
 \description{
 This function calculates the spatial extremogram for a given
 distance matrix and rainfall data.
+
+This function calculates the estimate of the spatial variogram parameters
+based on the given spatial chi values. It uses the Weighted Least Squares
+Estimation (WLSE) method to estimate the parameters.
 }
