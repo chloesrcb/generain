@@ -205,7 +205,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
   # params <- c(beta1, beta2, alpha1, alpha2)
   hmax <- max(h_vect$hnorm)
   # df_dist_new <- df_dist
-  print(params)
+  # print(params)
   if (is.null(excesses)) {
     excesses <- empirical_excesses(simu, quantile, tau, h_vect,
                                   nmin)
@@ -219,7 +219,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
   }
   # Check if the parameters are in the bounds
   if (any(params < lower.bound) || any(params > upper.bound)) {
-    print("out of bounds")
+    message("out of bounds")
     return(1e8)
   }
 
