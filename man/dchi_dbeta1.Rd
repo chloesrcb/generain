@@ -17,7 +17,7 @@ dchi_dbeta1(params, hnorm, tau)
 The derivative of the extremogram with respect to beta1.
 }
 \description{
-This function calculates the derivative of the extremogram with respect to 
+This function calculates the derivative of the extremogram with respect to
 beta1.
 }
 \examples{

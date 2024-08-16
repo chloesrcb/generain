@@ -14,7 +14,9 @@ neg_ll(
   quantile = 0.9,
   nmin = 5,
   simu_exp = FALSE,
-  excesses = NULL
+  excesses = NULL,
+  adv1 = 0,
+  adv2 = 0
 )
 }
 \arguments{

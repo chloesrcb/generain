@@ -1,6 +1,6 @@
 #' vario function
 #'
-#' This function computes the variogram value for a given distance matrix and 
+#' This function computes the variogram value for a given distance matrix and
 #' variogram parameters.
 #'
 #' @param h The spatial lags.
@@ -9,27 +9,28 @@
 #' @param beta2 The value of beta2.
 #' @param alpha1 The value of alpha1.
 #' @param alpha2 The value of alpha2.
-#' 
+#'
 #' @return The variogram value.
-#' 
+#'
 #' @export
-vario <- function(h, tau, beta1, beta2, alpha1, alpha2) {
-  (h * beta1)^alpha1 + (tau * beta2)^alpha2
+gamma_theta <- function(h, tau, beta1, beta2, alpha1, alpha2) {
+  gamma <- (h * beta1)^alpha1 + (abs(tau) * beta2)^alpha2
+  return(gamma)
 }
 
 
 #' dist_adv function
-#' 
+#'
 #' This function computes the distance between two points with advection.
-#' 
+#'
 #' @param s1 The first point coordinates.
 #' @param s2 The second point coordinates.
 #' @param t1 The first time.
 #' @param t2 The second time.
 #' @param adv The advection coordinates vector.
-#' 
+#'
 #' @return The distance between the two points with advection.
-#' 
+#'
 #' @export
 dist_adv <- function(s1, s2, t1, t2, adv) {
   h <- s1 - s2
@@ -116,7 +117,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
     }
   }
 
-  gamma <- vario(distmat_space, distmat_time, beta1, beta2,
+  gamma <- gamma_theta(distmat_space, distmat_time, beta1, beta2,
                  alpha1, alpha2)
 
   ## Main
@@ -183,7 +184,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal
-  
+
   ## Model-Variogram BuhlCklu
   modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
                    RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
@@ -235,7 +236,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
     }
   }
 
-  gamma <- vario(distmat_space, distmat_time, beta1, beta2, 
+  gamma <- gamma_theta(distmat_space, distmat_time, beta1, beta2, 
                  alpha1, alpha2)
 
   # Main

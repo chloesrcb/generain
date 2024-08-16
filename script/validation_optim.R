@@ -95,7 +95,7 @@ nsites <- 25
 df_dist <- distances_regular_grid(nsites) # distance matrix
 sites_coords <- generate_grid_coords(sqrt(nsites)) # grid coordinates
 npairs <- nrow(df_dist) # number of pairs
-
+true_param <- c(0.4, 0.2, 1.5, 1) # true parameters
 tau_vect <- 1:10 # temporal lags
 nconfig <- npairs * length(tau_vect) # number of configurations
 Tmax <- 100 # number of time steps
@@ -111,7 +111,6 @@ n_res <- 100 # number of simulations
 df_result <- evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi,
                                     sites_coords, nconfig)
 
-true_param <- c(0.4, 0.2, 1.5, 1) # true parameters
 df_valid_exp <- get_criterion(df_result, true_param) # get RMSE, MAE, Mean
 
 ################################################################################
@@ -127,14 +126,12 @@ true_param <- c(0.4, 0.2, 1.5, 1)
 nsites <- 25
 ntimes <- 300
 
-file_name <- paste0("../../phd_extremes/data/simulations_BR/sim_", nsites,
-                    "s_", ntimes, "t/br_", nsites, "s_", ntimes, "t_")
-
 file_name <- paste0("../data/simulations_BR/sim_", nsites,
                     "s_", ntimes, "t/br_", nsites, "s_", ntimes, "t_")
+
 # Iterate through files from 1 to 100
 list_BR <- list()
-for (i in 1:10) {
+for (i in 1:5) {
   file_path <- paste0(
           file_name, i, ".csv")
   df <- read.csv(file_path)
@@ -160,13 +157,13 @@ start_time <- Sys.time()
 df_result <- evaluate_optim(list_BR, quantile = 0.9, true_param = true_param,
                             tau_vect = 1:10, hmax = sqrt(17), nmin = 5,
                             locations = sites_coords,
-                            parscale = c(0.1, 0.1, 1, 1))
+                            parscale = c(1, 1, 1, 1))
 end_time <- Sys.time()
 print(end_time - start_time)
 
 q <- 0.9
 BR_df <- list_BR[[1]]
-excesses <- empirical_excesses(BR_df, q, 1:10, h_vect, nmin = 5)
+excesses <- empirical_excesses(BR_df, q, h_vect)
 
 excesses_filtered <- excesses$n_vect[excesses$n_vect > 0]
 density_plot <- ggplot(data.frame(x = excesses_filtered), aes(x)) +
@@ -182,7 +179,7 @@ density_plot <- ggplot(data.frame(x = excesses_filtered), aes(x)) +
 print(density_plot)
 
 # Save the plot to a file
-ggsave("../images/optim/density_plot_25s_300t_90.png", plot = density_plot, width = 8,
+ggsave("../images/optim/density_plot_25s_100t_90.png", plot = density_plot, width = 8,
        height = 6)
 
 
@@ -193,9 +190,9 @@ alpha1 <- seq(0.2, 1.99, 0.01)
 alpha2 <- 1
 
 
-q <- 0.87
+q <- 0.8
 BR_df <- list_BR[[1]]
-excesses <- empirical_excesses(BR_df, q, 1:10, h_vect, nmin = 5)
+excesses <- empirical_excesses(BR_df, q, h_vect)
 
 nll <- c()
 for (i in seq_along(alpha1)) {
@@ -203,9 +200,11 @@ for (i in seq_along(alpha1)) {
                    excesses = excesses, h_vect = h_vect, tau = tau,
                    locations = sites_coords, quantile = q)
 }
+# which.min(nll)
+# alpha1[which.min(nll)]
 
 par(mfrow = c(1, 1))
-png("../images/optim/nll_25s_300t_alpha1.png", width = 800, height = 600)
+png("../images/optim/nll_25s_100t_alpha1.png", width = 800, height = 600)
 plot(alpha1, nll, type = "l")
 dev.off()
 
@@ -214,11 +213,39 @@ result <- optim(par = c(true_param), fn = neg_ll,
                         simu = BR_df,
                         quantile = q,
                         excesses = excesses,
-                        h_vect = h_vect, tau = tau,
+                        h_vect = h_vect, tau = tau_vect,
                         locations = sites_coords,
                         method = "CG",
                         control = list(parscale = c(1, 1, 1, 1),
                                         maxit = 10000))
+
+
+
+library(bbmle)
+q <- 0.75
+excesses <- empirical_excesses(BR_df, q, 1:10, h_vect, nmin = 5)
+
+res <- mle2(neg_ll, start = list(beta1 = true_param[1],
+                                 beta2 = true_param[2],
+                                 alpha1 = true_param[3],
+                                 alpha2 = true_param[4]),
+                 data = list(simu = BR_df,
+                        quantile = q,
+                        excesses = excesses,
+                        h_vect = h_vect, tau = 1:10,
+                        locations = sites_coords),
+                  control = list(maxit = 10000),
+                  fixed = list(beta1 = true_param[1]))
+
+# (fit1 <- mle2(LL, method="L-BFGS-B", lower=c(ymax=0, xhalf=0)))
+p1 <- profile(res)
+
+plot(p1, absVal=FALSE)
+
+
+
+
+
 
 
 df_res <- na.omit(df_result)
@@ -235,19 +262,15 @@ grad_test <- gHgenb(par = c(0.4, 0.2, 1.5, 1),
 
 excesses <- empirical_excesses(BR_df, 0.9, 1:10, h_vect, df_dist, nmin = 5)
 # conjugate gradient algorithm with the Dai and Yuan update (2001)
-result <- Rcgmin(par = c(0.4, 0.2, 1.5, 1), gr = "grfwd",
-          fn = function(par) {
-            neg_ll(par, excesses = excesses, quantile = 0.9,
-            locations = sites_coords, simu = BR_df, h_vect = h_vect, tau = tau,
-            df_dist = df_dist)
-            }, lower = c(1e-6, 1e-6, 1e-6, 1e-6),
-                upper = c(Inf, Inf, 1.999, 1.999))
 
 # scaling <- c(0.4, 0.2, 1.5, 1)
 # p.scale <- parscale.parameters(true_param, scaling)
 
 param <- c(0.5, 0.1, 1.4, 1.1)
-result <- optimr(par = true_param,
+result <- optimr(par = list(beta1 = true_param[1],
+                                 beta2 = true_param[2],
+                                 alpha1 = true_param[3],
+                                 alpha2 = true_param[4]),
                   method = "CG", 
           fn = function(par) {
             neg_ll(par, excesses = excesses, quantile = 0.96,

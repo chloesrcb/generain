@@ -4,16 +4,16 @@
 \alias{empirical_excesses}
 \title{empirical_excesses function}
 \usage{
-empirical_excesses(data_rain, quantile, tau, h_vect, nmin = 5)
+empirical_excesses(data_rain, quantile, h_vect)
 }
 \arguments{
 \item{data_rain}{The rainfall data.}
 
 \item{quantile}{The quantile value.}
 
-\item{tau}{The temporal lag vector.}
-
 \item{h_vect}{The spatial lag vectors and distances dataframe.}
+
+\item{tau}{The temporal lag vector.}
 
 \item{nmin}{The minimum number of observations to consider. Default is 5.}
 }

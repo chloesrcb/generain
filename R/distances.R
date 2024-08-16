@@ -167,7 +167,8 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
       lag_latitude <- df_coords$Latitude[j] - df_coords$Latitude[i]
       lag_longitude <- df_coords$Longitude[j] - df_coords$Longitude[i]
 
-      hnorm <- norm_Lp(lag_latitude, lag_longitude, alpha_spa)
+      # hnorm <- norm_Lp(lag_latitude, lag_longitude, alpha_spa)
+      hnorm <- sqrt(lag_latitude^2 + lag_longitude^2)
 
       if (is.na(hmax) || hnorm <= hmax) {
         for (tau in tau_vect) {

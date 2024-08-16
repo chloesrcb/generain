@@ -90,7 +90,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
       chival <- excess_t / mean_excess_Xs
       chi_s_temp[s, t] <- chival
     }
-    print(paste0(s, "/", nsites)) # print progress
+    # print(paste0(s, "/", nsites)) # print progress
   }
   if (mean) { # return mean values by lag
     chi_temp <- colMeans(chi_s_temp, na.rm = TRUE)
@@ -384,7 +384,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
   }
 
   for (h in h_vect) {
-    print(paste0("h = ", h))
+    # print(paste0("h = ", h))
     chi_val <- c()
     # get index pairs
     df_dist_h <- df_dist[df_dist$value == h, ]
@@ -393,7 +393,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     for (i in seq_along(ind_s1)){
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
       colnames(rain_cp) <- c("s1", "s2")
-      print(c(ind_s1[i], ind_s2[i]))
+      # print(c(ind_s1[i], ind_s2[i]))
       if (length(quantile) > 1) {
         q <- quantile[ind_s1[i], ind_s2[i]]
       }

@@ -4,16 +4,16 @@
 \alias{simulate_excesses}
 \title{Simulate excesses}
 \usage{
-simulate_excesses(Tmax, tau, h_vect, chi)
+simulate_excesses(Tmax, chi)
 }
 \arguments{
 \item{Tmax}{The maximum time observation.}
 
+\item{chi}{The spatio-temporal extremogram matrix.}
+
 \item{tau}{The temporal lag vector.}
 
 \item{h_vect}{The spatial lag vector.}
-
-\item{chi}{The spatio-temporal extremogram matrix.}
 
 \item{df_dist}{The distances long dataframe.}
 }

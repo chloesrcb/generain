@@ -17,41 +17,42 @@
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, tau, h_vect, nmin = 5) {
-  Tmax <- nrow(data_rain) # number of time steps
+empirical_excesses <- function(data_rain, quantile, h_vect) {
   q <- quantile # quantile
 
-  unique_tau <- unique(h_vect$tau)
+  unique_tau <- unique(h_vect$tau) # unique temporal lags
 
-  for (t in unique_tau) {
-    df_h_t <- h_vect[h_vect$tau == t, ]
+  for (t in unique_tau) { # loop over temporal lags
+    df_h_t <- h_vect[h_vect$tau == t, ] # get the dataframe for each lag
 
-    for (i in seq_len(nrow(df_h_t))) {
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
       ind_s1 <- df_h_t$s1[i]
 
+      # get the data for the pair of sites
       rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
       rain_cp <- na.omit(rain_cp)
       colnames(rain_cp) <- c("s1", "s2")
 
-      rain_nolag <- rain_cp$s1[1:(Tmax - t)]
-      rain_lag <- rain_cp$s2[(1 + t):Tmax]
+      Tmax <- nrow(rain_cp) # number of time steps
+      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
+      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
 
-      n <- length(rain_nolag)
+      n <- length(rain_nolag) # number of observations
+      # transform the data in uniform data
+      rain_unif <- cbind(rank(rain_nolag) / (n + 1), rank(rain_lag) / (n + 1))
+      # get the conditional excesses on s2
+      cp_cond <- rain_unif[rain_unif[, 2] > q, , drop = FALSE]
+      excess_count <- sum(cp_cond[, 1] > q) # number of excesses for s1 given
+                                            # those of s2
+      num_cond_excesses <- nrow(cp_cond) # number excesses for s2
 
-      if (n >= nmin) {
-        rain_unif <- cbind(rank(rain_nolag) / (n + 1), rank(rain_lag) / (n + 1))
-        cp_cond <- rain_unif[rain_unif[, 2] > q, , drop = FALSE]
-
-        excess_count <- sum(cp_cond[, 1] > q)
-        num_cond_excesses <- nrow(cp_cond)
-
-        h_vect$N_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- num_cond_excesses
-        h_vect$n_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- excess_count
-      }
+      # store the number of excesses
+      h_vect$N_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- num_cond_excesses
+      h_vect$n_vect[h_vect$s1 == ind_s1 & h_vect$s2 == ind_s2 & h_vect$tau == t] <- excess_count
     }
   }
-
   return(h_vect)
 }
 
@@ -200,7 +201,8 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @export
 neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
                   latlon = FALSE, quantile = 0.9, nmin = 5,
-                  simu_exp = FALSE, excesses = NULL) {
+                  simu_exp = FALSE, excesses = NULL, adv1 = 0, adv2 = 0) {
+  # params <- c(beta1, beta2, alpha1, alpha2)
   hmax <- max(h_vect$hnorm)
   # df_dist_new <- df_dist
   print(params)
@@ -261,7 +263,7 @@ neg_ll <- function(params, simu, h_vect, tau, locations, # nolint
 
 #' Compute the derivative of the extremogram with respect to beta1.
 #'
-#' This function calculates the derivative of the extremogram with respect to 
+#' This function calculates the derivative of the extremogram with respect to
 #' beta1.
 #'
 #' @param params a vector of variogram parameters.
@@ -514,7 +516,7 @@ simulate_excess_ind <- function(Tmax, chi_h_t) {
 #' @return The simulated excesses matrix and the chi vector.
 #'
 #' @export
-simulate_excesses <- function(Tmax, tau, h_vect, chi) {
+simulate_excesses <- function(Tmax, chi) {
 
   excesses_df <- chi
   excesses_df$probaN <- runif(nrow(excesses_df), 0, 1)
@@ -557,7 +559,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
                       alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
 
   for (n in 1:n_res){
-    simu_E <- simulate_excesses(Tmax, tau_vect, h_vect, chi)
+    simu_E <- simulate_excesses(Tmax, chi)
     N_vect <-  simu_E$N_vect
     n_vect <-  simu_E$n_vect
     excesses <- list(N_vect = N_vect, n_vect = n_vect) # simu of excesses
@@ -603,14 +605,14 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #'
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
-                           locations, nmin = 5,
-                           parscale = c(1, 1, 1, 1), latlon = FALSE) {
+                           locations, nmin = 5, parscale = c(1, 1, 1, 1),
+                           latlon = FALSE) {
 
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(true_param) == 6) {
-    lower.bound <- c(lower.bound, -1e-6, -1e-6)
-    upper.bound <- c(upper.bound, Inf, Inf)
+  # lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(true_param) == 6 && length(parscale) == 4) {
+    # lower.bound <- c(lower.bound, -1e-6, -1e-6)
+    # upper.bound <- c(upper.bound, Inf, Inf)
     parscale <- c(parscale, 1, 1)
   }
 
@@ -628,13 +630,12 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
 
   cl <- makeCluster(detectCores() - 1)
   clusterEvalQ(cl, library(generain))
-  clusterExport(cl, c("list_simu", "neg_ll", "true_param", "quantile",
-            "tau_vect", "hmax", "locations", "nmin", "parscale", "latlon",
-            "lower.bound","upper.bound", "h_vect", "empirical_excesses",
-            "optim"))
+  # clusterExport(cl, c("list_simu", "neg_ll", "true_param",
+  #                     "quantile", "tau_vect", "hmax", "locations", "nmin",
+  #                     "parscale", "latlon", "h_vect", "empirical_excesses",
+  #                     "optim"), envir = NULL)
 
   results <- parLapply(cl, 1:n_res, function(n) {
-    library(generain)
     simu_df <- as.data.frame(list_simu[[n]])
 
     if (length(true_param) == 6) {
@@ -671,7 +672,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
     }
   }
 
-  print(paste0("Number of convergence: ", count_cv))
+  print(paste0("Number of convergences: ", count_cv))
   return(df_result)
 }
 
