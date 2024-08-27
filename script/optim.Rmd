@@ -82,7 +82,7 @@ excesses_indicators <- function(data, q) {
   return(data_long)
 }
 
-q <- 0.7 # quantile
+q <- 0.93 # quantile
 data_long <- excesses_indicators(data, q)
 print(head(data_long))
 ```
@@ -316,7 +316,7 @@ Pour un quantile de 0.62, on obtient une valeur de \(\beta_1\) proche de 0.5.
 Pour un quantile de 0.65, on obtient une valeur de \(\beta_1\) proche de 0.6.
 
 ```{r}  
-q <- 0.61 # quantile
+q <- 0.7 # quantile
 data_long <- excesses_indicators(data, q)
 taus <- 0:10 # temporal lags
 kij_tau_list <- calculate_kij_tau_list(data_long, taus) # conditional excesses

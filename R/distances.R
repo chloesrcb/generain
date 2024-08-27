@@ -187,6 +187,16 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
   # Remove the unused preallocated space
   lags <- lags[1:(idx - 1), ]
 
+  # modify with advection
+  if (all(adv != c(0, 0))) {
+    for (i in 1:nrow(lags)) {
+      lags$h1[i] <- lags$h1[i] - adv[1] * lags$tau[i]
+      lags$h2[i] <- lags$h2[i] - adv[2] * lags$tau[i]
+      lags$hnorm[i] <- sqrt(lags$h1[i]^2 + lags$h2[i]^2)
+      # lags$hnorm[i] <- norm_Lp(lags$h1[i], lags$h2[i], alpha_spa)
+    }
+  }
+
   return(lags)
 }
 

@@ -32,7 +32,7 @@ rain_com <- df_comephore[-1] # remove dates column
 # get censoring
 censores <- seq(0.05, 10, 0.05)
 df_score_com <- choose_censore(rain_com, censores, n_samples = 100)
-censores <- seq(0.2, 0.3, 0.005)
+censores <- seq(0.2, 0.3, 0.05)
 df_score_ohsm <- choose_censore(rain_new, censores, n_samples = 100)
 
 params_com_mtp <- get_egpd_estimates(rain_com,

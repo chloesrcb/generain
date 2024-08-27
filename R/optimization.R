@@ -123,19 +123,15 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' parameters.
 #'
 #' @param params A vector of parameters.
-#' @param h_vectors A dataframe with spatial lag values.
+#' @param df_lags A dataframe with spatial lag values.
 #' @param tau A vector of temporal lag values.
 #'
 #' @return The theoretical chi matrix.
 #'
 #' @export
-theorical_chi <- function(params, h_vect) {
-  chi_df <- h_vect
-  # tau <- unique(h_vect$tau)
-  # h_vectors <- unique(h_vect$hnorm)
-
-  chi_df$chi <- theorical_chi_ind(params, h_vect$hnorm, h_vect$tau)
-
+theorical_chi <- function(params, df_lags) {
+  chi_df <- df_lags # copy the dataframe
+  chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
   return(chi_df)
 }
 
