@@ -139,7 +139,7 @@ norm_Lp <- function(x, y, p) {
 #'
 #' @export
 get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
-  alpha_spa <- params[3]
+  # alpha_spa <- params[3]
 
   if (length(params) != 6) {
     adv <- c(0, 0)
@@ -189,6 +189,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
 
   # modify with advection
   if (all(adv != c(0, 0))) {
+    print("advection")
     for (i in 1:nrow(lags)) {
       lags$h1[i] <- lags$h1[i] - adv[1] * lags$tau[i]
       lags$h2[i] <- lags$h2[i] - adv[2] * lags$tau[i]

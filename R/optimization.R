@@ -79,7 +79,9 @@ theorical_chi_ind <- function(params, h, tau) {
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
-
+  # if (length(params) == 6) {
+  #   hnorm <- 
+  # }
   # Get vario and chi for each lagtemp
   varioval <- 2 * (beta1 * h^alpha1 + beta2 * tau^alpha2)
   phi <- pnorm(sqrt(0.5 * varioval))
