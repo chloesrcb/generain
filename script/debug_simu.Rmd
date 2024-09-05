@@ -1,0 +1,534 @@
+---
+title: "Simulations"
+author: " "
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 3.5,
+                      fig.align = 'center', message = FALSE, warning = FALSE)
+```
+
+
+```{r lib, show = FALSE}
+setwd("./script")
+library(generain)
+library(reshape2)
+library(ggplot2)
+source("load_libraries.R")
+library(animation)
+library(ismev)
+library(extRemes)
+library(evd)
+```
+
+# Simulation Brown-Resnick
+
+```{r, show = FALSE}
+create_simu_gif <- function(simulation_data, params, type = "rpar", 
+                            forcedtemp = NA) {
+  # type = "rpar" or "br"
+  ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
+  Tmax <- nrow(simulation_data) # Number of time steps
+  if (is.na(forcedtemp)) {
+    temp <- 1:Tmax
+  } else {
+    temp <- 1:forcedtemp
+  }
+
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+
+  if (length(params) == 6) {
+    adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
+  }
+
+  simulation_data$Time <- rownames(simulation_data) # Add a time column
+  simulation_data_long <- melt(simulation_data) # Convert to long format
+  simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
+  # Create a dataframe to represent grid points
+  grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+
+  plots <- list()
+  cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
+  # for each time step
+  for (i in unique(cropped_data$Time)) {
+    # Add the simulated values to the grid dataframe
+    grid$value <- cropped_data$value[cropped_data$Time == i]
+
+    # Plot
+    p <-  ggplot(data = grid, aes(x = x, y = y, fill = value)) +
+      geom_tile() +
+      scale_fill_gradient(low = "#70a7ae", high = "#9d503d",
+                          name = "Rainfall in mm",
+                          limits = c(min(cropped_data$value),
+                                     max(cropped_data$value))) +
+      labs(title = paste0("t =", i, " | Betas: ", beta1, ", ", beta2,
+                          " | Alphas: ",
+                          alpha1, ", ", alpha2, " | Advection: ", adv[1],
+                          ", ", adv[2])) +
+      theme_minimal() +
+      theme(plot.background = element_rect(fill = "#F9F8F6",
+                                         color = "#F9F8F6"),
+            panel.border = element_blank(),
+            panel.grid = element_blank(),
+            axis.text.x = element_blank(),
+            axis.text.y = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+    plots[[i]] <- p
+  }
+
+  # Save the plots as a gif
+  ani.options(interval = 0.5) # time between frames
+  saveGIF({
+    for (i in temp) {
+      print(plots[[i]])
+    }
+  }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
+                         "/simu_gif/simu_", type, "/", type, "_", ngrid^2, "s_",
+                         Tmax, "t.gif"),
+  ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
+
+}
+```
+
+## Sans l'advection
+
+```{r}
+sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR) { 
+  ## Setup 
+  RandomFields::RFoptions(spConform=FALSE) 
+  lx <- length(sx <- seq_along(x)) 
+  ly <- length(sy <- seq_along(y)) 
+  lz <- length(sz <- seq_along(z)) 
+  ## Model-Variogram BuhlCklu 
+  modelBuhlCklu <- RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=1) + 
+                  RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=2) + 
+                  RandomFields::RMfbm(alpha=alpha2, var=beta2, proj=3)
+  
+  ## Construct grid 
+  Nxy <- lx * ly 
+  N <- Nxy * lz 
+  grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix 
+
+  for (i in sx) 
+    for (j in seq_len(ly*lz)) 
+      grid[i+(j-1)*ly, 1] <- i 
+  
+  for (i in sy) 
+    for (j in sx) 
+      for(k in sz) 
+        grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i 
+  
+  for (i in sz) 
+    for (j in seq_len(Nxy)) 
+      grid[j+Nxy*(i-1), 3] <- i
+
+  ## Construct shifted variogram
+  Varm1 <- vapply(seq_len(N), function(n) 
+      RandomFields::RFvariogram(modelBuhlCklu,
+        x=sx-grid[n,1], 
+        y=sy-grid[n,2], 
+        z=sz-grid[n,3]), 
+        array(NA_real_, dim=c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
+
+  ## Main 
+  set.seed(123)
+  Z <- array(, dim=c(lx, ly, lz, n.BR)) # 4d array 
+  E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N) 
+  for (i in seq_len(n.BR)) { ## n=1 
+    V <- 1/E[i,1] 
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n=1) 
+    Y <- exp(W - W[1] - Varm1[,,,1]) 
+    Z[,,,i] <- V * Y 
+    ## n in {2,..,N} 
+    for(n in 2:N) { 
+      Exp <- E[i,n] 
+      V <- 1/Exp 
+      while(V > Z[N*(i-1)+n]) { 
+        W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) 
+        Y <- exp(W - W[n] - Varm1[,,,n]) 
+        if(all(V*Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))])) 
+          Z[,,,i] <- pmax(V*Y, Z[,,,i]) 
+          Exp <- Exp + rexp(1) 
+          V <- 1/Exp 
+      } 
+    } 
+  } 
+  ## Return 
+  Z 
+}
+```
+
+## Avec l'advection
+
+```{r}
+sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
+                       adv) {
+  ## Setup
+  RandomFields::RFoptions(spConform = FALSE)
+  lx <- length(sx <- seq_along(x))
+  ly <- length(sy <- seq_along(y))
+  lz <- length(sz <- seq_along(z))
+
+  ## Model-Variogram BuhlCklu
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+
+  ## Construct grid
+  Nxy <- lx * ly
+  N <- Nxy * lz
+  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
+
+  for (i in sx)
+    for (j in seq_len(ly * lz))
+      grid[i + (j - 1) * ly, 1] <- i
+
+  for (i in sy)
+    for (j in sx)
+      for (k in sz)
+        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
+
+  for (i in sz)
+    for (j in seq_len(Nxy))
+      grid[j + Nxy * (i - 1), 3] <- i
+
+  # Construct shifted grid with advected coordinates
+  grid[, 1] <- grid[, 1] - grid[, 3] * adv[1]
+  grid[, 2] <- grid[, 2] - grid[, 3] * adv[2]
+
+  ## Construct shifted variogram
+  Varm1 <- vapply(seq_len(N), function(n)
+      RandomFields::RFvariogram(modelBuhlCklu,
+        x = sx - grid[n, 1],
+        y = sy - grid[n, 2],
+        z = sz - grid[n, 3]),
+        array(NA_real_, dim = c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
+
+  ## Main
+  set.seed(123)
+  Z <- array(, dim = c(lx, ly, lz, n.BR)) # 4d array
+  E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
+  for (i in seq_len(n.BR)) { ## n=1 
+    V <- 1 / E[i, 1]
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n = 1)
+    Y <- exp(W - W[1] - Varm1[, , , 1])
+    Z[, , , i] <- V * Y
+    ## n in {2,..,N}
+    for (n in 2:N) {
+      Exp <- E[i, n]
+      V <- 1 / Exp 
+      while(V > Z[N * (i - 1) + n]) {
+        W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z)
+        Y <- exp(W - W[n] - Varm1[, , , n])
+        if(all(V * Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))]))
+          Z[, , , i] <- pmax(V * Y, Z[, , , i])
+          Exp <- Exp + rexp(1) 
+          V <- 1 / Exp 
+      }
+    }
+  }
+  ## Return
+  Z
+}
+```
+
+
+
+## Simulations verifications
+
+Comparaison avec et sans advection (seed fixée):
+
+```{r}
+adv <- c(0.5, 0.2)
+true_param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 2
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+n.BR <- 1
+
+# generate the simulations
+BR_adv <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+# plot(BR_adv[1, 1, , ], main = "Rainfall simulation with advection")
+
+BR_noadv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                   true_param[4], spa, spa, temp, n.BR)
+# plot(BR_noadv[1, 1, , ], main = "Rainfall simulation without advection")
+
+# plot on the same graph with ggplot
+df_adv <- data.frame(time = temp,
+                     value = BR_adv[1, 1, , ],
+                     type = "advection")
+df_noadv <- data.frame(time = temp,
+                      value = BR_noadv[1, 1, , ],
+                      type = "no_advection")
+
+df_plot <- rbind(df_adv, df_noadv)
+
+ggplot(df_plot, aes(x = time, y = value, color = type)) +
+  geom_point() +
+  labs(title = "Rainfall simulation with and without advection",
+       x = "Time", y = "Rainfall")
+```
+
+Comparaison sans advection avec les différents codes, on retrouve bien la meme chose, sachant que l'on fixe la seed:
+
+```{r}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 2
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+n.BR <- 1
+
+# generate the simulations
+BR_adv <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3], 
+                    true_param[4], spa, spa, temp, n.BR, adv)
+
+BR_noadv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3], 
+                  true_param[4], spa, spa, temp, n.BR)
+
+# plot on the same graph with ggplot
+df_adv <- data.frame(time = temp,
+                     value = BR_adv[1, 1, , ],
+                     type = "advection")
+df_noadv <- data.frame(time = temp,
+                      value = BR_noadv[1, 1, , ],
+                      type = "no_advection")
+
+df_plot <- rbind(df_adv, df_noadv)
+
+ggplot(df_plot, aes(x = time, y = value, color = type)) +
+  geom_point() +
+  labs(title = "Rainfall simulation with advection fixed at 0 and 
+        without advection",
+       x = "Time", y = "Rainfall")
+```
+
+Donc je vais utiliser `sim_BR_adv` pour les simulations.
+
+## Simulation avec 25 sites et 300 pas de temps sans advection
+
+```{r}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 7
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:500
+n.BR <- 1
+
+BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+
+foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+save_simulations(BR, ngrid, n.BR, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df <- read.csv(file_path)
+```
+
+
+```{r}
+# simulation gif
+create_simu_gif(simu_df, true_param, type = "br", forcedtemp = 50)
+```
+
+
+```{r}
+# plot the simulation for one site
+plot(simu_df[, 2], main = "Rainfall simulation with advection")
+```
+
+
+```{r}
+# plot the simulation at four different sites on 100 time steps
+df_plot <- data.frame(time = 1:100,
+                      S3 = simu_df[, 3],
+                      S4 = simu_df[, 4],
+                      S5 = simu_df[, 5])
+
+ggplot(df_plot, aes(x = time)) +
+    geom_point(aes(y = S3, color = "S4")) +
+    geom_point(aes(y = S4, color = "S5")) +
+    geom_point(aes(y = S5, color = "S6")) +
+    labs(title = "Rainfall simulation with advection at four different sites",
+         x = "Time", y = "Rainfall") +
+    theme_minimal()
+```
+
+
+## Verif marginales 
+
+```{r}
+# qq-plots margins
+par(mfrow = c(2, 2))
+
+BR_loc <- simu_df$S4
+plot(BR_loc, main = "Site 4")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+
+
+BR_loc <- simu_df$S5
+plot(BR_loc, main = "Site 5")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+```
+
+
+## Simulation avec 25 sites et 300 pas de temps avec advection
+
+```{r}
+adv <- c(0.05, 0.02)
+true_param <- c(0.1, 0.05, 1.5, 1, adv)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+n.BR <- 1
+
+BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+
+
+foldername <- paste0("../data/simulations_BR/sim_adv_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+save_simulations(BR, ngrid, n.BR, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df_adv <- read.csv(file_path)
+```
+
+
+```{r}
+# simulation gif
+create_simu_gif(simu_df_adv, true_param, type = "br_adv", forcedtemp = 50)
+```
+
+
+```{r}
+par(mfrow = c(1, 1))
+# plot the simulation for one site
+plot(simu_df_adv[, 4], main = "Rainfall simulation with advection")
+```
+
+
+```{r}
+# plot the simulation at four different sites on 100 time steps
+df_plot <- data.frame(time = 1:100,
+                      S3 = simu_df_adv[, 3],
+                      S4 = simu_df_adv[, 4],
+                      S5 = simu_df_adv[, 5])
+
+ggplot(df_plot, aes(x = time)) +
+    geom_point(aes(y = S3, color = "S4")) +
+    geom_point(aes(y = S4, color = "S5")) +
+    geom_point(aes(y = S5, color = "S6")) +
+    labs(title = "Rainfall simulation with advection at four different sites",
+         x = "Time", y = "Rainfall") +
+    theme_minimal()
+```
+
+
+## Verif marginales 
+
+```{r}
+# qq-plots margins
+par(mfrow = c(2, 2))
+
+BR_loc <- simu_df_adv$S4
+plot(BR_loc, main = "Site 4")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+
+
+BR_loc <- simu_df$S5
+plot(BR_loc, main = "Site 5")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+```
+
+
+
+
+### Comparaison avec et sans advection
+
+```{r}
+# plot on the same graph with ggplot
+df_adv <- data.frame(time = temp,
+                     value = simu_df_adv[, 4],
+                     type = "advection")
+df_noadv <- data.frame(time = temp,
+                      value = simu_df[, 4],
+                      type = "no_advection")
+
+df_plot <- rbind(df_adv, df_noadv)
+
+ggplot(df_plot, aes(x = time, y = value, color = type)) +
+  geom_point() +
+  labs(title = "Rainfall simulation with and without advection",
+       x = "Time", y = "Rainfall")
+```

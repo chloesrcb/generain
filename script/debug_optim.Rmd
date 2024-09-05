@@ -12,11 +12,12 @@ knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 3.5,
 
 
 ```{r lib}
-# setwd("./script")
+setwd("./script")
 library(generain)
 library(reshape2)
 library(ggplot2)
 source("load_libraries.R")
+library(animation)
 ```
 
 
@@ -30,7 +31,7 @@ save_results_optim <- function(result, filename) {
     df_rmse <- data.frame(estim = result$par, rmse = rmse)
     rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
     # save the results
-    write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/", 
+    write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/",
                           filename, ".csv"))
   } else {
     print("No convergence")
@@ -38,7 +39,8 @@ save_results_optim <- function(result, filename) {
 }
 
 get_results_optim <- function(filename) {
-  df_rmse <- read.csv(paste0("../data/simulations_BR/results/", filename, ".csv"))
+  df_rmse <- read.csv(paste0("../data/simulations_BR/results/", filename, 
+                      ".csv"))
   return(df_rmse)
 }
 ```
@@ -111,81 +113,6 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR) {
 ```
 
 
-```{r, eval = FALSE, show = FALSE}
-sim_BR_rdsites <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, 
-                           n_sites) { 
-  ## Setup 
-  RandomFields::RFoptions(spConform=FALSE) 
-  lx <- length(sx <- seq_along(x)) 
-  ly <- length(sy <- seq_along(y)) 
-  lz <- length(sz <- seq_along(z)) 
-  ## Model-Variogram BuhlCklu 
-  modelBuhlCklu <- RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=1) + 
-                  RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=2) + 
-                  RandomFields::RMfbm(alpha=alpha2, var=beta2, proj=3)
-  
-  ## Construct grid 
-  Nxy <- lx * ly 
-  N <- Nxy * lz 
-  grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix 
-
-  for (i in sx) 
-    for (j in seq_len(ly*lz)) 
-      grid[i+(j-1)*ly, 1] <- i 
-  
-  for (i in sy) 
-    for (j in sx) 
-      for(k in sz) 
-        grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i 
-  
-  for (i in sz) 
-    for (j in seq_len(Nxy)) 
-      grid[j+Nxy*(i-1), 3] <- i
-
-  ## Randomly select sites
-  set.seed(123) # For reproducibility
-  selected_coords_xy <- sample(1:Nxy, n_sites, replace = FALSE) 
-  selected_grid <- grid[selected_coords_xy, ] # Selected grid
-  selected_indices <- selected_coords_xy + Nxy * (sz - 1) # Selected indices
-  crop_grid <- grid[selected_indices, ] # Crop grid
-
-  ## Construct shifted variogram only for selected sites
-  Varm1 <- vapply(seq_len(n_sites), function(n) 
-      RandomFields::RFvariogram(modelBuhlCklu,
-        x=sx-crop_grid[n,1], 
-        y=sy-crop_grid[n,2], 
-        z=sz-crop_grid[n,3]), 
-        array(NA_real_, dim=c(lx, ly, lz))) ## => (lx, ly, lz, n_sites)-array
-
-  ## Main 
-  set.seed(123)
-  Z <- array(, dim=c(lx, ly, lz, n.BR)) # 4d array 
-  E <- matrix(rexp(n.BR * n_sites), nrow=n.BR, ncol=n_sites) 
-  for (i in seq_len(n.BR)) { ## n=1 
-    V <- 1/E[i,1] 
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n=1) 
-    Y <- exp(W - W[1] - Varm1[,,,1]) 
-    Z[,,,i] <- V * Y 
-    ## n in {2,..,n_sites} 
-    for(n in 2:n_sites) { 
-      Exp <- E[i,n] 
-      V <- 1/Exp 
-      while(V > Z[n_sites*(i-1)+n]) { 
-        W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) 
-        Y <- exp(W - W[selected_indices[n]] - Varm1[,,,n]) 
-        if(all(V*Y[seq_len(n-1)] < Z[(n_sites*(i-1)+1):(n_sites*(i-1)+(n-1))])) 
-          Z[,,,i] <- pmax(V*Y, Z[,,,i]) 
-          Exp <- Exp + rexp(1) 
-          V <- 1/Exp 
-      } 
-    } 
-  } 
-  ## Return 
-  Z 
-}
-```
-
-
 ```{r}
 true_param <- c(0.4, 0.2, 1.5, 1)
 ngrid <- 5
@@ -195,24 +122,24 @@ temp <- 1:300
 n.BR <- 1
 
 # generate the simulations
-# BR <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3], true_param[4],
-#              spa, spa, temp, n.BR)
-# save_simulations(BR, ngrid, n.BR,
-#         folder = paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
-#                                 length(temp), "t/"),
-#                   file = paste0("br_", ngrid^2, "s_",
-#                                 length(temp), "t"), forcedind = 1)
+BR <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3], true_param[4],
+             spa, spa, temp, n.BR)
+save_simulations(BR, ngrid, n.BR,
+        folder = paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/"),
+                  file = paste0("br_", ngrid^2, "s_",
+                                length(temp), "t"), forcedind = 1)
 
 # load the simulations
-file_path_25 <- paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
+file_path <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
                                 length(temp), "t/br_",
                       ngrid^2, "s_", length(temp), "t_", 1, ".csv")
-simu_df_25 <- read.csv(file_path_25)
+simu_df <- read.csv(file_path)
 ```
 
 
 ```{r}
-nsites <- ncol(simu_df_25)
+nsites <- ncol(simu_df)
 sites_coords <- generate_grid_coords(sqrt(nsites))
 dist_mat <- get_dist_mat(sites_coords,
                          latlon = FALSE) # distance matrix
@@ -299,14 +226,14 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
 
 hmax <- sqrt(17)
 q <- 0.9
-chispa <- spatial_chi_alldist(df_dist, simu_df_25, quantile = q,
+chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
                                hmax = hmax)
 spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = FALSE)
 print(spa_estim)
 
 q <- 0.9
 tmax <- 10
-chitemp <- temporal_chi(simu_df_df, tmax = tmax, quantile = q)
+chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
                                       weights = "exp", summary = FALSE)
 print(temp_estim)
@@ -348,9 +275,10 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
       rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
       rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
 
-      n <- length(rain_nolag) # number of observations
+      Tobs <- length(rain_nolag) # number of observations
       # transform the data in uniform data
-      rain_unif <- cbind(rank(rain_nolag) / (n + 1), rank(rain_lag) / (n + 1))
+      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1), 
+                         rank(rain_lag) / (Tobs + 1))
       # get the conditional excesses on s2
       cp_cond <- rain_unif[rain_unif[, 2] > quantile, , drop = FALSE]
       joint_excesses <- sum(cp_cond[, 1] > quantile) # number of excesses for s1
@@ -358,9 +286,9 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
       marginal_excesses <- nrow(cp_cond) # number excesses for s2
 
       # store the number of excesses
-      excesses$n[excesses$s1 == ind_s1
+      excesses$Tobs[excesses$s1 == ind_s1
                       & excesses$s2 == ind_s2
-                      & excesses$tau == t] <- n
+                      & excesses$tau == t] <- Tobs
       excesses$nj[excesses$s1 == ind_s1
                       & excesses$s2 == ind_s2
                       & excesses$tau == t] <- marginal_excesses
@@ -372,8 +300,8 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
   return(excesses)
 }
 
-q <- 0.93
-excesses <- empirical_excesses(simu_df_25, quantile = q, df_lags = df_lags)
+q <- 0.9
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 print(head(excesses))
 
 # density plot of the number of excesses
@@ -391,7 +319,7 @@ neg_ll_nopj <- function(params, simu, df_lags, locations,
                   simu_exp = FALSE, excesses = NULL) {
   hmax <- max(df_lags$hnorm)
   tau <- unique(df_lags$tau)
-  
+
   print(params)
   if (length(params) == 6) {
     adv <- params[5:6]
@@ -473,17 +401,17 @@ neg_ll <- function(params, simu, df_lags, locations,
   }
 
   nj <- excesses$nj # number of marginal excesses
-  n <- excesses$n # TODO
-  pj <- nj / nrow(simu) # TODO : n - tau
+  Tobs <- excesses$Tobs # T - tau
+  p <- nj[1] / nrow(simu) # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
   chi <- theorical_chi(params, df_lags) # get chi matrix
   # transform in chi vector
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
 
-  non_excesses <- n - kij # number of non-excesses
+  non_excesses <- Tobs - kij # number of non-excesses
   # log-likelihood vector
-  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - pj * chi_vect)
+  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - p * chi_vect)
 
   # final negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
@@ -507,36 +435,118 @@ de la vraisemblance composite. Les alphas sont fortement sous-estimés.
 
 Peu importe la méthode d'optimisation, on obtient des résultats similaires.
 
-```{r}
-q <- 0.93
-excesses <- empirical_excesses(simu_df_25, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
-result <- optim(par = c(true_param), fn = neg_ll,
-                        simu = simu_df_25,
-                        quantile = q,
-                        df_lags = df_lags,
-                        excesses = excesses,
-                        locations = sites_coords,
-                        method = "CG",
-                        control = list(parscale = c(1, 1, 1, 1),
-                                        maxit = 10000))
-print(result$convergence) # 0 if it has converged
-print(result$par)
+# Verif optimisation : distribution des dépassements
 
-rmse <- sqrt((result$par - true_param)^2)
-df_rmse <- data.frame(estim = result$par, rmse = rmse)
-rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2")
-print(t(df_rmse))
+```{r}
+q <- 0.82
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
+n_marg <- max(excesses$nj)
+Tobs <- excesses$Tobs # T - tau
+Tmax <- nrow(simu_df)
+p_hat <- n_marg / Tmax # probability of marginal excesses
+kij <- excesses$kij # number of joint excesses
+
+chi_theorical <- theorical_chi(true_param, df_lags)
+
+tau <- 1
+hnorm <- 2
+chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau & 
+                               chi_theorical$hnorm == hnorm]
+k_tau_h <- excesses$kij[excesses$tau == tau & 
+                          excesses$hnorm == hnorm]
+proba_tau_h <- unique(chi_tau_h * p_hat)
+n <- Tmax - tau 
+Tobs_tau_h <- unique(Tobs[excesses$tau == tau & 
+                   excesses$hnorm == hnorm])
+par(mfrow = c(1, 1))
+# Histogram
+# hist(k_tau_h, probability = TRUE, main = "Histogram vs Binomial distribution",
+#      xlab = "Number of excesses")
+
+x <- 0:Tobs_tau_h
+# theoretical_probs <- dbinom(x, size = n, prob = proba_tau_h)
+# lines(x, theoretical_probs, col = "red", type = "h", lwd = 2)
+
+# Density
+plot(density(k_tau_h), main = "Density vs Binomial distribution",
+     xlab = "Number of excesses", ylim = c(0, 0.2))
+# binomial density
+lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red", lwd = 2)
 ```
+
+
+```{r}
+library(ggplot2)
+
+q <- 0.82
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
+n_marg <- max(excesses$nj)
+# Tobs <- excesses$Tobs # T - tau
+Tmax <- nrow(simu_df)
+p_hat <- n_marg / Tmax # probability of marginal excesses
+kij <- excesses$kij # number of joint excesses
+
+chi_theorical <- theorical_chi(true_param, df_lags)
+
+tau_values <- unique(excesses$tau)
+
+plot_data <- data.frame()
+
+for (tau in tau_values) {
+  hnorm <- 1 # fixed hnorm
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+                                 chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+                          excesses$hnorm == hnorm]
+
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  Tobs <- Tmax - tau # t - tau
+
+  # Empirical density
+  density_data <- density(k_tau_h)
+  density_df <- data.frame(x = density_data$x, 
+          y = density_data$y, tau = as.factor(tau), type = "Empirical")
+
+  # Theorical binomial distribution
+  x_vals <- 0:Tobs
+  binom_y <- dbinom(x_vals, size = Tobs, prob = proba_tau_h)
+  binom_df <- data.frame(x = x_vals, y = binom_y,
+                         tau = as.factor(tau), type = "Binomial")
+
+  # Combine
+  plot_data <- rbind(plot_data, density_df, binom_df)
+}
+
+ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
+  geom_line(size = 1) +
+  facet_wrap(~tau, scales = "free_y") +
+  labs(title = paste0("Density vs Binomial distribution for q = ", q,
+              " and hnorm = ", hnorm, " for each tau"),
+       x = "Number of excesses",
+       y = "Density") +
+  theme_minimal() +
+  xlim(0, 40) +
+  theme(legend.title = element_blank())
+
+```
+
+On a \(k_{h, \tau} \sim Bin(T - \tau, p \chi_\Theta(h, \tau))\).
+
+
+
+
+# OPTIM
 
 En ajoutant l'advection en paramètre comme vecteur nul:
 
 ```{r}
-q <- 0.93
-excesses <- empirical_excesses(simu_df_25, quantile = q, df_lags = df_lags)
+q <- 0.9
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 true_param <- c(0.4, 0.2, 1.5, 1, 0, 0)
 result <- optim(par = c(true_param), fn = neg_ll,
-                        simu = simu_df_25,
+                        simu = simu_df,
                         quantile = q,
                         df_lags = df_lags,
                         excesses = excesses,
@@ -846,7 +856,7 @@ lz <- length(sz <- seq_along(z))
 ## Construct grid
 Nxy <- lx * ly
 N <- Nxy * lz
-grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix 
+grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
 
 # Spatial x coordinates
 for (i in sx) {
@@ -891,7 +901,7 @@ print(head(grid_adv))
 
 ```{r}
 sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
-                       adv = c(0, 0)) {
+                       adv) {
   ## Setup
   RandomFields::RFoptions(spConform = FALSE)
   lx <- length(sx <- seq_along(x))
@@ -962,78 +972,7 @@ sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
 ```
 
 
-## Simulations verifications
 
-Comparaison avec et sans advection (seed fixée):
-
-```{r}
-adv <- c(0.5, 0.2)
-true_param <- c(0.4, 0.2, 1.5, 1, adv)
-ngrid <- 2
-spa <- 1:ngrid
-nsites <- ngrid^2 # if the grid is squared
-temp <- 1:30
-n.BR <- 1
-
-# generate the simulations
-BR_adv <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
-                    true_param[4], spa, spa, temp, n.BR, adv)
-# plot(BR_adv[1, 1, , ], main = "Rainfall simulation with advection")
-
-BR_noadv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3],
-                   true_param[4], spa, spa, temp, n.BR)
-# plot(BR_noadv[1, 1, , ], main = "Rainfall simulation without advection")
-
-# plot on the same graph with ggplot
-df_adv <- data.frame(time = temp,
-                     value = BR_adv[1, 1, , ],
-                     type = "advection")
-df_noadv <- data.frame(time = temp,
-                      value = BR_noadv[1, 1, , ],
-                      type = "no_advection")
-
-df_plot <- rbind(df_adv, df_noadv)
-
-ggplot(df_plot, aes(x = time, y = value, color = type)) +
-  geom_point() +
-  labs(title = "Rainfall simulation with and without advection",
-       x = "Time", y = "Rainfall")
-```
-
-Comparaison sans advection avec les différents codes, on retrouve bien la meme chose, sachant que l'on fixe la seed:
-
-```{r}
-adv <- c(0, 0)
-true_param <- c(0.4, 0.2, 1.5, 1, adv)
-ngrid <- 2
-spa <- 1:ngrid
-nsites <- ngrid^2 # if the grid is squared
-temp <- 1:30
-n.BR <- 1
-
-# generate the simulations
-BR_adv <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3], 
-                    true_param[4], spa, spa, temp, n.BR, adv)
-
-BR_noadv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3], 
-                  true_param[4], spa, spa, temp, n.BR)
-
-# plot on the same graph with ggplot
-df_adv <- data.frame(time = temp,
-                     value = BR_adv[1, 1, , ],
-                     type = "advection")
-df_noadv <- data.frame(time = temp,
-                      value = BR_noadv[1, 1, , ],
-                      type = "no_advection")
-
-df_plot <- rbind(df_adv, df_noadv)
-
-ggplot(df_plot, aes(x = time, y = value, color = type)) +
-  geom_point() +
-  labs(title = "Rainfall simulation with advection fixed at 0 and 
-        without advection",
-       x = "Time", y = "Rainfall")
-```
 
 ```{r}
 adv <- c(0.5, 0.5)
@@ -1044,16 +983,6 @@ nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 n.BR <- 1
 
-# BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
-#                     true_param[4], spa, spa, temp, n.BR)
-
-
-# save_simulations(BR, ngrid, n.BR,
-#         folder = paste0("../data/simulations_BR/oldsim_adv_", ngrid^2, "s_",
-#                                 length(temp), "t/"),
-#                   file = paste0("br_", ngrid^2, "s_",
-#                                 length(temp), "t"), forcedind = 1)
-
 # load the simulations
 file_path <- paste0("../data/simulations_BR/oldsim_adv_", ngrid^2, "s_",
                                 length(temp), "t/br_",
@@ -1063,8 +992,6 @@ simu_df <- read.csv(file_path)
 
 
 ```{r}
-plot(simu_df[, 4], main = "Rainfall simulation with advection")
-
 nsites <- ncol(simu_df)
 sites_coords <- generate_grid_coords(sqrt(nsites))
 dist_mat <- get_dist_mat(sites_coords,
@@ -1122,26 +1049,26 @@ if (result$convergence == 0) {
 ### Plus petite advection
 
 ```{r}
-adv <- c(0.05, 0.05) # pixel by time?
+adv <- c(0.5, 0.5) # pixel by time?
 true_param <- c(0.4, 0.2, 1.5, 1, adv)
-ngrid <- 5
+ngrid <- 2
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:300
+temp <- 1:100
 n.BR <- 1
 
 BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
-                    true_param[4], spa, spa, temp, n.BR)
+                    true_param[4], spa, spa, temp, n.BR, adv)
 
 
 save_simulations(BR, ngrid, n.BR,
-        folder = paste0("../data/simulations_BR/oldsim_adv_2_", ngrid^2, "s_",
+        folder = paste0("../data/simulations_BR/sim_adv_", ngrid^2, "s_",
                                 length(temp), "t/"),
                   file = paste0("br_", ngrid^2, "s_",
                                 length(temp), "t"), forcedind = 1)
 
 # load the simulations
-file_path <- paste0("../data/simulations_BR/oldsim_adv_2_", ngrid^2, "s_",
+file_path <- paste0("../data/simulations_BR/sim_adv_", ngrid^2, "s_",
                                 length(temp), "t/br_",
                       ngrid^2, "s_", length(temp), "t_", 1, ".csv")
 simu_df <- read.csv(file_path)
@@ -1185,14 +1112,14 @@ if (result$convergence == 0) {
   rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
   # print(t(df_rmse))
   # save the results
-  namefile <- paste0("../data/optim_results_adv2_", q * 100, ".csv")
+  namefile <- paste0("../data/optim_results_adv_9s_100t_", q * 100, ".csv")
   write.csv(t(df_rmse), file = namefile)
   } else {
   print("No convergence")
 }
 
 # get result from csv
-df_rmse <- read.csv("../data/optim_results_adv2_90.csv")
+df_rmse <- read.csv("../data/optim_results_adv_9s_100t_80.csv")
 print(df_rmse)
 
 df_rmse <- read.csv("../data/optim_results_adv2_92.csv")
@@ -1387,9 +1314,11 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
   # Construct shifted grid with advected coordinates
   grid[, 1:2] <- grid[, 1:2] - grid[, 3] * adv
 
-  s0 <- 1 # Spatial conditioning point
-  t0 <- 5  # Temporal conditioning point
-  s0_t0 <- s0_space + (t0 - 1) * lx^2
+  s0_x <- 1 # Spatial x conditioning point
+  s0_y <- 5  # Spatial y conditioning point
+  t0 <- 1  # Temporal conditioning point
+  s0_t0 <- s0_x + (s0_y - 1) * lx + (t0 - 1) * Nxy
+  # s0_t0 <- s0 + (t0 - 1) * lx^2
   # grid[,s0]
 
   ## Construct shifted variogram
@@ -1402,11 +1331,11 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
 
 
   # Main
-  s0 <- 1
+  # s0 <- 1
   Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
   for (i in seq_len(n.res)) {
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # Gaussian process
-    Y <- exp(W - W[,, s0] - gamma[,,, s0]) # TODO
+    Y <- exp(W - W[s0_x, s0_y, t0] - gamma[,,, s0_t0]) # TODO
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
     Z[,,, i] <- R * Y
   }
@@ -1415,8 +1344,125 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
 }
 ```
 
+```{r}
+true_param <- c(0.4, 0.05, 1.5, 1)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+n.BR <- 1
+
+adv <- c(1, 2)
+
+rpar <- sim_rpareto(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv = adv)
+
+save_simulations(rpar, ngrid, n.BR,
+        folder = paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
+                                length(temp), "t/"),
+                  file = paste0("rpar_", ngrid^2, "s_",
+                                length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
+                                length(temp), "t/rpar_",
+                      ngrid^2, "s_", length(temp), "t_", 1, ".csv")
+
+simu_df <- read.csv(file_path)
+
+plot(simu_df[, 5, 5])
+```
+
+
+
+```{r}
+# simulation gif
+create_simu_gif(simu_df, true_param, type = "rpar", forcedtemp = 50)
+```
+
+
+```{r}
+nsites <- ncol(simu_df)
+sites_coords <- generate_grid_coords(sqrt(nsites))
+dist_mat <- get_dist_mat(sites_coords,
+                         latlon = FALSE) # distance matrix
+df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+```
+
+```{r, message=FALSE}
+sites_coords <- generate_grid_coords(sqrt(nsites))
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+
+hmax <- sqrt(17)
+q <- 0.9
+
+# excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
+result <- optim(par = c(true_param, adv), fn = neg_ll,
+                        simu = simu_df,
+                        quantile = q,
+                        df_lags = df_lags,
+                        locations = sites_coords,
+                        method = "CG",
+                        control = list(parscale = c(1, 1, 1, 1, 1, 1),
+                                      maxit = 10000))
+
+print(result$convergence) # 0 if it has converged
+print(result$par)
+
+if (result$convergence == 0) {
+  rmse <- sqrt((result$par - true_param)^2)
+  df_rmse <- data.frame(estim = result$par, rmse = rmse)
+  rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
+  # print(t(df_rmse))
+  # save the results
+  namefile <- paste0("../data/optim_results_noadv_", q * 100, ".csv")
+  write.csv(t(df_rmse), file = namefile)
+} else {
+  print("No convergence")
+}
+
+# get result from csv
+df_rmse <- read.csv("../data/optim_results_noadv_90.csv")
+print(df_rmse) # super rapide, pq?
+```
+
+
+
 ## TO DO 
 
 Simu avec moins de sites et plus de temps 9s, 500t
 
 R pareto
+
+
+## Profile log-likelihood
+
+```{r}
+profiled_neg_ll <- function(theta, simu, df_lags, locations,
+                            latlon = FALSE, quantile = 0.9,
+                            simu_exp = FALSE, excesses = NULL) {
+
+  # Function to optimize
+  optim_function <- function(psi) {
+    params <- c(theta, psi)
+    return(neg_ll(params, simu, df_lags, locations,
+                  latlon, quantile, simu_exp, excesses))
+  }
+
+  # Initialize the parameters of nuisance
+  init_psi <- c(0, 0)
+
+  # Optim on psi
+  opt_result <- optim(par = init_psi, fn = optim_function, method = "BFGS")
+  return(opt_result$value)
+}
+```
+
+```{r}
+# Exemple d'utilisation
+theta <- c(0.4, 0.2, 1.5, 1)
+psi <- c(0, 0)
+profiled_neg_ll(theta, simu_df, df_lags, sites_coords)
+```

@@ -10,10 +10,10 @@ library(ggplot2)
 library(plotly)
 
 # spatial and temporal structures
-ngrid <- 10
+ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:100
+temp <- 1:300
 
 # beta1, beta2, alpha1, alpha2
 param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
@@ -87,13 +87,13 @@ data <- data.frame(
 
 
 
-spa <- 1:10
+spa <- 1:5
 selected_time <- 1
 rain_data <- simulation_data_long[simulation_data_long$Time == selected_time,]
 grid_data <- expand.grid(x = spa, y = spa)
 rain_matrix <- matrix(rain_data$value, nrow = length(spa), ncol = length(spa))
 # grid_data$z <- as.vector(rain_data$value)
-
+library(plotly)
 fig <- plot_ly(
   x = ~spa,
   y = ~spa,
@@ -117,8 +117,8 @@ fig
 
 
 
-lon <- 1:10
-lat <- 1:10
+lon <- 1:5
+lat <- 1:5
 
 axx <- list(
 
@@ -134,7 +134,7 @@ axx <- list(
 
 
 # individual plots
-spa <- 1:10
+spa <- 1:5
 selected_time <- 1
 rain_data <- simulation_data_long[simulation_data_long$Time == selected_time,]
 grid_data <- expand.grid(x = spa, y = spa)
@@ -197,7 +197,7 @@ fig4 <- fig4 %>% add_surface(showscale=FALSE)
 
 # subplot and define scene
 
-fig <- subplot(fig1, fig2, fig3, fig4) 
+fig <- subplot(fig1, fig2, fig3, fig4)
 
 fig <- fig %>% layout(title = "3D Subplots",
 
