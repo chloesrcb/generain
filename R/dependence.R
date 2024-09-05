@@ -1,12 +1,12 @@
 # CHI --------------------------------------------------------------------------
 
-#' This function calculates the chi-square statistic for a given data set and
-#' quantile.
+#' This function calculates the chi extremogram for a given dataset
+#' and a quantile value.
 #'
-#' @param data The data set for which the chi-square statistic is calculated.
+#' @param data The data set.
 #' @param quantile The quantile value used in the calculation.
 #'
-#' @return The chi-square statistic.
+#' @return The chi value.
 #'
 #' @import dplyr
 #' @import tidyr
@@ -580,7 +580,7 @@ sd_vario <- function(x, vario, sd_c, sd_alpha) {
 
 #' chispatemp_dt function
 #'
-#' This function calculates the chi-squared spatial-temporal dependence test.
+#' This function calculates the chi spatial-temporal dependence
 #'
 #' @param lagt The temporal lag.
 #' @param lags The spatial lags.
@@ -589,7 +589,7 @@ sd_vario <- function(x, vario, sd_c, sd_alpha) {
 #' @param quant_mat The matrix of quantiles (optional).
 #' @param q_fixed The fixed quantile value (optional).
 #'
-#' @return The result of the chi-squared spatial-temporal dependence test.
+#' @return The result of the chi spatial-temporal dependence.
 #'
 #' @import dplyr
 #' @import tidyr

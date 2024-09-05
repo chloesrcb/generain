@@ -4,12 +4,12 @@
 \alias{theorical_chi}
 \title{Compute the theoretical chi dataframe.}
 \usage{
-theorical_chi(params, h_vect)
+theorical_chi(params, df_lags)
 }
 \arguments{
 \item{params}{A vector of parameters.}
 
-\item{h_vectors}{A dataframe with spatial lag values.}
+\item{df_lags}{A dataframe with spatial lag values.}
 
 \item{tau}{A vector of temporal lag values.}
 }

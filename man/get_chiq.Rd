@@ -2,22 +2,22 @@
 % Please edit documentation in R/dependence.R
 \name{get_chiq}
 \alias{get_chiq}
-\title{This function calculates the chi-square statistic for a given data set and
-quantile.}
+\title{This function calculates the chi extremogram for a given dataset
+and a quantile value.}
 \usage{
 get_chiq(data, quantile)
 }
 \arguments{
-\item{data}{The data set for which the chi-square statistic is calculated.}
+\item{data}{The data set.}
 
 \item{quantile}{The quantile value used in the calculation.}
 }
 \value{
-The chi-square statistic.
+The chi value.
 }
 \description{
-This function calculates the chi-square statistic for a given data set and
-quantile.
+This function calculates the chi extremogram for a given dataset
+and a quantile value.
 }
 \examples{
 data1 <- c(1, 2, 3, 4, 5)

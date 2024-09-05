@@ -70,7 +70,7 @@ empirical_excesses <- function(data_rain, quantile, h_vect) {
 #'
 #' @return The theoretical chi value.
 #'
-#' @import stats
+# ' @import stats
 #'
 #' @export
 theorical_chi_ind <- function(params, h, tau) {

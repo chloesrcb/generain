@@ -20,8 +20,8 @@ chispatemp_dt(lagt, lags, rad_mat, data_rain, quant_mat = NA, q_fixed = NA)
 \item{q_fixed}{The fixed quantile value (optional).}
 }
 \value{
-The result of the chi-squared spatial-temporal dependence test.
+The result of the chi spatial-temporal dependence.
 }
 \description{
-This function calculates the chi-squared spatial-temporal dependence test.
+This function calculates the chi spatial-temporal dependence
 }
