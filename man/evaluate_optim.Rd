@@ -8,10 +8,8 @@ evaluate_optim(
   list_simu,
   quantile,
   true_param,
-  tau_vect,
-  hmax,
+  df_lags,
   locations,
-  nmin = 5,
   parscale = c(1, 1, 1, 1),
   latlon = FALSE
 )
@@ -23,19 +21,19 @@ evaluate_optim(
 
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
-\item{tau_vect}{The temporal lag vector}
-
-\item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
-
 \item{locations}{The locations dataframe}
-
-\item{nmin}{The minimum number of observations to consider}
 
 \item{parscale}{The scaling parameter for the optimization process. Default
 is c(1, 1, 1, 1).}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
+
+\item{tau_vect}{The temporal lag vector}
+
+\item{hmax}{The maximum spatial lag value. Default is sqrt(17).}
+
+\item{nmin}{The minimum number of observations to consider}
 }
 \value{
 The result of the optimization process as a dataframe.

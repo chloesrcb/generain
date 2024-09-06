@@ -600,17 +600,14 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #'
 #' @import spam
 #' @import stats
+#' @import doParallel
 #'
 #' @export
-evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
-                           locations, nmin = 5, parscale = c(1, 1, 1, 1),
+evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
+                           locations, parscale = c(1, 1, 1, 1),
                            latlon = FALSE) {
 
-  # lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(true_param) == 6 && length(parscale) == 4) {
-    # lower.bound <- c(lower.bound, -1e-6, -1e-6)
-    # upper.bound <- c(upper.bound, Inf, Inf)
     parscale <- c(parscale, 1, 1)
   }
 
@@ -623,15 +620,15 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
     df_result$adv2 <- rep(NA, n_res)
   }
 
-  h_vect <- get_lag_vectors(locations, true_param, tau = tau_vect, hmax = hmax)
+  # df_lags <- get_lag_vectors(locations, true_param, tau = tau_vect, hmax = hmax)
   count_cv <- 0
 
   cl <- makeCluster(detectCores() - 1)
-  clusterEvalQ(cl, library(generain))
-  # clusterExport(cl, c("list_simu", "neg_ll", "true_param",
-  #                     "quantile", "tau_vect", "hmax", "locations", "nmin",
-  #                     "parscale", "latlon", "h_vect", "empirical_excesses",
-  #                     "optim"), envir = NULL)
+  # clusterEvalQ(cl, library(generain))
+  clusterExport(cl, c("list_simu", "neg_ll", "true_param",
+                      "quantile", "df_lags", "locations", "nmin",
+                      "parscale", "latlon", "empirical_excesses",
+                      "optim"), envir = NULL)
 
   results <- parLapply(cl, 1:n_res, function(n) {
     simu_df <- as.data.frame(list_simu[[n]])
@@ -639,13 +636,13 @@ evaluate_optim <- function(list_simu, quantile, true_param, tau_vect, hmax,
     if (length(true_param) == 6) {
       excesses <- NULL
     } else {
-      excesses <- empirical_excesses(simu_df, quantile, tau_vect, h_vect, nmin)
+      excesses <- empirical_excesses(simu_df, quantile, df_lags)
     }
 
     result <- tryCatch({
       optim(par = true_param, fn = neg_ll, excesses = excesses,
             quantile = quantile,
-            h_vect = h_vect, tau = tau_vect, locations = locations,
+            df_lags = df_lags, locations = locations,
             simu = simu_df,
             method = "CG", control = list(parscale = parscale, maxit = 10000))
     }, error = function(e) {

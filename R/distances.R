@@ -162,8 +162,8 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
   )
 
   idx <- 1
-  for (i in 1:(n - 1)) {
-    for (j in (i + 1):n) {
+  for (i in 1:(n)) {
+    for (j in (i):n) {
       lag_latitude <- df_coords$Latitude[j] - df_coords$Latitude[i]
       lag_longitude <- df_coords$Longitude[j] - df_coords$Longitude[i]
 
