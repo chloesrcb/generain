@@ -111,8 +111,8 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.BR, adv = c(0, 0)) {
         s2 <- c(grid[j, 1], grid[j, 2])
         t1 <- grid[i, 3]
         t2 <- grid[j, 3]
-        distmat_space_adv[i, j] <- dist_adv(s1, s2, t1, t2, adv)
-        distmat_time_adv[i, j] <- abs(t1 - t2)
+        distmat_space[i, j] <- dist_adv(s1, s2, t1, t2, adv)
+        distmat_time[i, j] <- abs(t1 - t2)
       }
     }
   }
