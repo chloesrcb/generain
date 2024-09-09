@@ -1,5 +1,5 @@
 ---
-title: "Debug negative log-likelihood"
+title: "Debug optimisation with neg ll"
 author: " "
 date: "`r Sys.Date()`" 
 output:
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, fig.width = 7, fig.height = 7,
                       fig.pos='H')
 par(cex.main = 0.8,
     cex.lab = 0.7,
-    cex.axis = 0.6)                
+    cex.axis = 0.6)
 ```
 
 
@@ -26,6 +26,9 @@ source("load_libraries.R")
 library(kableExtra)
 library(extRemes)
 library(bbmle)
+library(ismev)
+library(extRemes)
+library(evd)
 ```
 
 
@@ -90,7 +93,6 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR) {
         array(NA_real_, dim=c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
 
   ## Main 
-  set.seed(123456)
   Z <- array(, dim=c(lx, ly, lz, n.BR)) # 4d array 
   E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N) 
   for (i in seq_len(n.BR)) { ## n=1 
@@ -160,7 +162,6 @@ sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
         array(NA_real_, dim = c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
 
   ## Main
-  set.seed(123456)
   Z <- array(, dim = c(lx, ly, lz, n.BR)) # 4d array
   E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
   for (i in seq_len(n.BR)) { ## n=1 
@@ -190,14 +191,15 @@ sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
 # Simulation
 
 ```{r sim25s300t, fig.width = 5, fig.height = 5}
+adv <- c(0, 0)
 true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
-# BR <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3], true_param[4],
-#              spa, spa, temp, 1)
+# BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3], 
+#                 true_param[4], spa, spa, temp, 1, adv)
 
 # save the simulations
 foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
@@ -211,7 +213,8 @@ foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
 
 
 # load the simulations
-file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, ".csv")
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
+                    ".csv")
 simu_df <- read.csv(file_path)
 nsites <- ncol(simu_df)
 sites_coords <- generate_grid_coords(sqrt(nsites))
@@ -226,11 +229,11 @@ plot(simu_df[, 3], main = "Site 3")
 plot(simu_df[, 4], main = "Site 4")
 ```
 
-Verification gumbel:
+Verification que les marges sont des gumbel:
 
-```{r}
+```{r, fig.height=5, fig.width=5}
 # qq-plots margins
-par(mfrow = c(2, 2))
+par(mfrow = c(2, 2), cex = 0.5)
 
 BR_loc <- simu_df$S4
 plot(BR_loc, main = "Site 4")
@@ -245,6 +248,7 @@ theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
 qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
        xlab = "Empirical quantiles",
        ylab = "Theoretical quantiles")
+abline(0, 1, col = "red")
 
 
 BR_loc <- simu_df$S5
@@ -260,12 +264,14 @@ theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
 qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
        xlab = "Empirical quantiles",
        ylab = "Theoretical quantiles")
+abline(0, 1, col = "red")
 ```
 
 
 # Bulh model WLSE
 
-Validation du modèle de Buhl avec WLSE:
+Validation du modèle de Buhl avec WLSE, cela ne marche pas bien pour toutes les simus, pq?
+
 ```{r}
 # get the distances
 dist_mat <- get_dist_mat(sites_coords,
@@ -276,10 +282,10 @@ hmax <- sqrt(17)
 q <- 0.7
 chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
                                hmax = hmax)
-spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = FALSE)
+spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
 print(spa_estim)
 
-q <- 0.92
+q <- 0.9
 tmax <- 10
 chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
@@ -317,11 +323,10 @@ hnorm <- sqrt((sites_coords_cp[2, 1] - sites_coords_cp[1, 1])^2 +
 df_lags <- get_lag_vectors(sites_coords_cp, true_param,
                           hmax = NA, tau_vect = 0:10)
 
-print(df_lags)
 ```
 
 ```{r, echo = FALSE}
-get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
+get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
 
   # Advection vector
   adv <- if (length(params) == 6) params[5:6] else c(0, 0)
@@ -331,8 +336,9 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
 
   # Create index combinations
   pairs_comb <- combn(n, 2)
+  # indices <- pairs_comb
   
-  # Add n,n pairs
+  # # Add n,n pairs
   diag_pairs <- matrix(rep(1:n, each = 2), nrow = 2)
   indices <- cbind(pairs_comb, diag_pairs)
 
@@ -488,7 +494,7 @@ rain_cp <- simu_df[, c(s1, s2)]
 rain_cp <- na.omit(rain_cp)
 colnames(rain_cp) <- c("s1", "s2")
 # quantile
-q <- 0.9
+q <- 0.8
 rain_cp_q <- quantile(rain_cp$s2, probs = q)
 
 Tmax <- nrow(rain_cp) # number of time steps == length(temp)
@@ -519,7 +525,7 @@ n_marg1 <- sum(rain_cp$s2 > rain_cp_q)
 n_marg2 <- get_marginal_excess(rain_cp, q)
 print(n_marg1 == n_marg2) # ok
 
-q <- 0.9
+q <- 0.8
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 excesses_s1_s2 <- excesses[excesses$s1 == 1 & excesses$s2 == 2, ]
 print(excesses_s1_s2)
@@ -540,7 +546,7 @@ rain_cp <- simu_df[, c(s1, s2)]
 rain_cp <- na.omit(rain_cp)
 colnames(rain_cp) <- c("s1", "s2")
 # quantile
-q <- 0.9
+q <- 0.8
 rain_cp_q <- quantile(rain_cp$s2, probs = q)
 
 Tmax <- nrow(rain_cp) # number of time steps == length(temp)
@@ -598,6 +604,9 @@ theorical_chi <- function(params, df_lags) {
 ```
 
 ```{r theochicalc}
+tau_vect <- 0:10
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = tau_vect)
 chi_theorical <- theorical_chi(true_param, df_lags)
 print(tail(chi_theorical))
 
@@ -706,12 +715,14 @@ empiriquement et théoriquement:
 
 Premiere methode de calcul du chi empirique:
 ```{r plotchithemp, fig.height=5, fig.width=5, echo=FALSE}
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
 chi_theorical <- theorical_chi(true_param, df_lags)
 chi <- unique(chi_theorical$chi)
 # print(head(chi_theorical))
 
 par(mfrow = c(2, 3))
-q_values <- c(0.8, 0.85, 0.9, 0.92, 0.95, 0.955)
+q_values <- c(0.8, 0.82, 0.85, 0.88, 0.9, 0.92)
 for (q in q_values) {
   chi_emp <- chispatemp_dt(simu_df, df_lags, q)
   chi_vect_th <- c()
@@ -744,7 +755,7 @@ chi <- unique(chi_theorical$chi)
 # print(head(chi_theorical))
 
 par(mfrow = c(2, 3))
-q_values <- c(0.8, 0.85, 0.9, 0.92, 0.95, 0.955)
+q_values <- c(0.82, 0.85, 0.88, 0.9, 0.92, 0.95)
 for (q in q_values) {
   chi_emp <- chispatemp_dt(simu_df, df_lags, q)
   chi_vect_th <- c()
@@ -784,7 +795,9 @@ joints $k_{ij, \tau}$ par rapport à la distribution binomiale correspondante th
 On se fixe un lag spatial $h = 2$, un lag temporel $\tau = 1$ et on fait varier le quantile:
 
 ```{r plotdenskij, fig.height=7, fig.width=7}
-q_values <- seq(0.92, 0.965, by = 0.005)
+q_values <- seq(0.9, 0.96, by = 0.01)
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
 par(mfrow = c(ceiling(length(q_values)/3), 3))
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
@@ -809,9 +822,9 @@ for (q in q_values) {
               excesses$hnorm == hnorm])
   x <- 0:Tobs_tau_h
   # Density
-  plot(density(k_tau_h), main = paste("Density vs Binomial distribution (q =",
-                      q, ")"), xlab = "Number of excesses",
-                      ylim = c(0, 0.3), cex.main = 0.8,
+  plot(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.2), cex.main = 0.8,
                       cex.lab = 0.8, cex.axis = 0.8)
   # binomial density
   lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
@@ -823,7 +836,7 @@ for (q in q_values) {
 Pour un autre lag spatial $h = 1$ et un lag temporel $\tau = 3$:
 
 ```{r plotdenskij2, fig.height=7, fig.width=7, echo=FALSE}
-q_values <- seq(0.9, 0.95, by = 0.005)
+q_values <- seq(0.9, 0.96, by = 0.01)
 par(mfrow = c(ceiling(length(q_values)/3), 3))
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
@@ -848,9 +861,9 @@ for (q in q_values) {
               excesses$hnorm == hnorm])
   x <- 0:Tobs_tau_h
   # Density
-  plot(density(k_tau_h), main = paste("Density vs Binomial distribution (q =",
-                      q, ")"), xlab = "Number of excesses",
-                      ylim = c(0, 0.3), cex.main = 0.8,
+  plot(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.25), cex.main = 0.8,
                       cex.lab = 0.8, cex.axis = 0.8)
   # binomial density
   lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
@@ -863,7 +876,10 @@ for (q in q_values) {
 Maintenant on fixe le quantile et $h = 1$ et on fait varier le lag temporel $\tau$, en prenant le chi théorique:
 
 ```{r plotdenskij3, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.93
+q <- 0.96
+tau_vect <- 0:10
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = tau_vect)
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 
 n_marg <- get_marginal_excess(simu_df, quantile = q)
@@ -921,7 +937,7 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 Idem en prenant le chi empirique moyen, c'est la meme chose qu'avec le theorique (à peu près):
 
 ```{r plotdenskij4, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.93
+q <- 0.96
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
@@ -980,10 +996,10 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 ```
 
 
-Ici on fixe le quantile à 0.92 et $h = 3$ et on fait varier le lag temporel $\tau$:
+Ici on fixe le quantile et $h = 3$ et on fait varier le lag temporel $\tau$:
 
 ```{r plotdenskij5, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.92
+q <- 0.94
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
@@ -1105,7 +1121,7 @@ neg_ll <- function(params, simu, df_lags, locations, quantile,
 Quelques résultats pour la log-likelihood:
 
 ```{r negllcalc}
-q <- 0.9
+q <- 0.94
 nll <- neg_ll(true_param, simu_df, df_lags, sites_coords, quantile = q)
 print(nll)
 nll <- neg_ll(true_param + 0.05, simu_df, df_lags, sites_coords, quantile = q)
@@ -1117,11 +1133,11 @@ print(nll)
 Si je réduis le nombre de décalage temporel:
 
 ```{r optimtau1, echo=FALSE}
-tau1 <- 0:1 # 0:tmax
+tau1 <- 0:1 # 1:tmax
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau1)
 
-q <- 0.9
+q <- 0.915
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 true_param <- c(0.4, 0.2, 1.5, 1)
 result_tau1 <- optim(par = c(true_param), fn = neg_ll,
@@ -1143,7 +1159,6 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau2)
 
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
 result_tau2 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
                         quantile = q,
@@ -1164,7 +1179,6 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau3)
 
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
 
 result_tau3 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
@@ -1186,9 +1200,7 @@ tau4 <- 0:6
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau4)
 
-# q <- 0.9
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
 
 result_tau4 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
@@ -1210,9 +1222,8 @@ tau5 <- 0:8
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau5)
 
-# q <- 0.9
+
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
 
 result_tau5 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
@@ -1234,9 +1245,7 @@ tau6 <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau6)
 
-q <- 0.8
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-true_param <- c(0.4, 0.2, 1.5, 1)
 
 result_tau6 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
@@ -1305,12 +1314,17 @@ temp <- 1:300
 Pour differentes valeurs de quantiles, on peut estimer les paramètres du modèle spatio-temporel
 avec l'optimisation. On peut aussi calculer le RMSE pour chaque paramètre.
 
+C'est beaucoup trop sensible au quantile.
+
 On obtient les résultats suivants pour une simulation:
 ```{r optimquantile, echo=FALSE}
-q_values <- c(0.9, 0.91, 0.92, 0.93, 0.94, 0.95) # quantiles
+q_values <- seq(0.9, 0.96, by = 0.005) # quantiles
 
-result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), alpha1 = numeric(), alpha2 = numeric())
+result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
+                           alpha1 = numeric(), alpha2 = numeric())
 
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
 # For each quantile
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
@@ -1329,9 +1343,9 @@ for (q in q_values) {
   if (result$convergence == 0) {
     result_table <- rbind(result_table,
                           data.frame(q = q,
-                                     beta1 = result$par[1], 
-                                     beta2 = result$par[2], 
-                                     alpha1 = result$par[3], 
+                                     beta1 = result$par[1],
+                                     beta2 = result$par[2],
+                                     alpha1 = result$par[3],
                                      alpha2 = result$par[4]))
   } else {
     # In case of non-convergence, store NAs
@@ -1340,6 +1354,7 @@ for (q in q_values) {
   }
 }
 
+result_table <- round(result_table, 5)
 df_rmse <- data.frame(q = result_table$q,
                 rmse_beta1 = sqrt((result_table$beta1 - true_param[1])^2),
                 rmse_beta2 = sqrt((result_table$beta2 - true_param[2])^2),
@@ -1348,7 +1363,7 @@ df_rmse <- data.frame(q = result_table$q,
 
 kable(result_table, "latex", booktabs = TRUE,
       caption = "Optim estimations for each quantile for one simulation")  %>%
-  kable_styling(latex_options = "H", 
+  kable_styling(latex_options = "H",
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 
@@ -1477,7 +1492,6 @@ kable(df_rmse, "latex", booktabs = TRUE,
 # print(df_valid)
 ```
 
-## Other simulations
 
 ```{r simu25s500t, echo=FALSE, eval=FALSE}
 true_param <- c(0.4, 0.2, 1.5, 1)
@@ -1501,7 +1515,7 @@ df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 
 
 ```{r plotdenskijnewsim, echo=FALSE, eval=FALSE}
-q <- 0.83
+q <- 0.915
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
@@ -1536,6 +1550,7 @@ lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red", lwd = 2)
 
 ```{r plotdenskijnewsim2, fig.height=7, fig.width=7, echo=FALSE, eval=FALSE}
 q <- 0.83
+
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 
 n_marg <- get_marginal_excess(simu_df, quantile = q)
@@ -1647,7 +1662,7 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2,
 ### Fixer trois paramètres
 
 ```{r fix3params1, echo=FALSE}
-quantiles <- seq(0.75, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -1685,7 +1700,7 @@ kable(results, "latex", booktabs = TRUE,
 ```
 
 ```{r fix3param2, echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
@@ -1724,7 +1739,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.7, 0.9, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       alpha1_estim = numeric(),
@@ -1756,14 +1771,14 @@ for (q in quantiles) {
 rownames(results) <- NULL
 kable(results, "latex", booktabs = TRUE,
       caption = "Optim estimations for each quantile, true alpha1 = 1.5") %>%
-  kable_styling(latex_options = "H", 
+  kable_styling(latex_options = "H",
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
 
 
 ```{r echo=FALSE}
-quantiles <- seq(0.75, 0.9, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       alpha2_estim = numeric(),
@@ -1843,7 +1858,7 @@ kable(results, "latex", booktabs = TRUE,
 ```
 
 ```{r,  echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.05)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
@@ -1887,7 +1902,7 @@ kable(results, "latex", booktabs = TRUE,
 ### Fixer un paramètre
 
 ```{r,  echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -1930,7 +1945,7 @@ kable(results, "latex", booktabs = TRUE,
 ```
 
 ```{r,  echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -1974,7 +1989,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r,  echo=FALSE}
-quantiles <- c(0.93, 0.94, 0.945, 0.95, 0.955, 0.96)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -2019,7 +2034,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r,  echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
@@ -2065,7 +2080,7 @@ kable(results, "latex", booktabs = TRUE,
 ### Sans fixer de paramètre
 
 ```{r,  echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.001)
+quantiles <- seq(0.9, 0.95, 0.005)
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
                       beta2_estim = numeric(),
@@ -2112,7 +2127,7 @@ kable(results, "latex", booktabs = TRUE,
 
 ```{r}
 library(bbmle)
-q <- 0.92
+q <- 0.93
 mle_rain <- mle2(neg_ll_par, start = list(beta1 = true_param[1],
                                  beta2 = true_param[2],
                                  alpha1 = true_param[3],
@@ -2171,8 +2186,6 @@ Tobs <- excesses$Tobs # T - tau
 Tmax <- nrow(simu_df_adv)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
-
-plot(density(kij), main = "Density of joint excesses")
 ```
 
 
@@ -2224,7 +2237,7 @@ neg_ll_par_adv <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
 ### Fixer cinq paramètres
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.75, 0.95, 0.01)
+quantiles <- seq(0.8, 0.9, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -2266,7 +2279,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.8, 0.9, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
@@ -2308,7 +2321,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.7, 0.9, 0.01)
+quantiles <- seq(0.8, 0.9, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       alpha1_estim = numeric(),
@@ -2350,7 +2363,7 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.75, 0.9, 0.01)
+quantiles <- seq(0.8, 0.9, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       alpha2_estim = numeric(),
@@ -2523,7 +2536,7 @@ kable(results, "latex", booktabs = TRUE,
 # Estimation des paramètres en fixant l'advection:
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.88, 0.93, 0.001)
+quantiles <- seq(0.9, 0.93, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -2572,7 +2585,7 @@ kable(results, "latex", booktabs = TRUE,
 # Optimisation avec advection
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.85, 0.93, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
