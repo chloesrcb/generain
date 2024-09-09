@@ -225,13 +225,13 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
 
 hmax <- sqrt(17)
-q <- 0.9
+q <- 0.85
 chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
                                hmax = hmax)
 spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = FALSE)
 print(spa_estim)
 
-q <- 0.9
+q <- 0.92
 tmax <- 10
 chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),

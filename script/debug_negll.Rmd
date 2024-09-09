@@ -468,7 +468,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
 ```
 
 
-```{r excessplot, eval=FALSE, echo=FALSE}
+```{r excessplot, echo=FALSE}
 q <- 0.9
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 print(head(excesses))
@@ -1291,11 +1291,11 @@ kable(df_rmse, "latex", booktabs = TRUE,
 ## Optimisation on simulations
 
 ```{r simubr25, echo=FALSE}
-true_param <- c(0.4, 0.2, 1.5, 1)
-ngrid <- 5
-spa <- 1:ngrid
-nsites <- ngrid^2 # if the grid is squared
-temp <- 1:300
+# true_param <- c(0.4, 0.2, 1.5, 1)
+# ngrid <- 5
+# spa <- 1:ngrid
+# nsites <- ngrid^2 # if the grid is squared
+# temp <- 1:300
 
 # simu_df <- read.csv("../data/simulations_BR/sim_25s_300t/br_25s_300t_1.csv")
 # get simulations list
@@ -1494,10 +1494,10 @@ kable(df_rmse, "latex", booktabs = TRUE,
 
 
 ```{r simu25s500t, echo=FALSE, eval=FALSE}
-true_param <- c(0.4, 0.2, 1.5, 1)
-ngrid <- 5
-spa <- 1:ngrid
-nsites <- ngrid^2 # if the grid is squared
+# true_param <- c(0.4, 0.2, 1.5, 1)
+# ngrid <- 5
+# spa <- 1:ngrid
+# nsites <- ngrid^2 # if the grid is squared
 # temp <- 1:500
 
 # # load the simulations
@@ -1506,11 +1506,11 @@ nsites <- ngrid^2 # if the grid is squared
 #                       ngrid^2, "s_", length(temp), "t_", 1, ".csv")
 # simu_df <- read.csv(file_path)
 
-nsites <- ncol(simu_df)
-sites_coords <- generate_grid_coords(sqrt(nsites))
-dist_mat <- get_dist_mat(sites_coords,
-                         latlon = FALSE) # distance matrix
-df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+# nsites <- ncol(simu_df)
+# sites_coords <- generate_grid_coords(sqrt(nsites))
+# dist_mat <- get_dist_mat(sites_coords,
+#                          latlon = FALSE) # distance matrix
+# df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 ```
 
 
@@ -1549,7 +1549,7 @@ lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red", lwd = 2)
 
 
 ```{r plotdenskijnewsim2, fig.height=7, fig.width=7, echo=FALSE, eval=FALSE}
-q <- 0.83
+q <- 0.915
 
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 
@@ -1661,14 +1661,15 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2,
 
 ### Fixer trois paramètres
 
-```{r fix3params1, echo=FALSE}
-quantiles <- seq(0.9, 0.95, 0.005)
+```{r, echo=FALSE}
+quantiles <- seq(0.9, 0.94, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1697,16 +1698,26 @@ kable(results, "latex", booktabs = TRUE,
   kable_styling(latex_options = "H", 
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
+# save results in csv file
+# write.csv(results, "../data/results_3params_beta1.csv")
+
+# load results
+# result_table <- read.csv("../data/results_3params_beta1.csv")
+# kable(result_table, "latex", booktabs = TRUE,
+#       caption = "Optim estimations for each quantile, true beta1 = 0.4") %>%
+#   kable_styling(latex_options = "H", 
+#                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
-```{r fix3param2, echo=FALSE}
-quantiles <- seq(0.9, 0.95, 0.005)
+```{r , echo=FALSE}
+quantiles <- seq(0.9, 0.94, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1734,18 +1745,18 @@ kable(results, "latex", booktabs = TRUE,
       caption = "Optim estimations for each quantile, true beta2 = 0.2") %>%
   kable_styling(latex_options = "H", 
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
-
 ```
 
 
 ```{r, echo=FALSE}
 quantiles <- seq(0.9, 0.95, 0.005)
-
+ 
 results <- data.frame(Quantile = numeric(),
                       alpha1_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1785,6 +1796,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1825,6 +1838,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1866,6 +1881,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1911,6 +1928,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1954,6 +1973,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -1998,6 +2019,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2043,6 +2066,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2089,6 +2114,8 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2128,6 +2155,8 @@ kable(results, "latex", booktabs = TRUE,
 ```{r}
 library(bbmle)
 q <- 0.93
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
 mle_rain <- mle2(neg_ll_par, start = list(beta1 = true_param[1],
                                  beta2 = true_param[2],
                                  alpha1 = true_param[3],
@@ -2237,13 +2266,15 @@ neg_ll_par_adv <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
 ### Fixer cinq paramètres
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.9, 0.005)
+quantiles <- seq(0.92, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2251,7 +2282,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2279,13 +2310,14 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.9, 0.01)
+quantiles <- seq(0.9, 0.95, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       beta2_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2293,7 +2325,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2321,13 +2353,14 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.9, 0.01)
+quantiles <- seq(0.9, 0.95, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       alpha1_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2335,7 +2368,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2363,13 +2396,14 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.9, 0.01)
+quantiles <- seq(0.9, 0.95, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       alpha2_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2377,7 +2411,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2404,13 +2438,14 @@ kable(results, "latex", booktabs = TRUE,
 ```
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.95, 0.01)
+quantiles <- seq(0.9, 0.95, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       adv1_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2418,7 +2453,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2446,13 +2481,14 @@ kable(results, "latex", booktabs = TRUE,
 
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.95, 0.97, 0.001)
+quantiles <- seq(0.8, 0.9, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       adv2_estim = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2460,7 +2496,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2490,7 +2526,7 @@ kable(results, "latex", booktabs = TRUE,
 ### Estimation de l'advection en fixant les autres paramètres
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.8, 0.97, 0.005)
+quantiles <- seq(0.8, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       adv1_estim = numeric(),
@@ -2498,6 +2534,7 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2505,7 +2542,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2536,7 +2573,7 @@ kable(results, "latex", booktabs = TRUE,
 # Estimation des paramètres en fixant l'advection:
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.9, 0.93, 0.005)
+quantiles <- seq(0.92, 0.95, 0.005)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -2546,6 +2583,7 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2553,7 +2591,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2585,7 +2623,7 @@ kable(results, "latex", booktabs = TRUE,
 # Optimisation avec advection
 
 ```{r, echo=FALSE}
-quantiles <- seq(0.85, 0.93, 0.005)
+quantiles <- seq(0.8, 0.95, 0.01)
 
 results <- data.frame(Quantile = numeric(),
                       beta1_estim = numeric(),
@@ -2597,6 +2635,7 @@ results <- data.frame(Quantile = numeric(),
                       Convergence = numeric())
 
 for (q in quantiles) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
   res <- mle2(neg_ll_par_adv,
               start = list(beta1 = true_param[1],
                            beta2 = true_param[2],
@@ -2604,7 +2643,7 @@ for (q in quantiles) {
                            alpha2 = true_param[4],
                            adv1 = true_param[5],
                            adv2 = true_param[6]),
-              data = list(simu = simu_df,
+              data = list(simu = simu_df_adv,
                           quantile = q,
                           df_lags = df_lags,
                           locations = sites_coords,
@@ -2633,3 +2672,66 @@ kable(results, "latex", booktabs = TRUE,
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
+
+
+# Profiled log likelihood
+
+```{r}
+# q <- 0.95
+# excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+
+# mle_rain <- mle2(neg_ll_par_adv, start = list(beta1 = true_param[1],
+#                                  beta2 = true_param[2],
+#                                  alpha1 = true_param[3],
+#                                  alpha2 = true_param[4],
+#                                  adv1 = true_param[5],
+#                                  adv2 = true_param[6]),
+#                  data = list(simu = simu_df_adv,
+#                         quantile = q,
+#                         df_lags = df_lags,
+#                         locations = sites_coords,
+#                         excesses = excesses,
+#                         method = "CG"),
+#                   control = list(maxit = 10000))
+
+# rain_pro <- bbmle::profile(mle_rain) # profiled likelihood
+# par(mfrow = c(2, 3))
+# plot(rain_pro)
+
+# bbmle::confint(rain_pro, level = 0.95) # confidence intervals
+```
+
+
+# Plot log likelihood
+
+```{r}
+# # Define the fixed parameters
+# alpha1 <- 1.5
+# alpha2 <- 1.0
+# adv1 <- 0.05
+# adv2 <- 0.02
+
+# beta1_values <- seq(0.1, 2.0, length.out = 50)
+# beta2_values <- seq(0.1, 2.0, length.out = 50)
+
+# # Create a matrix to store the log-likelihood values
+# log_likelihood_matrix <- matrix(NA, nrow = length(beta1_values), ncol = length(beta2_values))
+
+# # Loop over beta1 and beta2 values and compute the log-likelihood
+# for (i in seq_along(beta1_values)) {
+#   for (j in seq_along(beta2_values)) {
+#     beta1 <- beta1_values[i]
+#     beta2 <- beta2_values[j]
+    
+#     # Compute the negative log-likelihood for the current values of beta1 and beta2
+#     log_likelihood_matrix[i, j] <- neg_ll_par_adv(beta1, beta2, alpha1, alpha2, adv1, adv2,
+#                                                   simu_df_adv, df_lags, sites_coords)
+#   }
+# }
+
+# par(mfrow = c(1, 1))
+# # Plot the log-likelihood as a contour plot
+# contour(beta1_values, beta2_values, log_likelihood_matrix,
+#         xlab = "beta1", ylab = "beta2", main = "Log-Likelihood Contour Plot")
+```
+
