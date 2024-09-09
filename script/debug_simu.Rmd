@@ -6,13 +6,14 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 3.5,
-                      fig.align = 'center', message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 5,
+                      fig.align = 'center', message = FALSE, warning = FALSE,
+                      fig.pos='H')
 ```
 
 
-```{r lib, show = FALSE}
-setwd("./script")
+```{r lib, echo = FALSE}
+# setwd("./script")
 library(generain)
 library(reshape2)
 library(ggplot2)
@@ -25,7 +26,7 @@ library(evd)
 
 # Simulation Brown-Resnick
 
-```{r, show = FALSE}
+```{r, echo = FALSE}
 create_simu_gif <- function(simulation_data, params, type = "rpar", 
                             forcedtemp = NA) {
   # type = "rpar" or "br"
@@ -247,7 +248,7 @@ sim_BR_adv <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
 
 Comparaison avec et sans advection (seed fixée):
 
-```{r}
+```{r, echo=FALSE}
 adv <- c(0.5, 0.2)
 true_param <- c(0.4, 0.2, 1.5, 1, adv)
 ngrid <- 2
@@ -283,7 +284,7 @@ ggplot(df_plot, aes(x = time, y = value, color = type)) +
 
 Comparaison sans advection avec les différents codes, on retrouve bien la meme chose, sachant que l'on fixe la seed:
 
-```{r}
+```{r, echo=FALSE}
 adv <- c(0, 0)
 true_param <- c(0.4, 0.2, 1.5, 1, adv)
 ngrid <- 2
@@ -323,10 +324,10 @@ Donc je vais utiliser `sim_BR_adv` pour les simulations.
 ```{r}
 adv <- c(0, 0)
 true_param <- c(0.4, 0.2, 1.5, 1, adv)
-ngrid <- 7
+ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:500
+temp <- 1:300
 n.BR <- 1
 
 BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
@@ -350,19 +351,23 @@ simu_df <- read.csv(file_path)
 
 ```{r}
 # simulation gif
-create_simu_gif(simu_df, true_param, type = "br", forcedtemp = 50)
+# create_simu_gif(simu_df, true_param, type = "br", forcedtemp = 50)
 ```
 
 
-```{r}
+```{r,echo=FALSE}
 # plot the simulation for one site
-plot(simu_df[, 2], main = "Rainfall simulation with advection")
+par(mfrow = c(2, 2), cex = 0.5)
+plot(simu_df[, 1], main = "Site 1")
+plot(simu_df[, 2], main = "Site 2")
+plot(simu_df[, 3], main = "Site 3")
+plot(simu_df[, 4], main = "Site 4")
 ```
 
 
 ```{r}
 # plot the simulation at four different sites on 100 time steps
-df_plot <- data.frame(time = 1:100,
+df_plot <- data.frame(time = 1:300,
                       S3 = simu_df[, 3],
                       S4 = simu_df[, 4],
                       S5 = simu_df[, 5])
@@ -414,7 +419,7 @@ qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
 ```
 
 
-## Simulation avec 25 sites et 300 pas de temps avec advection
+## Simulation avec 25 sites et 100 pas de temps avec advection
 
 ```{r}
 adv <- c(0.05, 0.02)
@@ -422,12 +427,14 @@ true_param <- c(0.1, 0.05, 1.5, 1, adv)
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:300
+temp <- 1:100
 n.BR <- 1
 
+start_time <- Sys.time()
 BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
                     true_param[4], spa, spa, temp, n.BR, adv)
-
+end_time <- Sys.time()
+print(end_time - start_time)
 
 foldername <- paste0("../data/simulations_BR/sim_adv_", ngrid^2, "s_",
                                 length(temp), "t/")
@@ -447,14 +454,16 @@ simu_df_adv <- read.csv(file_path)
 
 ```{r}
 # simulation gif
-create_simu_gif(simu_df_adv, true_param, type = "br_adv", forcedtemp = 50)
+# create_simu_gif(simu_df_adv, true_param, type = "br_adv", forcedtemp = 50)
 ```
 
 
-```{r}
-par(mfrow = c(1, 1))
-# plot the simulation for one site
-plot(simu_df_adv[, 4], main = "Rainfall simulation with advection")
+```{r, echo=FALSE}
+# par(mfrow = c(2, 2))
+# plot(simu_df_adv[, 1], main = "Site 1")
+# plot(simu_df_adv[, 2], main = "Site 2")
+# plot(simu_df_adv[, 3], main = "Site 3")
+# plot(simu_df_adv[, 4], main = "Site 4")
 ```
 
 
@@ -477,9 +486,9 @@ ggplot(df_plot, aes(x = time)) +
 
 ## Verif marginales 
 
-```{r}
+```{r, fig.height=7, fig.width=7}
 # qq-plots margins
-par(mfrow = c(2, 2))
+par(mfrow = c(2, 2), cex = 0.5, cex.main = 0.8, cex.axis = 0.8)
 
 BR_loc <- simu_df_adv$S4
 plot(BR_loc, main = "Site 4")
@@ -531,4 +540,110 @@ ggplot(df_plot, aes(x = time, y = value, color = type)) +
   geom_point() +
   labs(title = "Rainfall simulation with and without advection",
        x = "Time", y = "Rainfall")
+```
+
+# Probleme simulation avec advection
+
+Quand le nombre de pas de temps est trop élevé, cela prends beaucoup trop de temps
+ie le code a tourner 7 jours pour 300 pas de temps et 25 sites et je l'ai arreté.
+
+Est ce que c'est parce que la fonction ne passer pas bien avec la parallélisation??
+
+Avec 200 pas de temps, cela fonctionne:
+
+```{r}
+adv <- c(0.05, 0.02)
+true_param <- c(0.1, 0.05, 1.5, 1, adv)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:200
+n.BR <- 1
+
+start_time <- Sys.time()
+BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+end_time <- Sys.time()
+print(end_time - start_time)
+
+foldername <- paste0("../data/simulations_BR/sim_adv_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+save_simulations(BR, ngrid, n.BR, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df_adv <- read.csv(file_path)
+```
+
+Avec 300 pas de temps et une faible advection, cela fonctionne:
+```{r}
+adv <- c(0.05, 0.02)
+true_param <- c(0.1, 0.05, 1.5, 1, adv)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+n.BR <- 1
+
+start_time <- Sys.time()
+BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+end_time <- Sys.time()
+print(end_time - start_time)
+
+foldername <- paste0("../data/simulations_BR/sim_adv2_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+save_simulations(BR, ngrid, n.BR, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df_adv <- read.csv(file_path)
+```
+
+
+Avec 300 pas de temps et une plus forte advection, c'est ultra long car les valeurs des coordonnées explosent et cela 
+explose dans le variogramme qui va écrasé les valeurs de la simulation dans le $Y = exp(W - W[1] - Varm1[,,,1])$ qui va
+donner des valeurs très proches de 0 et donc $Z = V * Y$ va donner des valeurs très proches de 0 et cela ne va pas trouver 
+de maximum.
+
+```{r}
+adv <- c(0.05, 0.02)
+true_param <- c(0.1, 0.05, 1.5, 1, adv)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+n.BR <- 1
+
+start_time <- Sys.time()
+BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3],
+                    true_param[4], spa, spa, temp, n.BR, adv)
+end_time <- Sys.time()
+print(end_time - start_time)
+
+foldername <- paste0("../data/simulations_BR/sim_adv2_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+save_simulations(BR, ngrid, n.BR, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df_adv <- read.csv(file_path)
 ```
