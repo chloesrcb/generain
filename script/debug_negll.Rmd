@@ -198,26 +198,52 @@ spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
+library(doParallel)
+library(foreach)
+
+num_iter <- 100
+
+# detect core
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
+  library(generain)
+  BR <- generain::sim_BR(true_param[1]*2, true_param[2]*2, true_param[3], 
+                true_param[4], spa, spa, temp, 1, adv)
+
+  if (all(adv == c(0, 0))) {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+  } else {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                  length(temp), "t_adv/")
+  }
+
+  if (!dir.exists(foldername)) {
+    dir.create(foldername, recursive = TRUE)
+  }
+
+  save_simulations(BR, ngrid, 1, folder = foldername,
+          file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
+          forcedind = i)
+
+}
+
+stopCluster(cl)
+
 # BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3], 
 #                 true_param[4], spa, spa, temp, 1, adv)
 
 # save the simulations
-foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t/")
-# if (!dir.exists(foldername)) {
-#   dir.create(foldername, recursive = TRUE)
-# }
-
-# save_simulations(BR, ngrid, 1, folder = foldername,
-#         file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
 
 
 # load the simulations
-file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
-                    ".csv")
-simu_df <- read.csv(file_path)
-nsites <- ncol(simu_df)
-sites_coords <- generate_grid_coords(sqrt(nsites))
+# file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
+#                     ".csv")
+# simu_df <- read.csv(file_path)
+# nsites <- ncol(simu_df)
+# sites_coords <- generate_grid_coords(sqrt(nsites))
 ```
 
 ```{r, echo=FALSE}
