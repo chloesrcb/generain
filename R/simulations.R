@@ -71,9 +71,12 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
   lz <- length(sz <- seq_along(z))
 
   ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1, 
+                                                       proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1, 
+                                       proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2, 
+                                       proj = 3)
 
   ## Construct grid
   Nxy <- lx * ly
