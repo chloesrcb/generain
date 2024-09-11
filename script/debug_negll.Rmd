@@ -138,52 +138,54 @@ spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
-library(doParallel)
-library(foreach)
+# library(doParallel)
+# library(foreach)
 
-num_iter <- 100
+# num_iter <- 1
 
 # detect core
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores())
+# registerDoParallel(cl)
 
-results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
-  library(generain)
-  BR <- sim_BR(true_param[1], true_param[2], true_param[3],
-                true_param[4], spa, spa, temp, 1, adv)
-
-  if (all(adv == c(0, 0))) {
-    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t/")
-  } else {
-    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                  length(temp), "t_adv/")
-  }
-
-  if (!dir.exists(foldername)) {
-    dir.create(foldername, recursive = TRUE)
-  }
-
-  save_simulations(BR, ngrid, 1, folder = foldername,
-          file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
-          forcedind = i)
-
-}
-
-stopCluster(cl)
-
-# BR <- sim_BR_adv(true_param[1] * 2, true_param[2] * 2, true_param[3], 
+# results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
+#   library(generain)
+#   BR <- sim_BR(true_param[1], true_param[2], true_param[3],
 #                 true_param[4], spa, spa, temp, 1, adv)
 
-# save the simulations
+#   if (all(adv == c(0, 0))) {
+#     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t/")
+#   } else {
+#     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                   length(temp), "t_adv/")
+#   }
 
+#   if (!dir.exists(foldername)) {
+#     dir.create(foldername, recursive = TRUE)
+#   }
+
+#   save_simulations(BR, ngrid, 1, folder = foldername,
+#           file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
+#           forcedind = i)
+
+# }
+
+# stopCluster(cl)
 
 # load the simulations
-# file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
-#                     ".csv")
-# simu_df <- read.csv(file_path)
-# nsites <- ncol(simu_df)
-# sites_coords <- generate_grid_coords(sqrt(nsites))
+if (all(adv == c(0, 0))) {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+} else {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                  length(temp), "t_adv/")
+}
+
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
+                    ".csv")
+simu_df <- read.csv(file_path)
+nsites <- ncol(simu_df)
+sites_coords <- generate_grid_coords(sqrt(nsites))
 ```
 
 ```{r, echo=FALSE}
@@ -272,24 +274,6 @@ kable(df_valid, format = "latex") %>%
 ```
 
 # Set of lags
-
-```{r, echo=FALSE, eval=FALSE}
-# get only two sites
-site1 <- 1
-site2 <- 25
-simu_df_cp <- simu_df[, c(site1, site2)]
-colnames(simu_df_cp) <- c("site1", "site2")
-
-# get the distance between the two sites
-sites_coords_cp <- sites_coords[c(site1, site2), ]
-hnorm <- sqrt((sites_coords_cp[2, 1] - sites_coords_cp[1, 1])^2 +
-              (sites_coords_cp[2, 2] - sites_coords_cp[1, 2])^2)
-
-# get the lag vectors
-df_lags <- get_lag_vectors(sites_coords_cp, true_param,
-                          hmax = NA, tau_vect = 0:10)
-
-```
 
 ```{r, echo = FALSE}
 get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
@@ -429,21 +413,40 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
                     & excesses$tau == t] <- joint_excesses
     }
   }
+  # excesses <- excesses[excesses$kij > 0, ]
   return(excesses)
 }
 ```
 
 
 ```{r excessplot, echo=FALSE}
-q <- 0.9
+q <- 0.91
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 print(head(excesses))
 
 # density plot of the number of excesses
-# ggplot(excesses, aes(x = kij)) +
-#   geom_density() +
-#   labs(title = "Density plot of the number of excesses",
-#        x = "Number of excesses", y = "Density")
+ggplot(excesses, aes(x = kij)) +
+  geom_density() +
+  labs(title = "Density plot of the number of excesses",
+       x = "Number of excesses", y = "Density")
+
+# histogram
+ggplot(excesses, aes(x = kij)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of the number of excesses",
+       x = "Number of excesses", y = "Frequency")
+
+# without zeros
+ggplot(excesses[excesses$kij > 0, ], aes(x = kij)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of the number of excesses",
+       x = "Number of excesses", y = "Frequency")
+
+# density 
+ggplot(excesses[excesses$kij > 0, ], aes(x = kij)) +
+  geom_density() +
+  labs(title = "Density plot of the number of excesses",
+       x = "Number of excesses", y = "Density")
 ```
 
 
@@ -772,7 +775,6 @@ for (q in q_values) {
   Tmax <- nrow(simu_df)
   p_hat <- n_marg / Tmax # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
-
   chi_theorical <- theorical_chi(true_param, df_lags)
 
   tau <- 1
@@ -799,20 +801,61 @@ for (q in q_values) {
 }
 ```
 
-Pour un autre lag spatial $h = 1$ et un lag temporel $\tau = 3$:
-
-```{r plotdenskij2, fig.height=7, fig.width=7, echo=FALSE}
-q_values <- seq(0.9, 0.96, by = 0.01)
+Without zeros $k_{ij, \tau} > 0$:
+```{r plotdenskij, fig.height=7, fig.width=7}
+q_values <- seq(0.935, 0.96, by = 0.005)
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
 par(mfrow = c(ceiling(length(q_values)/3), 3))
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- excesses[excesses$kij > 0, ] # without zeros
+  n_marg <- get_marginal_excess(simu_df, quantile = q)
+  Tobs <- excesses$Tobs # T - tau
+  Tmax <- nrow(simu_df)
+  p_hat <- n_marg / Tmax # probability of marginal excesses
+  kij <- excesses$kij # number of joint excesses
+  chi_theorical <- theorical_chi(true_param, excesses)
+
+  tau <- 1
+  hnorm <- 2
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+               chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+           excesses$hnorm == hnorm]
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  n <- Tmax - tau # t - tau
+
+  Tobs_tau_h <- unique(Tobs[excesses$tau == tau &
+              excesses$hnorm == hnorm])
+  x <- 0:Tobs_tau_h
+  # Density
+  plot(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.25), cex.main = 0.8,
+                      cex.lab = 0.8, cex.axis = 0.8)
+  # binomial density
+  lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
+    lwd = 2)
+  legend("topright", legend = "Binomial", col = "red", lwd = 1)
+}
+```
+
+Pour un autre lag spatial $h = 1$ et un lag temporel $\tau = 3$:
+
+```{r plotdenskij2, fig.height=7, fig.width=7, echo=FALSE}
+q_values <- seq(0.935, 0.96, by = 0.005)
+par(mfrow = c(ceiling(length(q_values)/3), 3))
+for (q in q_values) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- excesses[excesses$kij > 0, ] # without zeros
   n_marg <- get_marginal_excess(simu_df, quantile = q)
   Tobs <- excesses$Tobs # T - tau
   Tmax <- nrow(simu_df)
   p_hat <- n_marg / Tmax # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
 
-  chi_theorical <- theorical_chi(true_param, df_lags)
+  chi_theorical <- theorical_chi(true_param, excesses)
 
   tau <- 3
   hnorm <- 1
@@ -841,12 +884,63 @@ for (q in q_values) {
 
 Maintenant on fixe le quantile et $h = 1$ et on fait varier le lag temporel $\tau$, en prenant le chi théorique:
 
+```{r, echo=FALSE}
+empirical_excesses <- function(data_rain, quantile, df_lags) {
+  excesses <- df_lags # copy the dataframe
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+
+  for (t in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- df_h_t$s1[i]
+
+      # get the data for the pair of sites
+      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- as.data.frame(na.omit(rain_cp))
+      colnames(rain_cp) <- c("s1", "s2")
+
+      Tmax <- nrow(rain_cp) # number of total observations
+      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
+      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
+
+      Tobs <- length(rain_nolag) # number of observations for the lagged pair
+                                 # i.e. T - tau
+
+      # transform the data in uniform data
+      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
+                         rank(rain_lag) / (Tobs + 1))
+
+      # get the conditional excesses on s2
+      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
+      # number of joint excesses
+      joint_excesses <- sum(cp_cond[, 1] > quantile)
+
+      # store the number of excesses and T - tau
+      excesses$Tobs[excesses$s1 == ind_s1
+                      & excesses$s2 == ind_s2
+                      & excesses$tau == t] <- Tobs
+
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == t] <- joint_excesses
+    }
+  }
+  excesses <- excesses[excesses$kij > 0, ]
+  return(excesses)
+}
+```
+
 ```{r plotdenskij3, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.96
+q <- 0.95
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
+# excesses without zeros (function has changed)
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+df_lags_excesses <- excesses[, 1:6]
 
 n_marg <- get_marginal_excess(simu_df, quantile = q)
 # Tobs <- excesses$Tobs # T - tau
@@ -854,7 +948,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theorical_chi(true_param, df_lags_excesses)
 
 tau_values <- unique(excesses$tau)
 
@@ -873,7 +967,7 @@ for (tau in tau_values) {
   # proba_tau_h <- unique(chi_tau_h * p_hat_tau)
   # Empirical density
   density_data <- density(k_tau_h)
-  density_df <- data.frame(x = density_data$x, 
+  density_df <- data.frame(x = density_data$x,
           y = density_data$y, tau = as.factor(tau), type = "Empirical")
 
   # Theorical binomial distribution
@@ -894,7 +988,7 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
        x = "Number of excesses",
        y = "Density") +
   theme_minimal() +
-  xlim(0, 20) +
+  xlim(-0.5, 10) +
   theme(legend.title = element_blank())
 
 ```
@@ -903,11 +997,13 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 Idem en prenant le chi empirique moyen, c'est la meme chose qu'avec le theorique (à peu près):
 
 ```{r plotdenskij4, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.96
+q <- 0.955
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+# get corresponding lags in the first cols of excesses
+df_lags_excesses <- excesses[, 1:6]
 
 n_marg <- get_marginal_excess(simu_df, quantile = q)
 # Tobs <- excesses$Tobs # T - tau
@@ -915,8 +1011,8 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
-chi_emp <- chispatemp_dt(simu_df, df_lags, quantile = q)
+chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_emp <- chispatemp_dt(simu_df, df_lags_excesses, quantile = q)
 tau_values <- unique(excesses$tau)
 
 plot_data <- data.frame()
@@ -956,7 +1052,7 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
        x = "Number of excesses",
        y = "Density") +
   theme_minimal() +
-  xlim(0, 20) +
+  xlim(-0.5, 15) +
   theme(legend.title = element_blank())
 
 ```
@@ -969,7 +1065,10 @@ q <- 0.94
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
+# excesses without zeros
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+# get corresponding lags in the first cols of excesses
+df_lags_excesses <- excesses[, 1:6]
 
 n_marg <- get_marginal_excess(simu_df, quantile = q)
 # Tobs <- excesses$Tobs # T - tau
@@ -977,8 +1076,8 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
-chi_emp <- chispatemp_dt(simu_df, df_lags, quantile = q)
+chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_emp <- chispatemp_dt(simu_df, df_lags_excesses, quantile = q)
 tau_values <- unique(excesses$tau)
 
 plot_data <- data.frame()
@@ -1029,6 +1128,52 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 ## Log likelihood
 
 ```{r negll}
+empirical_excesses <- function(data_rain, quantile, df_lags) {
+  excesses <- df_lags # copy the dataframe
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+
+  for (t in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- df_h_t$s1[i]
+
+      # get the data for the pair of sites
+      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- as.data.frame(na.omit(rain_cp))
+      colnames(rain_cp) <- c("s1", "s2")
+
+      Tmax <- nrow(rain_cp) # number of total observations
+      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
+      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
+
+      Tobs <- length(rain_nolag) # number of observations for the lagged pair
+                                 # i.e. T - tau
+
+      # transform the data in uniform data
+      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
+                         rank(rain_lag) / (Tobs + 1))
+
+      # get the conditional excesses on s2
+      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
+      # number of joint excesses
+      joint_excesses <- sum(cp_cond[, 1] > quantile)
+
+      # store the number of excesses and T - tau
+      excesses$Tobs[excesses$s1 == ind_s1
+                      & excesses$s2 == ind_s2
+                      & excesses$tau == t] <- Tobs
+
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == t] <- joint_excesses
+    }
+  }
+  return(excesses)
+}
+
 neg_ll <- function(params, simu, df_lags, locations, quantile,
                    latlon = FALSE, simu_exp = FALSE, excesses = NULL) {
   hmax <- max(df_lags$hnorm)
@@ -1072,11 +1217,13 @@ neg_ll <- function(params, simu, df_lags, locations, quantile,
   # transform in chi vector
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
-
+  # get indices where kij == 0
+  ind_zero <- which(kij == 0)
   non_excesses <- Tobs - kij # number of non-excesses
   # log-likelihood vector
   ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - p * chi_vect)
-
+  # remove the zeros
+  # ll_vect <- ll_vect[-ind_zero]
   # final negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
   # print(nll)
@@ -1084,17 +1231,6 @@ neg_ll <- function(params, simu, df_lags, locations, quantile,
 }
 ```
 
-Quelques résultats pour la log-likelihood:
-
-```{r negllcalc}
-q <- 0.94
-nll <- neg_ll(true_param, simu_df, df_lags, sites_coords, quantile = q)
-print(nll)
-nll <- neg_ll(true_param + 0.05, simu_df, df_lags, sites_coords, quantile = q)
-print(nll)
-nll <- neg_ll(true_param - 0.1, simu_df, df_lags, sites_coords, quantile = q)
-print(nll)
-```
 
 Si je réduis le nombre de décalage temporel:
 
@@ -1105,6 +1241,7 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
 
 q <- 0.915
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+
 true_param <- c(0.4, 0.2, 1.5, 1)
 result_tau1 <- optim(par = c(true_param), fn = neg_ll,
                         simu = simu_df,
@@ -1284,7 +1421,7 @@ C'est beaucoup trop sensible au quantile.
 
 On obtient les résultats suivants pour une simulation:
 ```{r optimquantile, echo=FALSE}
-q_values <- seq(0.9, 0.96, by = 0.005) # quantiles
+q_values <- seq(0.9, 0.95, by = 0.005) # quantiles
 
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
                            alpha1 = numeric(), alpha2 = numeric())
@@ -1294,7 +1431,6 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
 # For each quantile
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-
   # Optimization
   result <- optim(par = c(true_param), fn = neg_ll,
                   simu = simu_df,
@@ -1486,13 +1622,16 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 
+# keep only excesses with kij > 0
+excesses <- excesses[excesses$kij > 0, ]
+
 n_marg <- get_marginal_excess(simu_df, quantile = q)
 Tobs <- excesses$Tobs # T - tau
 Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theorical_chi(true_param, excesses)
 
 tau <- 0
 hnorm <- 1
@@ -1515,10 +1654,10 @@ lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red", lwd = 2)
 
 
 ```{r plotdenskijnewsim2, fig.height=7, fig.width=7, echo=FALSE, eval=FALSE}
-q <- 0.915
+q <- 0.95
 
 excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-
+excesses <- excesses[excesses$kij > 0, ]
 n_marg <- get_marginal_excess(simu_df, quantile = q)
 # Tobs <- excesses$Tobs # T - tau
 Tmax <- nrow(simu_df)
@@ -1564,7 +1703,7 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
        x = "Number of excesses",
        y = "Density") +
   theme_minimal() +
-  xlim(0, 40) +
+  xlim(0, 30) +
   theme(legend.title = element_blank())
 ```
 
@@ -2003,7 +2142,7 @@ for (q in quantiles) {
 
   conv <- res@details$conv
   coef <- res@coef
-  
+
   results <- rbind(results, data.frame(Quantile = q,
                                        beta1_estim = coef["beta1"],
                                        alpha1_estim = coef["alpha1"],
@@ -2227,6 +2366,14 @@ neg_ll_par_adv <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
   nll <- -sum(ll_vect, na.rm = TRUE)
   return(nll)
 }
+
+q <- 0.9
+excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+nll <- neg_ll_par_adv(true_param[1], true_param[2], true_param[3],
+                      true_param[4], true_param[5], true_param[6],
+                      simu_df_adv, df_lags, sites_coords, quantile = q, 
+                      excesses = excesses)
+print(nll)
 ```
 
 ### Fixer cinq paramètres
@@ -2671,33 +2818,88 @@ kable(results, "latex", booktabs = TRUE,
 # Plot log likelihood
 
 ```{r}
-# # Define the fixed parameters
-# alpha1 <- 1.5
-# alpha2 <- 1.0
-# adv1 <- 0.05
-# adv2 <- 0.02
+# Define the fixed parameters
+beta2 <- 0.2
+alpha1 <- 1.5
+alpha2 <- 1.0
+adv1 <- 0.05
+adv2 <- 0.02
 
-# beta1_values <- seq(0.1, 2.0, length.out = 50)
-# beta2_values <- seq(0.1, 2.0, length.out = 50)
+beta1_values <- seq(0.1, 1, length.out = 20)
+q <- 0.9
+nll <- numeric(length(beta1_values))
 
-# # Create a matrix to store the log-likelihood values
-# log_likelihood_matrix <- matrix(NA, nrow = length(beta1_values), ncol = length(beta2_values))
+for (i in 1:length(nll)) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+  nll[i] <- neg_ll_par_adv(beta1_values[i], beta2, alpha1, alpha2, adv1, adv2,
+                      simu_df_adv, df_lags, sites_coords, quantile = q,
+                      excesses = excesses)
+}
 
-# # Loop over beta1 and beta2 values and compute the log-likelihood
-# for (i in seq_along(beta1_values)) {
-#   for (j in seq_along(beta2_values)) {
-#     beta1 <- beta1_values[i]
-#     beta2 <- beta2_values[j]
-    
-#     # Compute the negative log-likelihood for the current values of beta1 and beta2
-#     log_likelihood_matrix[i, j] <- neg_ll_par_adv(beta1, beta2, alpha1, alpha2, adv1, adv2,
-#                                                   simu_df_adv, df_lags, sites_coords)
-#   }
-# }
-
-# par(mfrow = c(1, 1))
-# # Plot the log-likelihood as a contour plot
-# contour(beta1_values, beta2_values, log_likelihood_matrix,
-#         xlab = "beta1", ylab = "beta2", main = "Log-Likelihood Contour Plot")
+# plot
+par(mfrow = c(1, 1))
+plot(beta1_values, nll, type = "l", col = "blue",
+     xlab = "beta1", ylab = "Log likelihood")
 ```
 
+
+
+```{r}
+# Define the fixed parameters
+beta1 <- 0.4
+beta2 <- 0.2
+alpha1 <- 1.5
+alpha2 <- 1.0
+adv1 <- 0.05
+adv2 <- 0.02
+
+adv1_values <- seq(-0.5, 0.5, length.out = 30)
+q <- 0.93
+nll <- numeric(length(adv1_values))
+
+for (i in 1:length(nll)) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+  nll[i] <- neg_ll_par_adv(beta1, beta2, alpha1, alpha2, adv1_values[i], adv2,
+                      simu_df_adv, df_lags, sites_coords, quantile = q,
+                      excesses = excesses)
+}
+
+# plot
+par(mfrow = c(1, 1))
+plot(adv1_values, nll, type = "l", col = "blue",
+     xlab = "adv1", ylab = "Log likelihood")
+
+min_adv <- adv1_values[which.min(nll)]
+print(min_adv)
+```
+
+
+
+```{r}
+# Define the fixed parameters
+beta1 <- 0.4
+beta2 <- 0.2
+alpha1 <- 1.5
+alpha2 <- 1.0
+adv1 <- 0.05
+adv2 <- 0.02
+
+adv2_values <- seq(-0.1, 0.1, length.out = 30)
+q <- 0.85
+nll <- numeric(length(adv2_values))
+
+for (i in 1:length(nll)) {
+  excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
+  nll[i] <- neg_ll_par_adv(beta1, beta2, alpha1, alpha2, adv1, adv2_values[i],
+                      simu_df_adv, df_lags, sites_coords, quantile = q,
+                      excesses = excesses)
+}
+
+# plot
+par(mfrow = c(1, 1))
+plot(adv2_values, nll, type = "l", col = "blue",
+     xlab = "adv2", ylab = "Log likelihood")
+
+min_adv <- adv2_values[which.min(nll)]
+print(min_adv)
+```

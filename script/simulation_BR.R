@@ -32,69 +32,6 @@ true_param <- c(beta1, beta2, alpha1, alpha2)
 #                                 length(temp), "t"), forcedind = 1)
 
 
-sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR) { 
-  ## Setup 
-  RandomFields::RFoptions(spConform=FALSE) 
-  lx <- length(sx <- seq_along(x)) 
-  ly <- length(sy <- seq_along(y)) 
-  lz <- length(sz <- seq_along(z)) 
-  ## Model-Variogram BuhlCklu 
-  modelBuhlCklu <- RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=1) + 
-                  RandomFields::RMfbm(alpha=alpha1, var=beta1, proj=2) + 
-                  RandomFields::RMfbm(alpha=alpha2, var=beta2, proj=3)
-  
-  ## Construct grid 
-  Nxy <- lx * ly 
-  N <- Nxy * lz 
-  grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix 
-
-  for (i in sx) 
-    for (j in seq_len(ly*lz)) 
-      grid[i+(j-1)*ly, 1] <- i 
-  
-  for (i in sy) 
-    for (j in sx) 
-      for(k in sz) 
-        grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i 
-  
-  for (i in sz) 
-    for (j in seq_len(Nxy)) 
-      grid[j+Nxy*(i-1), 3] <- i
-
-  ## Construct shifted variogram
-  Varm1 <- vapply(seq_len(N), function(n) 
-      RandomFields::RFvariogram(modelBuhlCklu, 
-        x=sx-grid[n,1], 
-        y=sy-grid[n,2], 
-        z=sz-grid[n,3]), 
-        array(NA_real_, dim=c(lx, ly, lz))) ## => (lx, ly, lz, N)-array 
-  
-  ## Main 
-  Z <- array(, dim=c(lx, ly, lz, n.BR)) # 4d array 
-  E <- matrix(rexp(n.BR * N), nrow=n.BR, ncol=N) 
-  for (i in seq_len(n.BR)) { ## n=1 
-    V <- 1/E[i,1] 
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n=1) 
-    Y <- exp(W - W[1] - Varm1[,,,1]) 
-    Z[,,,i] <- V * Y 
-    ## n in {2,..,N} 
-    for(n in 2:N) { 
-      Exp <- E[i,n] 
-      V <- 1/Exp 
-      while(V > Z[N*(i-1)+n]) { 
-        W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z) 
-        Y <- exp(W - W[n] - Varm1[,,,n]) 
-        if(all(V*Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))])) 
-          Z[,,,i] <- pmax(V*Y, Z[,,,i]) 
-          Exp <- Exp + rexp(1) 
-          V <- 1/Exp 
-      } 
-    } 
-  } 
-  ## Return 
-  Z 
-}
-
 library(foreach)
 library(doParallel)
 
@@ -228,3 +165,46 @@ theorical_qfrechet <- qgev(ppoints(BR_loc), mu, sigma, 0)
 qqplot(BR_loc, theorical_qfrechet, main = "Frechet Q-Q plot",
   xlab = "Empirical quantiles",
   ylab = "Theoretical quantiles")
+
+################################################################################
+# SIMULATION WITH ADVECTION
+################################################################################
+
+adv <- c(0.05, 0.02)
+param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 2
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+n.BR <- 1
+
+# generate the simulations
+# BR_adv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3],
+#                     true_param[4], spa, spa, temp, n.BR, adv)
+
+
+library(foreach)
+library(doParallel)
+
+n.BR <- 1
+num_iterations <- 5
+remotes::install_github('chloesrcb/generain')
+library(generain)
+
+# Create a parallel backend
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+# Run the simulation in parallel
+results <- foreach(i = 1:num_iterations, .combine = "c") %dopar% {
+  BR <- generain::sim_BR(2*param[1], 2*param[2], param[3], param[4], spa, spa, temp, n.BR)
+  save_simulations(BR, ngrid, n.BR,
+                  folder = paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
+                                length(temp), "t/"),
+                  file = paste0("br_", ngrid^2, "s_",
+                                length(temp), "t"), forcedind = i)
+
+}
+
+# Stop the parallel backend
+stopCluster(cl)
