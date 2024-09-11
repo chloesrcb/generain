@@ -1218,12 +1218,9 @@ neg_ll <- function(params, simu, df_lags, locations, quantile,
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
   # get indices where kij == 0
-  ind_zero <- which(kij == 0)
   non_excesses <- Tobs - kij # number of non-excesses
   # log-likelihood vector
   ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - p * chi_vect)
-  # remove the zeros
-  # ll_vect <- ll_vect[-ind_zero]
   # final negative log-likelihood
   nll <- -sum(ll_vect, na.rm = TRUE)
   # print(nll)
@@ -2903,3 +2900,96 @@ plot(adv2_values, nll, type = "l", col = "blue",
 min_adv <- adv2_values[which.min(nll)]
 print(min_adv)
 ```
+
+
+## Plusieurs simulations ensemble
+
+```{r}
+
+neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
+                    list_excesses, latlon = FALSE, simu_exp = FALSE) {
+
+  nll_composite <- 0
+  # number of simulations  in list_simu
+  nsim <- length(list_simu)
+  for (i in 1:nsim) {
+    simu <- list_simu[[i]]
+    excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
+                    latlon = latlon, simu_exp = simu_exp, excesses = excesses)
+
+    nll_composite <- nll_composite + nll_i
+  }
+
+  return(nll_composite)
+}
+
+
+true_param <- c(0.4, 0.2, 1.5, 1)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+
+# count number of simulation/files in folder
+foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+files <- list.files(foldername)
+nfiles <- length(files)
+
+list_simu <- list()
+for (i in 1:nfiles) {
+  file_path <- paste0(foldername, "/br_",
+                      ngrid^2, "s_", length(temp), "t_", i, ".csv")
+  simu_df <- read.csv(file_path)
+  list_simu[[i]] <- simu_df
+}
+
+locations <- generate_grid_coords(sqrt(nsites))
+df_lags <- get_lag_vectors(locations, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+quantile <- 0.94
+list_excesses <- list()
+for (i in 1:8) {
+  excesses <- empirical_excesses(list_simu[[i]], quantile = quantile, 
+                                df_lags = df_lags)
+  list_excesses[[i]] <- excesses
+}
+
+# nll_total <- neg_ll_composite(true_param, list_simu, df_lags, locations,
+#                               quantile, list_excesses)
+# nll_total
+
+# optimisation of neg_ll_composite
+
+
+
+
+# optim sur une seule simu
+simu <- list_simu[[2]]
+excesses <- list_excesses[[2]]
+
+result_1 <- optim(c(0.4, 0.2, 1.5, 1), neg_ll, simu = simu, df_lags = df_lags,
+                locations = locations, quantile = quantile, excesses = excesses,
+                control = list(maxit = 10000))
+
+print(result_1$par)
+# sur deux simu
+simu1 <- list_simu[[1]]
+simu2 <- list_simu[[2]]
+list_simu12 <- list(simu1, simu2)
+list_excesses12 <- list_excesses[1:2]
+result_2 <- optim(c(0.4, 0.2, 1.5, 1), neg_ll_composite, list_simu = list_simu12,
+                df_lags = df_lags, locations = locations, quantile = quantile,
+                list_excesses = list_excesses12, control = list(maxit = 10000))
+
+print(result_2$par)
+
+result_all <- optim(c(0.4, 0.2, 1.5, 1), neg_ll_composite, list_simu = list_simu,
+                df_lags = df_lags, locations = locations, quantile = quantile,
+                list_excesses = list_excesses, control = list(maxit = 10000))
+
+print(result_all$par)
+
+```
+

@@ -170,13 +170,25 @@ qqplot(BR_loc, theorical_qfrechet, main = "Frechet Q-Q plot",
 # SIMULATION WITH ADVECTION
 ################################################################################
 
-adv <- c(0.05, 0.02)
+adv <- c(0, 0)
 param <- c(0.4, 0.2, 1.5, 1, adv)
-ngrid <- 2
+ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:30
+temp <- 1:300
 n.BR <- 1
+
+if (all(adv == c(0, 0))) {
+  foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+} else {
+  foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t_adv/")
+}
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
 
 # generate the simulations
 # BR_adv <- sim_BR(true_param[1] * 2, true_param[2] * 2, true_param[3],
@@ -185,26 +197,23 @@ n.BR <- 1
 
 library(foreach)
 library(doParallel)
-
-n.BR <- 1
-num_iterations <- 5
-remotes::install_github('chloesrcb/generain')
 library(generain)
+
+num_iterations <- 8
 
 # Create a parallel backend
 cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
-# Run the simulation in parallel
-results <- foreach(i = 1:num_iterations, .combine = "c") %dopar% {
-  BR <- generain::sim_BR(2*param[1], 2*param[2], param[3], param[4], spa, spa, temp, n.BR)
-  save_simulations(BR, ngrid, n.BR,
-                  folder = paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
-                                length(temp), "t/"),
-                  file = paste0("br_", ngrid^2, "s_",
-                                length(temp), "t"), forcedind = i)
+results <- foreach(i = 1:num_iterations, .combine = rbind) %dopar% {
+  library(generain)
+  BR <- generain::sim_BR(param[1], param[2], param[3],
+                param[4], spa, spa, temp, 1, adv)
+
+  save_simulations(BR, ngrid, 1, folder = foldername,
+          file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
+          forcedind = i)
 
 }
 
-# Stop the parallel backend
 stopCluster(cl)

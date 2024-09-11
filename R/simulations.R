@@ -109,7 +109,6 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
         array(NA_real_, dim = c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
 
   ## Main
-  set.seed(123)
   Z <- array(, dim = c(lx, ly, lz, n.BR)) # 4d array
   E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
   for (i in seq_len(n.BR)) { ## n=1 
