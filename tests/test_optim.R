@@ -33,49 +33,27 @@ test_that("get_criterion calculates the correct values", {
   expect_equal(result$mae, expected_mae)
 })
 
+test_that("get_lag_vectors", {
+  # Create sample data
+  data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
+  data_rain <- as.data.frame(data_rain)
+  sites_coords <- generate_grid_coords(5) # Example sites_coords
 
-test_that("neg_ll calculates the correct negative log-likelihood", {
-  # Create sample data and parameters
-  params <- c(0.5, 0.7, 1.2, 1.5) # Example parameters
-  excesses <- list(N_vect = c(10, 20, 30), n_vect = c(2, 4, 6)) # Excesses
-  h_vect <- c(1, 2, 3) # Example h_vect
-  hmax <- 3 # Example hmax
-  tau <- 1 # Example tau
-  df_dist <- data.frame(value = c(1, 2, 3)) # Example df_dist (distance matrix
-  locations <- data.frame(Latitude = c(1, 2, 7),
-                         Longitude = c(3, 4, 7)) # Example locations
+  # Calculate the h vector
+  q <- 0.7
+  true_param <- c(0.4, 0.2, 1.5, 1)
+  hmax <- sqrt(17)
+  tau_vect <- 0:10
+  df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax, tau_vect)
 
-  # Call the function
-  result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
+  # Check col
+  expect_equal(ncol(df_lags), 6)
+  # Check taus
+  expect_equal(unique(df_lags$tau), tau_vect)
+  # Check hmax
+  expect_equal(max(df_lags$hnorm), hmax)
 
-  # Check if the result is a numeric value
-  expect_is(result, "numeric")
-
-  # Check if the result is a Inf for wrong parameters
-  params <- c(0.5, 0.7, 1.2, 3)
-  result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
-  expect_equal(result, 1e+06)
-
-  params <- c(0.5, 0.7, 2, 1)
-  result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
-  expect_equal(result, 1e+06)
-
-  params <- c(0, 0.7, 1, 1)
-  result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
-  expect_equal(result, 1e+06)
-
-  params <- c(0.5, 0, 1, 1)
-  result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
-  expect_equal(result, 1e+06)
-
-  # with advection=c(0, 0)
-  params <- c(0.5, 0.5, 1, 1, 0, 0)
-
-  # # with advection
-  # df_dist <- data.frame(value = c(1, 2, 3, 4, 5, 6)) # Example df_dist (distance matrix
-  params <- c(0.5, 0.5, 1, 1, 0.1, 0.1)
-  # result <- neg_ll(params, excesses, h_vect, hmax, tau, df_dist, locations)
-  # expect_equal(result, 1e+06)
 })
 
 test_that("empirical_excesses works with sufficient data", {
@@ -83,52 +61,46 @@ test_that("empirical_excesses works with sufficient data", {
   data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
   data_rain <- as.data.frame(data_rain)
   sites_coords <- generate_grid_coords(5) # Example sites_coords
-  dist_mat <- get_dist_mat(sites_coords, adv = c(0, 0), tau = 1:10,
-                            latlon = FALSE) # distance matrix
-  df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 
   # Calculate the h vector
-  h_vect <- get_h_vect(df_dist, sqrt(17))
-  quantile <- 0.9
-  tau <- 1:10
+  q <- 0.7
+  true_param <- c(0.4, 0.2, 1.5, 1)
+  df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+  excesses <- empirical_excesses(data_rain, quantile = q, df_lags = df_lags)
 
-  # Call the function
-  result <- empirical_excesses(data_rain, quantile, tau, h_vect, df_dist,
-                               nmin = 5)
+  # Check the number of columns
+  expect_equal(ncol(excesses), ncol(df_lags) + 2)
+  # Check the number of rows
+  expect_equal(nrow(excesses), nrow(df_lags))
 
-  # Check if the result as the correct length
-  expect_true(length(result$n_vect) == nrow(df_dist))
-  expect_true(length(result$N_vect) == nrow(df_dist))
+  # for the hnorm == 0  and tau == 0 ie same site (si, si)
+  k_h_tau <- excesses[excesses$hnorm == 0 & excesses$tau == 0, ]
+  n_marg <- get_marginal_excess(data_rain, q)
+  # check if it is the same
+  expect_equal(unique(k_h_tau$kij), n_marg)
 
-  # Check if the result is numeric or NA
-  expect_true(all(is.na(result$n_vect) | is.numeric(result$n_vect)))
-  expect_true(all(is.na(result$N_vect) | is.numeric(result$N_vect)))
+})
 
-  # Check if the result is NA for insufficient data
-  result <- empirical_excesses(data_rain, quantile, tau, h_vect, df_dist,
-                               nmin = 1000)
-  expect_true(all(is.na(result$n_vect)))
-  expect_true(all(is.na(result$N_vect)))
+test_that("theorical_chi", {
+  tau_vect <- 0:10
+  data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
+  data_rain <- as.data.frame(data_rain)
+  sites_coords <- generate_grid_coords(5) # Example sites_coords
+  true_param <- c(0.4, 0.2, 1.5, 1)
+  df_lags <- get_lag_vectors(sites_coords, true_param,
+                            hmax = sqrt(17), tau_vect = tau_vect)
 
-  # with advection coordinates
-  dist_mat <- get_dist_mat(sites_coords, adv = c(0.1, 0.1), tau = 1:10,
-                            latlon = FALSE) # distance matrix
-  df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+  chi_theorical <- theorical_chi(true_param, df_lags)
 
-  # Calculate the h vector
-  h_vect <- get_h_vect(df_dist, sqrt(17))
-  quantile <- 0.9
-  tau <- 1:10
+  # for one hnorm and one tau
+  hnorm <- 1
+  tau <- 3
+  semivar <- true_param[1]*hnorm^true_param[3] + true_param[2]*tau^true_param[4]
+  chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
 
-  # Call the function
-  result <- empirical_excesses(data_rain, quantile, tau, h_vect, df_dist,
-                               nmin = 5)
+  chi_h_t <- chi_theorical$chi[chi_theorical$hnorm == hnorm &
+                                    chi_theorical$tau == tau]
 
-  # Check if the result as the correct length
-  expect_true(length(result$n_vect) == nrow(df_dist))
-  expect_true(length(result$N_vect) == nrow(df_dist))
-
-  # Check if the result is numeric or NA
-  expect_true(all(is.na(result$n_vect) | is.numeric(result$n_vect)))
-  expect_true(all(is.na(result$N_vect) | is.numeric(result$N_vect)))
+  expect_equal(unique(chi_h_t), chi_h_t_verif)
 })

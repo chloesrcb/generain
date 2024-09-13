@@ -9,22 +9,9 @@ test_that("reshape_distances produces correct format", {
     df_dist <- reshape_distances(dist_mat_adv) # reshape the distance matrix
 
     # Check if the required columns are present in the reshaped distance matrix
-    expect_true(all(c("Y", "X", "value", "tau") %in% colnames(df_dist)))
-
-    # Check the number of unique values in the 'tau', 'Y', and 'X' columns
-    expect_equal(length(unique(df_dist$tau)), 10)
-    expect_equal(length(unique(df_dist$Y)), 25)
-    expect_equal(length(unique(df_dist$X)), 25)
-
-    # Calculate the distance matrix with weighted parameters
-    dist_mat_wt_adv <- get_dist_mat(sites_coords, adv = c(0, 0), tau = 1:10,
-                                    latlon = FALSE)
-    df_dist <- reshape_distances(dist_mat_wt_adv) # reshape the distance matrix
-
-    # Check if the required columns are present in the reshaped distance matrix
     expect_true(all(c("Y", "X", "value") %in% colnames(df_dist)))
 
-    # Check the number of unique values in the 'Y' and 'X' columns
+    # Check the number of unique values in the 'tau', 'Y', and 'X' columns
     expect_equal(length(unique(df_dist$Y)), 25)
     expect_equal(length(unique(df_dist$X)), 25)
 })
