@@ -293,53 +293,6 @@ simulate_excess_ind <- function(Tmax, chi_h_t, p_marg) {
 
 # VALIDATION -------------------------------------------------------------------
 
-#' Evaluate optimization using simulated binomial experiments
-#'
-#' This function evaluates the optimization process using simulated experiments.
-#' Simulation of excesses is performed considering a binomial distribution with
-#' a probability parameter equals to the spatio-temporal extremogram value.
-#'
-#' @param n_res The number of realizations
-#' @param Tmax The maximum time observation
-#' @param tau_vect The temporal lag vector
-#' @param h_vect The spatial lag vector
-#' @param chi The spatio-temporal extremogram matrix
-#' @param locations The locations dataframe
-#' @param nconfig The number of configurations
-#'
-#' @import spam
-#' @import stats
-#'
-#' @return The result of the optimization process as a dataframe.
-#'
-#' @export
-evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
-                                   locations, nconfig) {
-  df_result <- data.frame(beta1 = rep(NA, n_res), beta2 = rep(NA, n_res),
-                      alpha1 = rep(NA, n_res), alpha2 = rep(NA, n_res))
-
-  for (n in 1:n_res){
-    simu_E <- simulate_excesses(Tmax, chi)
-    N_vect <-  simu_E$N_vect
-    n_vect <-  simu_E$n_vect
-    excesses <- list(N_vect = N_vect, n_vect = n_vect) # simu of excesses
-    # Conjugate gradient method
-    result <- optim(par = c(0.4, 0.2, 1.5, 1), fn = neg_ll,
-                    excesses = excesses, quantile = 0.9,
-                    h_vect = h_vect, tau = tau_vect,
-                    locations = locations,
-                    method = "CG")
-
-    params <- result$par
-    df_result$beta1[n] <- params[1]
-    df_result$beta2[n] <- params[2]
-    df_result$alpha1[n] <- params[3]
-    df_result$alpha2[n] <- params[4]
-  }
-
-    return(df_result)
-}
-
 #' evaluate_optim function
 #'
 #' This function evaluates the optimization process on simulated data (for
@@ -477,16 +430,19 @@ get_criterion <- function(df_result, true_param) {
 #' Save the results of the optimization process in a CSV file.
 #'
 #' @param result The result of the optimization process.
+#' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param filename The name of the file to save the results.
 #'
+#' @import utils
+#' 
 #' @export
-save_results_optim <- function(result, filename) {
+save_results_optim <- function(result, true_param, filename) {
   if (result$convergence == 0) {
     rmse <- sqrt((result$par - true_param)^2)
     df_rmse <- data.frame(estim = result$par, rmse = rmse)
     rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
     # save the results
-    write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/",
+    utils::write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/",
                           filename, ".csv"))
   } else {
     print("No convergence")
@@ -499,9 +455,11 @@ save_results_optim <- function(result, filename) {
 #'
 #' @param filename The name of the file to get the results.
 #'
+#' @import utils
+#' 
 #' @export
 get_results_optim <- function(filename) {
-  df_rmse <- read.csv(paste0("../data/simulations_BR/results/", filename,
+  df_rmse <- utils::read.csv(paste0("../data/simulations_BR/results/", filename,
                       ".csv"))
   return(df_rmse)
 }

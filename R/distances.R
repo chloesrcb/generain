@@ -149,6 +149,8 @@ get_euclidean_distance <- function(point1, point2) {
 #' @param hmax The maximum distance threshold. Default is NA.
 #' @param tau_vect A vector of temporal lags. Default is 0:10.
 #'
+#' @import utils
+#' 
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
@@ -160,7 +162,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
   tau_len <- length(tau_vect)
 
   # Create index combinations
-  pairs_comb <- combn(n, 2)
+  pairs_comb <- utils::combn(n, 2)
   # indices <- pairs_comb
 
   # # Add n,n pairs

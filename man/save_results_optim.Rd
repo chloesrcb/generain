@@ -4,10 +4,12 @@
 \alias{save_results_optim}
 \title{save_results_optim function}
 \usage{
-save_results_optim(result, filename)
+save_results_optim(result, true_param, filename)
 }
 \arguments{
 \item{result}{The result of the optimization process.}
+
+\item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
 \item{filename}{The name of the file to save the results.}
 }
