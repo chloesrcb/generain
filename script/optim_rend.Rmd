@@ -1,0 +1,673 @@
+---
+title: "Debug optimisation with neg ll"
+author: " "
+date: "`r Sys.Date()`" 
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+    encoding: "UTF-8"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 7, fig.height = 7,
+                      fig.align = 'center', message = FALSE, warning = FALSE,
+                      fig.pos='H')
+par(cex.main = 0.8,
+    cex.lab = 0.7,
+    cex.axis = 0.6)
+```
+
+
+```{r lib, echo=FALSE}
+# setwd("./script")
+library(generain)
+library(reshape2)
+library(ggplot2)
+source("load_libraries.R")
+library(kableExtra)
+library(extRemes)
+library(bbmle)
+library(ismev)
+library(extRemes)
+library(evd)
+```
+
+# Simulation
+
+```{r sim25s300t, fig.width = 5, fig.height = 5}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+
+# get folder name
+if (all(adv == c(0, 0))) {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+} else {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                  length(temp), "t_adv/")
+}
+
+# get number of files in the folder
+nfiles <- length(list.files(foldername))
+
+# load simulated data in a list
+simu_list <- list()
+
+for(i in 1:nfiles) {
+    file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", i,
+                        ".csv")
+    simu_temp <- read.csv(file_path)
+    simu_list[[i]] <- simu_temp
+}
+
+simu_df <- simu_list[[1]]
+nsites <- ncol(simu_df)
+sites_coords <- generate_grid_coords(sqrt(nsites))
+```
+
+```{r, echo=FALSE}
+# plot the simulations
+par(mfrow = c(2, 2), cex = 0.5, main = "Simulated data")
+plot(simu_df[, 1], main = "Site 1")
+plot(simu_df[, 2], main = "Site 2")
+plot(simu_df[, 3], main = "Site 3")
+plot(simu_df[, 4], main = "Site 4")
+```
+
+
+
+
+# Bulh model WLSE
+
+Validation of the model with the WLSE method (Bulh model).
+For one simulation:
+```{r}
+# get the distances
+dist_mat <- get_dist_mat(sites_coords,
+                         latlon = FALSE) # distance matrix
+df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+
+hmax <- sqrt(17)
+q <- 0.7
+chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
+                               hmax = hmax)
+spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
+print(spa_estim)
+
+q <- 0.85
+tmax <- 10
+chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
+temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
+                                      weights = "exp", summary = FALSE)
+print(temp_estim)
+df_result <- data.frame(beta1 =  spa_estim[1],
+                        alpha1 = spa_estim[2],
+                        beta2 = temp_estim[1],
+                        alpha2 = temp_estim[2])
+colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+
+df_valid <- get_criterion(df_result, true_param)
+colnames(df_valid) <- c("estim", "rmse", "mae")
+
+kable(df_valid, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
+
+For all the simulations:
+```{r}
+# get the distances
+dist_mat <- get_dist_mat(sites_coords,
+                         latlon = FALSE) # distance matrix
+df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
+
+spa_estim <- evaluate_vario_estimates(simu_list, df_dist = df_dist,
+                                      spatial = TRUE, quantile = 0.65,
+                                      hmax = hmax, tmax = 10)
+
+temp_estim <- evaluate_vario_estimates(simu_list, df_dist = df_dist,
+                                      spatial = FALSE, quantile = 0.9,
+                                      hmax = hmax, tmax = 10)
+
+df_result <- cbind(spa_estim, temp_estim)
+colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+
+df_valid <- get_criterion(df_result, true_param)
+
+kable(df_valid, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
+
+# Theorical chi vs Empirical chi
+
+For the empirical chi, I calculate it in two ways:
+
+- Either by counting the number of joint exceedances and the number of marginal exceedances, and taking the ratio of the number of joint exceedances to the number of marginal exceedances for each pair of sites and time lag.
+
+- Or by using the `get_chiq` function, which estimates the chi using the formula $2 - \frac{\log(c_u)}{\log(u)}$, where $c_u$ is the proportion of site pairs whose maximum ranks are less than $u$.
+
+For both methods, I do not obtain the same empirical chi values, and the second method that I use for the regression model provides better correspondence with the theoretical chi than the other method.
+
+To calculate the empirical spatio-temporal chi,
+we need to have an empirical chi close to the theoretical 
+chi by averaging the empirical chi values over pairs of sites 
+with the same temporal lag and spatial lag. 
+We obtain similar values empirically and theoretically:
+
+First method of calculating the empirical chi:
+```{r plotchithemp, fig.height=5, fig.width=5, echo=FALSE}
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+chi_theorical <- theorical_chi(true_param, df_lags)
+chi <- unique(chi_theorical$chi)
+# print(head(chi_theorical))
+
+par(mfrow = c(2, 3))
+q_values <- c(0.85, 0.88, 0.9, 0.92, 0.95, 0.96) - 0.1
+for (q in q_values) {
+  chi_emp <- chispatemp_dt(simu_df, df_lags, q)
+  chi_vect_th <- c()
+  chi_vect_emp <- c()
+  tau_values <- unique(df_lags$tau)
+  for (tau in tau_values) {
+    hnorm_values <- unique(df_lags$hnorm)
+    for (hnorm in hnorm_values) {
+      chi_emp_mean_h_t <- mean(chi_emp$chiemp[chi_emp$tau == tau &
+                           chi_emp$hnorm == hnorm])
+      chi_theorical_h_t <- unique(chi_theorical$chi[chi_theorical$tau == tau &
+                                         chi_theorical$hnorm == hnorm])
+      chi_vect_th <- c(chi_vect_th, chi_theorical_h_t)
+      chi_vect_emp <- c(chi_vect_emp, chi_emp_mean_h_t)
+    }
+  }
+  plot(chi_vect_th, chi_vect_emp, xlab = "Theorical chi",
+       ylab = "Empirical chi",
+       main = paste("Quantile =",
+              q),
+       cex = 0.3, cex.main = 1, cex.axis = 0.8)
+  abline(0, 1, col = "red")
+}
+```
+
+Second method of calculating the empirical chi:
+```{r plotchithemp2, fig.height=5, fig.width=5, echo=FALSE}
+chi_theorical <- theorical_chi(true_param, df_lags)
+chi <- unique(chi_theorical$chi)
+# print(head(chi_theorical))
+
+par(mfrow = c(2, 3))
+q_values <- c(0.82, 0.85, 0.88, 0.9, 0.92, 0.95)
+for (q in q_values) {
+  chi_emp <- chispatemp_dt(simu_df, df_lags, q)
+  chi_vect_th <- c()
+  chi_vect_emp <- c()
+  tau_values <- unique(df_lags$tau)
+  for (tau in tau_values) {
+    hnorm_values <- unique(df_lags$hnorm)
+    for (hnorm in hnorm_values) {
+      chi_emp_mean_h_t <- mean(chi_emp$chiemp2[chi_emp$tau == tau &
+                           chi_emp$hnorm == hnorm])
+      chi_theorical_h_t <- unique(chi_theorical$chi[chi_theorical$tau == tau &
+                                         chi_theorical$hnorm == hnorm])
+      chi_vect_th <- c(chi_vect_th, chi_theorical_h_t)
+      chi_vect_emp <- c(chi_vect_emp, chi_emp_mean_h_t)
+    }
+  }
+  plot(chi_vect_th, chi_vect_emp, xlab = "Theorical chi",
+       ylab = "Empirical chi",
+       main = paste("Quantile =", 
+              q),
+       cex = 0.3, cex.main = 1, cex.axis = 0.8)
+  abline(0, 1, col = "red")
+}
+```
+
+
+## Exceedance Distribution
+
+For each pair of sites with the same spatial lag, we have a variable $k_{h, \tau} = [ k_{ij, \tau}, (i, j) | s_i - s_j = h ]$
+that follows a binomial distribution with parameters $T - \tau$ and $p \times \chi_{\tau, h}$, where $T$ is the number of observations, $\tau$ is the temporal lag,
+$p$ is the probability of marginal exceedances, and $\chi_{\tau, h}$ is
+the theoretical chi for the temporal lag $\tau$ and spatial lag $h$.
+
+For different quantile values, we can verify the distribution of joint exceedances $k_{ij, \tau}$ compared to the corresponding theoretical binomial distribution.
+We fix a spatial lag $h = 2$, a temporal lag $\tau = 1$, and vary the quantile:
+
+```{r plotdenskij, fig.height=7, fig.width=7}
+q_values <- seq(0.9, 0.96, by = 0.01)
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+par(mfrow = c(ceiling(length(q_values)/3), 3))
+for (q in q_values) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- excesses[excesses$kij > 0, ] # without zeros
+  n_marg <- get_marginal_excess(simu_df, quantile = q)
+  Tobs <- excesses$Tobs # T - tau
+  Tmax <- nrow(simu_df)
+  p_hat <- n_marg / Tmax # probability of marginal excesses
+  kij <- excesses$kij # number of joint excesses
+  chi_theorical <- theorical_chi(true_param, df_lags)
+
+  tau <- 1
+  hnorm <- 2
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+               chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+           excesses$hnorm == hnorm]
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  n <- Tmax - tau # t - tau
+
+  Tobs_tau_h <- unique(Tobs[excesses$tau == tau &
+              excesses$hnorm == hnorm])
+  x <- 0:Tobs_tau_h
+  # Density
+  plot(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.3), cex.main = 0.8,
+                      cex.lab = 0.8, cex.axis = 0.8)
+  # histogram
+  # hist(k_tau_h, freq = FALSE, breaks = 20, main = paste("q =", q),
+  #    xlab = "Number of excesses", ylim = c(0, 0.2), cex.main = 0.8,
+  #    cex.lab = 0.8, cex.axis = 0.8)
+  
+
+  # binomial density
+  lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
+    lwd = 2)
+  legend("topright", legend = "Binomial", col = "red", lwd = 1)
+}
+```
+
+Without zeros $k_{ij, \tau} > 0$:
+```{r plotdenskij, fig.height=7, fig.width=7}
+q_values <- seq(0.9, 0.95, by = 0.01)
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+chi_theorical <- theorical_chi(true_param, df_lags)
+
+png("../images/optim/density_25s_300t_byq_without0.png")
+
+par(mfrow = c(ceiling(length(q_values)/3), 3))
+for (q in q_values) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- excesses[excesses$kij > 0, ] # without zeros
+  n_marg <- get_marginal_excess(simu_df, quantile = q)
+  Tobs <- excesses$Tobs # T - tau
+  Tmax <- nrow(simu_df)
+  p_hat <- n_marg / Tmax # probability of marginal excesses
+  kij <- excesses$kij # number of joint excesses
+  chi_theorical <- theorical_chi(true_param, excesses)
+
+  tau <- 2
+  hnorm <- 2
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+               chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+           excesses$hnorm == hnorm]
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  n <- Tmax - tau # t - tau
+
+  Tobs_tau_h <- unique(Tobs[excesses$tau == tau &
+              excesses$hnorm == hnorm])
+  x <- 0:Tobs_tau_h
+  # Density
+  hist(k_tau_h, freq = FALSE, breaks = 20, main = paste("q =", q),
+     xlab = "Number of excesses", cex.main = 0.8,
+     cex.lab = 0.8, cex.axis = 0.8)
+
+  lines(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.2), cex.main = 0.8,
+                      cex.lab = 0.8, cex.axis = 0.8)
+
+  # binomial density
+  lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
+    lwd = 2)
+  legend("topright", legend = "Binomial", col = "red", lwd = 1)
+}
+
+dev.off()
+```
+
+For another spatial lag $h = 1$ and a temporal lag $\tau = 3:
+
+```{r plotdenskij2, fig.height=7, fig.width=7, echo=FALSE}
+q_values <- seq(0.85, 0.96, by = 0.01)
+par(mfrow = c(ceiling(length(q_values)/3), 3))
+for (q in q_values) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- excesses[excesses$kij > 0, ] # without zeros
+  n_marg <- get_marginal_excess(simu_df, quantile = q)
+  Tobs <- excesses$Tobs # T - tau
+  Tmax <- nrow(simu_df)
+  p_hat <- n_marg / Tmax # probability of marginal excesses
+  kij <- excesses$kij # number of joint excesses
+
+  chi_theorical <- theorical_chi(true_param, excesses)
+
+  tau <- 3
+  hnorm <- 1
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+               chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+           excesses$hnorm == hnorm]
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  n <- Tmax - tau # t - tau
+
+  Tobs_tau_h <- unique(Tobs[excesses$tau == tau &
+              excesses$hnorm == hnorm])
+  x <- 0:Tobs_tau_h
+  # Density
+  plot(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.25), cex.main = 0.8,
+                      cex.lab = 0.8, cex.axis = 0.8)
+  # binomial density
+  lines(x, dbinom(x, size = Tobs_tau_h, prob = proba_tau_h), col = "red",
+    lwd = 2)
+  legend("topright", legend = "Binomial", col = "red", lwd = 1)
+}
+```
+
+
+Now we fix the quantile and $h = 1$ and vary the temporal lag $\tau$, 
+using the theoretical chi.
+```{r, echo=FALSE}
+empirical_excesses <- function(data_rain, quantile, df_lags) {
+  excesses <- df_lags # copy the dataframe
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+
+  for (t in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- df_h_t$s1[i]
+
+      # get the data for the pair of sites
+      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- as.data.frame(na.omit(rain_cp))
+      colnames(rain_cp) <- c("s1", "s2")
+
+      Tmax <- nrow(rain_cp) # number of total observations
+      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
+      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
+
+      Tobs <- length(rain_nolag) # number of observations for the lagged pair
+                                 # i.e. T - tau
+
+      # transform the data in uniform data
+      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
+                         rank(rain_lag) / (Tobs + 1))
+
+      # get the conditional excesses on s2
+      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
+      # number of joint excesses
+      joint_excesses <- sum(cp_cond[, 1] > quantile)
+
+      # store the number of excesses and T - tau
+      excesses$Tobs[excesses$s1 == ind_s1
+                      & excesses$s2 == ind_s2
+                      & excesses$tau == t] <- Tobs
+
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == t] <- joint_excesses
+    }
+  }
+  excesses <- excesses[excesses$kij > 0, ]
+  return(excesses)
+}
+```
+
+```{r plotdenskij3, fig.height=7, fig.width=7, echo=FALSE}
+q <- 0.85
+tau_vect <- 0:10
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = tau_vect)
+# excesses without zeros (function has changed)
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+df_lags_excesses <- excesses[, 1:6]
+
+n_marg <- get_marginal_excess(simu_df, quantile = q)
+# Tobs <- excesses$Tobs # T - tau
+Tmax <- nrow(simu_df)
+p_hat <- n_marg / Tmax # probability of marginal excesses
+kij <- excesses$kij # number of joint excesses
+
+chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+
+tau_values <- unique(excesses$tau)
+
+plot_data <- data.frame()
+
+for (tau in tau_values) {
+  hnorm <- 1 # fixed hnorm
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+                                 chi_theorical$hnorm == hnorm]
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+                          excesses$hnorm == hnorm]
+
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  Tobs <- Tmax - tau # t - tau
+  # p_hat_tau <- n_marg / Tobs
+  # proba_tau_h <- unique(chi_tau_h * p_hat_tau)
+  # Empirical density
+  density_data <- density(k_tau_h)
+  density_df <- data.frame(x = density_data$x,
+          y = density_data$y, tau = as.factor(tau), type = "Empirical")
+
+  # Theorical binomial distribution
+  x_vals <- 0:Tobs
+  binom_y <- dbinom(x_vals, size = Tobs, prob = proba_tau_h)
+  binom_df <- data.frame(x = x_vals, y = binom_y,
+                         tau = as.factor(tau), type = "Binomial")
+
+  # Combine
+  plot_data <- rbind(plot_data, density_df, binom_df)
+}
+
+plot_tau <- ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
+  geom_line(size = 1) +
+  facet_wrap(~tau, scales = "free_y") +
+  labs(title = paste0("Density vs Binomial distribution for q = ", q,
+              " and hnorm = ", hnorm, " for each tau"),
+       x = "Number of excesses",
+       y = "Density") +
+  theme_minimal() +
+  xlim(-0.5, 10) +
+  theme(legend.title = element_blank())
+
+plot_tau
+
+# Save plot as PNG file
+ggsave("../images/optim/density_100s_100t_bytau.png", 
+      plot = plot_tau, width = 7, height = 7)
+
+
+```
+
+For another spatial lag $h = 3$ and a temporal lag $\tau = 5:
+
+```{r plotdenskij5, fig.height=7, fig.width=7, echo=FALSE}
+q <- 0.87
+tau_vect <- 0:10
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = tau_vect)
+# excesses without zeros
+excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+# get corresponding lags in the first cols of excesses
+df_lags_excesses <- excesses[, 1:6]
+
+n_marg <- get_marginal_excess(simu_df, quantile = q)
+# Tobs <- excesses$Tobs # T - tau
+Tmax <- nrow(simu_df)
+p_hat <- n_marg / Tmax # probability of marginal excesses
+kij <- excesses$kij # number of joint excesses
+
+chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_emp <- chispatemp_dt(simu_df, df_lags_excesses, quantile = q)
+tau_values <- unique(excesses$tau)
+
+plot_data <- data.frame()
+
+for (tau in tau_values) {
+  hnorm <- sqrt(2) # fixed hnorm
+  chi_tau_h <- chi_theorical$chi[chi_theorical$tau == tau &
+                                 chi_theorical$hnorm == hnorm]
+  # chi_tau_h <- mean(chi_emp$chiemp[chi_emp$tau == tau &
+  #                                chi_emp$hnorm == hnorm])
+  k_tau_h <- excesses$kij[excesses$tau == tau &
+                          excesses$hnorm == hnorm]
+
+  proba_tau_h <- unique(chi_tau_h * p_hat)
+  Tobs <- Tmax - tau # t - tau
+
+  # Empirical density
+  density_data <- density(k_tau_h)
+  density_df <- data.frame(x = density_data$x,
+          y = density_data$y, tau = as.factor(tau), type = "Empirical")
+
+  # Theorical binomial distribution
+  x_vals <- 0:Tobs
+  binom_y <- dbinom(x_vals, size = Tobs, prob = proba_tau_h)
+  binom_df <- data.frame(x = x_vals, y = binom_y,
+                         tau = as.factor(tau), type = "Binomial")
+
+  # Combine
+  plot_data <- rbind(plot_data, density_df, binom_df)
+}
+
+ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
+  geom_line(size = 1) +
+  facet_wrap(~tau, scales = "free_y") +
+  labs(title = paste0("Density vs Binomial distribution for q = ", q,
+              " and hnorm = ", hnorm, " for each tau"),
+       x = "Number of excesses",
+       y = "Density") +
+  theme_minimal() +
+  xlim(0, 10) +
+  theme(legend.title = element_blank())
+
+```
+
+
+# Optimization
+
+## For one simulation
+
+For one simulation, we can estimate the parameters of the spatio-temporal model with the optimization method.
+We can also calculate the RMSE for each parameter.
+
+It is very sensitive to the quantile choice.
+
+```{r optimquantile, echo=FALSE}
+q_values <- seq(0.8, 0.95, by = 0.005) # quantiles
+
+result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
+                           alpha1 = numeric(), alpha2 = numeric())
+
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+# For each quantile
+for (q in q_values) {
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  # Optimization
+  result <- optim(par = c(true_param), fn = neg_ll,
+                  simu = simu_df,
+                  quantile = q,
+                  df_lags = df_lags,
+                  excesses = excesses,
+                  locations = sites_coords,
+                  method = "CG",
+                  control = list(parscale = c(1, 1, 1, 1), maxit = 10000))
+
+  # Check convergence
+  if (result$convergence == 0) {
+    result_table <- rbind(result_table,
+                          data.frame(q = q,
+                                     beta1 = result$par[1],
+                                     beta2 = result$par[2],
+                                     alpha1 = result$par[3],
+                                     alpha2 = result$par[4]))
+  } else {
+    # In case of non-convergence, store NAs
+    result_table <- rbind(result_table,
+        data.frame(q = q, beta1 = NA, beta2 = NA, alpha1 = NA, alpha2 = NA))
+  }
+}
+
+result_table <- round(result_table, 5)
+df_rmse <- data.frame(q = result_table$q,
+                rmse_beta1 = sqrt((result_table$beta1 - true_param[1])^2),
+                rmse_beta2 = sqrt((result_table$beta2 - true_param[2])^2),
+                rmse_alpha1 = sqrt((result_table$alpha1 - true_param[3])^2),
+                rmse_alpha2 = sqrt((result_table$alpha2 - true_param[4])^2))
+
+kable(result_table, "latex", booktabs = TRUE,
+      caption = "Optim estimations for each quantile for one simulation")  %>%
+  kable_styling(latex_options = "H",
+                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+kable(df_rmse, "latex", booktabs = TRUE,
+      caption = "RMSE for each parameter and 
+                  different quantiles for one simulation")  %>%
+  kable_styling(latex_options = "H", 
+                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+
+## Contour plots
+
+```{r}
+library(graphics)
+
+# Définir les paramètres fixes
+fixed_params <- c(0.4, 0.2, 1.5, 1)
+
+# Créer une grille de valeurs pour deux paramètres (par exemple, paramètre 1 et paramètre 2)
+param1_values <- seq(0.05, 0.9, length.out = 50)
+param2_values <- seq(0.05, 0.9, length.out = 50)
+
+# Matrice pour stocker les résultats de la log-vraisemblance négative
+nll_matrix <- matrix(NA, nrow = length(param1_values), ncol = length(param2_values))
+
+quantile <- 0.92
+excesses <- empirical_excesses(simu_df, quantile = quantile, df_lags = df_lags)
+# Calculer la log-vraisemblance pour chaque combinaison de param1 et param2
+for (i in 1:length(param1_values)) {
+  for (j in 1:length(param2_values)) {
+    params <- c(param1_values[i], param2_values[j], fixed_params[3:4])
+    nll_matrix[i, j] <- neg_ll(params, simu, df_lags, locations, quantile, excesses)
+  }
+}
+
+par(mfrow=c(1,1))
+
+png("../images/optim/contour_25s_300t_betas_q92.png")
+contour(param1_values, param2_values, nll_matrix, nlevels = 20, 
+        xlab = "Beta1", ylab = "Beta2",
+        main = "Contour plot of Negative Log-Likelihood")
+
+# Save plot as PNG file
+dev.off()
+
+library(plotly)
+
+# Créer un graphique en 3D de la log-vraisemblance négative
+plot_ly(x = ~param1_values, y = ~param2_values, z = ~nll_matrix) %>%
+  add_surface() %>%
+  layout(title = "Surface de la log-vraisemblance négative",
+         scene = list(xaxis = list(title = 'Alpha1'),
+                      yaxis = list(title = 'Alpha2'),
+                      zaxis = list(title = 'Negative Log-Likelihood')))
+
+```

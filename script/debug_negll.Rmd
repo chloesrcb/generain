@@ -32,83 +32,6 @@ library(extRemes)
 library(evd)
 ```
 
-
-
-```{r, echo=FALSE}
-sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,
-                       adv) {
-  ## Setup
-  RandomFields::RFoptions(spConform = FALSE)
-  lx <- length(sx <- seq_along(x))
-  ly <- length(sy <- seq_along(y))
-  lz <- length(sz <- seq_along(z))
-
-  ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1, 
-                                                       proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1, 
-                                       proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2, 
-                                       proj = 3)
-
-  ## Construct grid
-  Nxy <- lx * ly
-  N <- Nxy * lz
-  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
-
-  for (i in sx)
-    for (j in seq_len(ly * lz))
-      grid[i + (j - 1) * ly, 1] <- i
-
-  for (i in sy)
-    for (j in sx)
-      for (k in sz)
-        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
-
-  for (i in sz)
-    for (j in seq_len(Nxy))
-      grid[j + Nxy * (i - 1), 3] <- i
-
-  # Construct shifted grid with advected coordinates
-  grid[, 1] <- grid[, 1] - grid[, 3] * adv[1]
-  grid[, 2] <- grid[, 2] - grid[, 3] * adv[2]
-
-  ## Construct shifted variogram
-  Varm1 <- vapply(seq_len(N), function(n)
-      RandomFields::RFvariogram(modelBuhlCklu,
-        x = sx - grid[n, 1],
-        y = sy - grid[n, 2],
-        z = sz - grid[n, 3]),
-        array(NA_real_, dim = c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
-
-  ## Main
-  Z <- array(, dim = c(lx, ly, lz, n.BR)) # 4d array
-  E <- matrix(rexp(n.BR * N), nrow = n.BR, ncol = N)
-  for (i in seq_len(n.BR)) { ## n=1 
-    V <- 1 / E[i, 1]
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z, n = 1)
-    Y <- exp(W - W[1] - Varm1[, , , 1])
-    Z[, , , i] <- V * Y
-    ## n in {2,..,N}
-    for (n in 2:N) {
-      Exp <- E[i, n]
-      V <- 1 / Exp 
-      while(V > Z[N * (i - 1) + n]) {
-        W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, z)
-        Y <- exp(W - W[n] - Varm1[, , , n])
-        print(all(V * Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))]))
-        if(all(V * Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))])) {
-          Z[, , , i] <- pmax(V * Y, Z[, , , i])
-          Exp <- Exp + rexp(1) 
-          V <- 1 / Exp 
-      }
-    }
-  }
-  ## Return
-  Z
-}
-```
-
 # Simulation
 
 ```{r sim25s300t, fig.width = 5, fig.height = 5}
@@ -119,38 +42,38 @@ spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
-library(doParallel)
-library(foreach)
+# library(doParallel)
+# library(foreach)
 
-num_iter <- 100
+# num_iter <- 100
 
-if (all(adv == c(0, 0))) {
-    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t/")
-} else {
-  foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t_adv/")
-}
+# if (all(adv == c(0, 0))) {
+#     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t/")
+# } else {
+#   foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t_adv/")
+# }
 
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
 
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores())
+# registerDoParallel(cl)
 
-results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
-  library(generain)
-  BR <- sim_BR(true_param[1], true_param[2], true_param[3],
-                true_param[4], spa, spa, temp, 1, adv)
+# results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
+#   library(generain)
+#   BR <- sim_BR(true_param[1], true_param[2], true_param[3],
+#                 true_param[4], spa, spa, temp, 1, adv)
 
-  save_simulations(BR, ngrid, 1, folder = foldername,
-          file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
-          forcedind = i)
+#   save_simulations(BR, ngrid, 1, folder = foldername,
+#           file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
+#           forcedind = i)
 
-}
+# }
 
-stopCluster(cl)
+# stopCluster(cl)
 
 # load the simulations
 if (all(adv == c(0, 0))) {
@@ -234,7 +157,7 @@ chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
 spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
 print(spa_estim)
 
-q <- 0.6
+q <- 0.85
 tmax <- 10
 chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
@@ -256,74 +179,6 @@ kable(df_valid, format = "latex") %>%
 
 # Set of lags
 
-```{r, echo = FALSE}
-get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
-
-  # Advection vector
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
-
-  n <- nrow(df_coords)
-  tau_len <- length(tau_vect)
-
-  # Create index combinations
-  pairs_comb <- combn(n, 2)
-  # indices <- pairs_comb
-  
-  # # Add n,n pairs
-  diag_pairs <- matrix(rep(1:n, each = 2), nrow = 2)
-  indices <- cbind(pairs_comb, diag_pairs)
-
-  i_vals <- indices[1,]
-  j_vals <- indices[2,]
-
-  # Calculate lags
-  lag_latitudes <- df_coords$Latitude[j_vals] - df_coords$Latitude[i_vals]
-  lag_longitudes <- df_coords$Longitude[j_vals] - df_coords$Longitude[i_vals]
-
-  # Calculate hnorm for all pairs
-  hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
-  # hnorms <- norm_Lp(lag_latitudes, lag_longitudes, params[3])
-  # Filter based on hmax
-  if (!is.na(hmax)) {
-    valid_indices <- which(hnorms <= hmax)
-    i_vals <- i_vals[valid_indices]
-    j_vals <- j_vals[valid_indices]
-    lag_latitudes <- lag_latitudes[valid_indices]
-    lag_longitudes <- lag_longitudes[valid_indices]
-    hnorms <- hnorms[valid_indices]
-  }
-
-  # Replicate for tau_vect
-  num_pairs <- length(i_vals)
-  i_vals <- rep(i_vals, each = tau_len)
-  j_vals <- rep(j_vals, each = tau_len)
-  lag_latitudes <- rep(lag_latitudes, each = tau_len)
-  lag_longitudes <- rep(lag_longitudes, each = tau_len)
-  hnorms <- rep(hnorms, each = tau_len)
-  taus <- rep(tau_vect, times = num_pairs)
-
-  # Apply advection
-  if (all(adv != c(0, 0))) {
-    lag_latitudes <- lag_latitudes - adv[1] * taus
-    lag_longitudes <- lag_longitudes - adv[2] * taus
-    hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
-  }
-
-  # Create final dataframe
-  lags <- data.frame(
-    s1 = i_vals,
-    s2 = j_vals,
-    h1 = lag_latitudes,
-    h2 = lag_longitudes,
-    tau = taus,
-    hnorm = hnorms
-  )
-
-  return(lags)
-}
-
-```
-
 ```{r, echo=FALSE}
 sites_coords <- generate_grid_coords(sqrt(nsites))
 df_lags <- get_lag_vectors(sites_coords, true_param,
@@ -342,110 +197,6 @@ kable(crop_lags, format = "latex",
 
 Fonction qui calcule les excès joints ie les $k_{ij, \tau}$ pour chaque paire de sites $(s_i, s_j)$ 
 et chaque lag temporel $\tau$.
-
-```{r excess}
-get_marginal_excess <- function(data_rain, quantile) {
-  Tmax <- nrow(data_rain)
-  rain_unif <- rank(data_rain[, 1]) / (Tmax + 1) # for one sites
-  marginal_excesses <- sum(rain_unif > quantile)
-  return(marginal_excesses)
-}
-
-empirical_excesses <- function(data_rain, quantile, df_lags) {
-  excesses <- df_lags # copy the dataframe
-  unique_tau <- unique(df_lags$tau) # unique temporal lags
-
-  for (t in unique_tau) { # loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
-
-    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-      # get the indices of the sites
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      ind_s1 <- df_h_t$s1[i]
-
-      # get the data for the pair of sites
-      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
-      rain_cp <- as.data.frame(na.omit(rain_cp))
-      colnames(rain_cp) <- c("s1", "s2")
-
-      Tmax <- nrow(rain_cp) # number of total observations
-      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
-      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
-
-      Tobs <- length(rain_nolag) # number of observations for the lagged pair
-                                 # i.e. T - tau
-
-      # transform the data in uniform data
-      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
-                         rank(rain_lag) / (Tobs + 1))
-
-      # get the conditional excesses on s2
-      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
-      # number of joint excesses
-      joint_excesses <- sum(cp_cond[, 1] > quantile)
-
-      # store the number of excesses and T - tau
-      excesses$Tobs[excesses$s1 == ind_s1
-                      & excesses$s2 == ind_s2
-                      & excesses$tau == t] <- Tobs
-
-      excesses$kij[excesses$s1 == ind_s1
-                    & excesses$s2 == ind_s2
-                    & excesses$tau == t] <- joint_excesses
-    }
-  }
-  # excesses <- excesses[excesses$kij > 0, ]
-  return(excesses)
-}
-
-
-empirical_excesses <- function(data_rain, quantile, df_lags) {
-  excesses <- df_lags # Copy the dataframe
-  unique_tau <- unique(df_lags$tau) # Unique temporal lags
-
-  for (t in unique_tau) { # Loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == t, ] # Get the dataframe for each tau lag
-
-    # Vectorize the outer loop over pairs of sites
-    ind_s2 <- as.numeric(as.character(df_h_t$s2))
-    ind_s1 <- df_h_t$s1
-
-    for (i in seq_len(nrow(df_h_t))) { # Loop over each pair of sites
-      # Get the data for the pair of sites
-      rain_cp <- data_rain[, c(ind_s1[i], ind_s2[i]), drop = FALSE]
-      rain_cp <- as.data.frame(na.omit(rain_cp)) # Remove NAs
-      Tmax <- nrow(rain_cp) # Number of total observations
-
-      if (Tmax <= t) next # Skip if there are not enough observations for lag
-
-      # Lag the data
-      rain_nolag <- rain_cp[1:(Tmax - t), 1]
-      rain_lag <- rain_cp[(1 + t):Tmax, 2]
-
-      Tobs <- length(rain_nolag) # Number of valid observations
-
-      # Transform the data to uniform distributions
-      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
-                         rank(rain_lag) / (Tobs + 1))
-
-      # Get the conditional excesses on s2
-      cp_cond <- rain_unif[rain_unif[, 2] > quantile, , drop = FALSE]
-
-      # Number of joint excesses
-      joint_excesses <- sum(cp_cond[, 1] > quantile)
-
-      # Store Tobs and excesses in prefiltered rows
-      idx <- excesses$s1 == ind_s1[i] & excesses$s2 == ind_s2[i] & excesses$tau == t
-      excesses$Tobs[idx] <- Tobs
-      excesses$kij[idx] <- joint_excesses
-    }
-  }
-
-  return(excesses)
-}
-
-```
-
 
 ```{r excessplot, echo=FALSE}
 q <- 0.7
@@ -481,10 +232,6 @@ ggplot(excesses[excesses$kij > 1, ], aes(x = kij)) +
   labs(title = "Density plot of the number of excesses",
        x = "Number of excesses", y = "Density")
 
-
-# for the same spatial lag and temporal lag
-k_h_tau <- excesses[excesses$hnorm == 1 & excesses$tau == 1, ]
-length(k_h_tau$kij)
 # density plot of the number of excesses
 ggplot(k_h_tau, aes(x = kij)) +
   geom_density() +

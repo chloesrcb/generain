@@ -779,8 +779,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
     if (spatial) {
       chi <- spatial_chi_alldist(df_dist, simu_df, quantile = quantile,
                                  hmax = hmax)
-      params <- get_estimate_variospa(chi, weights = "exp", summary = TRUE)
-      print(n)
+      params <- get_estimate_variospa(chi, weights = "exp", summary = FALSE)
     } else {
       chi <- temporal_chi(simu_df, tmax = tmax, quantile = quantile)
       params <- get_estimate_variotemp(chi, tmax, npoints = ncol(simu_df),

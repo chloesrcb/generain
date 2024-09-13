@@ -9,9 +9,9 @@
 #' @param tau A vector of temporal lags. Default is 1:10.
 #' @param alpha_spa The spatial lag exponent. Default is 1.5.
 #' @return A distance matrix containing the reshaped distances.
-#' 
+#'
 #' @import geodist
-#' 
+#'
 #' @export
 get_dist_mat <- function(locations, dmax = NA, latlon = TRUE,
                                    adv = c(0, 0), tau = 1:10, alpha_spa = 1.5) {
