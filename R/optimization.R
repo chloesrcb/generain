@@ -361,6 +361,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #' @import spam
 #' @import stats
 #' @import doParallel
+#' @import foreach
 #'
 #' @export
 evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
@@ -383,14 +384,14 @@ evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
   # df_lags <- get_lag_vectors(locations, true_param, tau = tau_vect, hmax = hmax)
   count_cv <- 0
 
-  cl <- makeCluster(detectCores() - 1)
+  cl <- parallel::makeCluster(parallel::detectCores() - 1)
   # clusterEvalQ(cl, library(generain))
-  clusterExport(cl, c("list_simu", "neg_ll", "true_param",
+  parallel::clusterExport(cl, c("list_simu", "neg_ll", "true_param",
                       "quantile", "df_lags", "locations", "nmin",
                       "parscale", "latlon", "empirical_excesses",
                       "optim"), envir = NULL)
 
-  results <- parLapply(cl, 1:n_res, function(n) {
+  results <- parallel::parLapply(cl, 1:n_res, function(n) {
     simu_df <- as.data.frame(list_simu[[n]])
 
     if (length(true_param) == 6) {
@@ -417,7 +418,7 @@ evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
     }
   })
 
-  stopCluster(cl)
+  parallel::stopCluster(cl)
 
   for (n in 1:n_res) {
     res <- results[[n]]
