@@ -21,6 +21,8 @@ evaluate_optim(
 
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
+\item{df_lags}{The dataframe with spatial and temporal lag values}
+
 \item{locations}{The locations dataframe}
 
 \item{parscale}{The scaling parameter for the optimization process. Default

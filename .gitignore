@@ -49,3 +49,7 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# VS Code folder
+.vscode/
+

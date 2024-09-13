@@ -17,6 +17,8 @@ evaluate_optim_simuExp(n_res, Tmax, tau_vect, h_vect, chi, locations, nconfig)
 
 \item{chi}{The spatio-temporal extremogram matrix}
 
+\item{locations}{The locations dataframe}
+
 \item{nconfig}{The number of configurations}
 }
 \value{

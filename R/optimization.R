@@ -304,6 +304,7 @@ simulate_excess_ind <- function(Tmax, chi_h_t, p_marg) {
 #' @param tau_vect The temporal lag vector
 #' @param h_vect The spatial lag vector
 #' @param chi The spatio-temporal extremogram matrix
+#' @param locations The locations dataframe
 #' @param nconfig The number of configurations
 #'
 #' @import spam
@@ -348,6 +349,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #' @param list_simu A list of simulated data
 #' @param quantile The quantile value
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
+#' @param df_lags The dataframe with spatial and temporal lag values
 #' @param locations The locations dataframe
 #' @param parscale The scaling parameter for the optimization process. Default
 #'                 is c(1, 1, 1, 1).
