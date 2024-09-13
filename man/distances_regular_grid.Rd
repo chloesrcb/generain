@@ -9,6 +9,10 @@ distances_regular_grid(nsites, adv = c(0, 0), tau = 1:10)
 }
 \arguments{
 \item{nsites}{the number of sites on the grid ie nb of pixels squared}
+
+\item{adv}{a vector of advection values. Default is c(0, 0).}
+
+\item{tau}{a vector of temporal lags. Default is 1:10.}
 }
 \value{
 a matrix of distances between sites

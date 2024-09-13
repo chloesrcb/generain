@@ -118,8 +118,8 @@ dgpdExt1 <- function(x, kappa, sigma, gamma) {
 #' site according to the NRMSE and RMSE.
 #'
 #' @param rain_df The input dataframe containing the rain data.
-#' @param censore The censored vector.
-#' @param nb_simu The number of simulations (default is 100).
+#' @param censores The censored vector.
+#' @param n_samples The number of samples to generate. Default is 100.
 #'
 #' @return The selected censored data in a datafram according to the NRMSE and
 #'         RMSE. # TODO: add CRPS

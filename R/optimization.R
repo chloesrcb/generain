@@ -148,8 +148,7 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' variogram parameters.
 #'
 #' @param params A vector of variogram parameters.
-#' @param df_lags A dataframe with spatial lag values.
-#' @param tau A vector of temporal lag values.
+#' @param df_lags A dataframe with spatial and temporal lag values.
 #'
 #' @return The theoretical chi matrix.
 #'
@@ -305,7 +304,6 @@ simulate_excess_ind <- function(Tmax, chi_h_t, p_marg) {
 #' @param tau_vect The temporal lag vector
 #' @param h_vect The spatial lag vector
 #' @param chi The spatio-temporal extremogram matrix
-#' @param df_dist The distances long dataframe
 #' @param nconfig The number of configurations
 #'
 #' @import spam
@@ -350,10 +348,7 @@ evaluate_optim_simuExp <- function(n_res, Tmax, tau_vect, h_vect, chi,
 #' @param list_simu A list of simulated data
 #' @param quantile The quantile value
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
-#' @param tau_vect The temporal lag vector
 #' @param locations The locations dataframe
-#' @param hmax The maximum spatial lag value. Default is sqrt(17).
-#' @param nmin The minimum number of observations to consider
 #' @param parscale The scaling parameter for the optimization process. Default
 #'                 is c(1, 1, 1, 1).
 #' @param latlon A boolean value to indicate if the locations are in latitude

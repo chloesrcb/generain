@@ -19,11 +19,11 @@ sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv)
 
 \item{y}{Vector for the second dimension (spatial y in our case)}
 
+\item{z}{Vector for the third dimension (time in our case).}
+
 \item{n.BR}{The number of BR simulations to perform.}
 
 \item{adv}{The advection coordinates vector. Default is c(0, 0).}
-
-\item{t}{Vector for the third dimension (time in our case).}
 }
 \value{
 The result of the simulation.

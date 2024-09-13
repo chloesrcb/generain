@@ -7,11 +7,11 @@
 get_h_vect(dist, hmax = NA, intervals = FALSE)
 }
 \arguments{
+\item{dist}{The distance dataframe or matrix for intervals.}
+
 \item{hmax}{The maximum spacial lag value. Default is NA.}
 
 \item{intervals}{A logical value indicating whether we work with intervals.}
-
-\item{df_dist}{The distance dataframe or matrix for intervals.}
 }
 \value{
 The spatial distance lags vector or list of lag vectors.

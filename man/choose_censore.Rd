@@ -9,9 +9,9 @@ choose_censore(rain_df, censores, n_samples = 100)
 \arguments{
 \item{rain_df}{The input dataframe containing the rain data.}
 
-\item{censore}{The censored vector.}
+\item{censores}{The censored vector.}
 
-\item{nb_simu}{The number of simulations (default is 100).}
+\item{n_samples}{The number of samples to generate. Default is 100.}
 }
 \value{
 The selected censored data in a datafram according to the NRMSE and

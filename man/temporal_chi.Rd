@@ -24,8 +24,3 @@ The temporal chi statistic.
 \description{
 This function calculates the temporal extremogram for a given dataset.
 }
-\examples{
-data <- c(1, 2, 3, 4, 5)
-temporal_chi(data, 3, 0.5)
-
-}

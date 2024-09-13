@@ -115,10 +115,6 @@ chispatemp_empirical <- function(data_rain, df_lags, quantile) {
 #' @import dplyr
 #' @import tidyr
 #'
-#' @examples
-#' data <- c(1, 2, 3, 4, 5)
-#' temporal_chi(data, 3, 0.5)
-#'
 #' @export
 temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   # number of stations

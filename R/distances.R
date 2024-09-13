@@ -89,7 +89,7 @@ reshape_distances <- function(dist_mat) {
 #' This function calculates the spatial lag vector based on the given distance
 #' dataframe and maximum spacial lag value.
 #'
-#' @param df_dist The distance dataframe or matrix for intervals.
+#' @param dist The distance dataframe or matrix for intervals.
 #' @param hmax The maximum spacial lag value. Default is NA.
 #' @param intervals A logical value indicating whether we work with intervals.
 #' @return The spatial distance lags vector or list of lag vectors.
@@ -222,6 +222,9 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
 #' grid.
 #'
 #' @param nsites the number of sites on the grid ie nb of pixels squared
+#' @param adv a vector of advection values. Default is c(0, 0).
+#' @param tau a vector of temporal lags. Default is 1:10.
+#' 
 #' @return a matrix of distances between sites
 #'
 #' @import spam

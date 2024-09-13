@@ -52,7 +52,7 @@ dist_adv <- function(s1, s2, t1, t2, adv) {
 #' @param alpha2 The value of alpha2.
 #' @param x Vector for the first dimension (spatial x in our case).
 #' @param y Vector for the second dimension (spatial y in our case)
-#' @param t Vector for the third dimension (time in our case).
+#' @param z Vector for the third dimension (time in our case).
 #' @param n.BR The number of BR simulations to perform.
 #' @param adv The advection coordinates vector. Default is c(0, 0).
 #'
