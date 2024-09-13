@@ -33,26 +33,6 @@ library(evd)
 ```
 
 
-```{r, echo=FALSE}
-save_results_optim <- function(result, filename) {
-  if (result$convergence == 0) {
-    rmse <- sqrt((result$par - true_param)^2)
-    df_rmse <- data.frame(estim = result$par, rmse = rmse)
-    rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
-    # save the results
-    write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/",
-                          filename, ".csv"))
-  } else {
-    print("No convergence")
-  }
-}
-
-get_results_optim <- function(filename) {
-  df_rmse <- read.csv(paste0("../data/simulations_BR/results/", filename,
-                      ".csv"))
-  return(df_rmse)
-}
-```
 
 ```{r, echo=FALSE}
 sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, n.BR,

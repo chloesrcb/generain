@@ -43,13 +43,13 @@ get_chiq <- function(data, quantile) {
 #' Calculate the spatio-temporal chi extremogram for a given dataset
 #' and a quantile value.
 #' 
-#' @data_rain The data set.
-#' @df_lags The dataframe containing the spatial and temporal lags.
-#' @quantile The quantile value.
+#' @param data_rain The data set.
+#' @param df_lags The dataframe containing the spatial and temporal lags.
+#' @param quantile The quantile value.
 #' 
 #' @return The spatio-temporal chi value.
 #' 
-#' @import stat
+#' @import stats
 #' @import dplyr
 #' @import tidyr
 #' 

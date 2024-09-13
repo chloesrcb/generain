@@ -20,6 +20,10 @@ chispatemp_dt(lagt, lags, rad_mat, data_rain, quant_mat = NA, q_fixed = NA)
 \item{quant_mat}{The matrix of quantiles (optional).}
 
 \item{q_fixed}{The fixed quantile value (optional).}
+
+\item{df_lags}{The dataframe containing the spatial and temporal lags.}
+
+\item{quantile}{The quantile value.}
 }
 \value{
 The spatio-temporal chi value.
