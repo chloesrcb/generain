@@ -22,11 +22,3 @@ The standard deviation of the variogram.
 This function calculates the standard deviation of a variogram based on
 the given parameters.
 }
-\examples{
-x <- c(1, 2, 3, 4, 5)
-vario <- function(h) h^2
-sd_c <- 1
-sd_alpha <- 0.5
-sd_vario(x, vario, sd_c, sd_alpha)
-
-}

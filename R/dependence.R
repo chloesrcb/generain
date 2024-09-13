@@ -620,13 +620,6 @@ chi_vario <- function(vario) {
 #'
 #' @return The standard deviation of the variogram.
 #'
-#' @examples
-#' x <- c(1, 2, 3, 4, 5)
-#' vario <- function(h) h^2
-#' sd_c <- 1
-#' sd_alpha <- 0.5
-#' sd_vario(x, vario, sd_c, sd_alpha)
-#'
 #' @export
 sd_vario <- function(x, vario, sd_c, sd_alpha) {
   sd <- vario * sqrt(sd_c^2 + sd_alpha^2) # with delta-method

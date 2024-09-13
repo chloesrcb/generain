@@ -2,7 +2,7 @@
 test_that("reshape_distances produces correct format", {
     # Calculate the spatial coordinates of the regular grid
     sites_coords <- generate_grid_coords(5)
-
+    avd <- c(0, 0) # Advection coordinates
     # Calculate the distance matrix with advanced parameters
     dist_mat_adv <- get_dist_mat(sites_coords, adv = adv, tau = 1:10,
                                 latlon = FALSE)
