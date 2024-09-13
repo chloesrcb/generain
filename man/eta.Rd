@@ -17,8 +17,3 @@ The eta function transforms the input vector by applying a logarithmic
 transformation using the quantile function of the standard normal
 distribution.
 }
-\examples{
-eta(c(-1, 0, 1, 2))
-# Output: [1]  2.000000e+00  1.000000e-06 -1.151293e-01 -2.000000e-01
-
-}

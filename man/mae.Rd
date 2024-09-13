@@ -19,9 +19,3 @@ The mean absolute error between true values and predicted values.
 Calculate the mean absolute error (MAE) between true values and
 predicted values.
 }
-\examples{
-true <- c(1, 2, 3)
-predicted <- c(1.5, 2.5, 3.5)
-mae(true, predicted)
-
-}

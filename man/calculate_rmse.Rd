@@ -20,11 +20,3 @@ The root mean squared error (RMSE) between true values and
 Calculate the root mean squared error (RMSE) between true values and
 predicted values.
 }
-\examples{
-true_values <- c(1, 2, 3)
-predicted_values <- c(1.5, 2.5, 3.5)
-rmse <- calculate_rmse(true_values, predicted_values)
-print(rmse)
-# Output: 0.5
-
-}

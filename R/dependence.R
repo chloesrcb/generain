@@ -11,13 +11,6 @@
 #' @import dplyr
 #' @import tidyr
 #'
-#' @examples
-#' data1 <- c(1, 2, 3, 4, 5)
-#' data2 <- c(2, 3, 4, 5, 6)
-#' data <- cbind(data1, data2)
-#' quantile <- 0.95
-#' get_chiq(data, quantile)
-#'
 #' @export
 get_chiq <- function(data, quantile) {
   n <- nrow(data)
@@ -170,11 +163,6 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
 #' @import tidyr
 #' @import lmtest
 #'
-#' @examples
-#' data <- data.frame(time = c(1, 2, 3), value = c(10, 20, 30))
-#' weights <- c(0.5, 0.3, 0.2)
-#' result <- temporal_chi_WLSE(data, weights)
-#' print(result)
 #'
 #' @export
 temporal_chi_WLSE <- function(dftemp, weights){
@@ -527,10 +515,6 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
 #' @param chi The input extremogram to be transformed.
 #' @return The transformed vector.
 #'
-#' @examples
-#' eta(c(-1, 0, 1, 2))
-#' # Output: [1]  2.000000e+00  1.000000e-06 -1.151293e-01 -2.000000e-01
-#'
 #' @import stats
 #'
 #' @export
@@ -552,10 +536,6 @@ eta <- function(chi) {
 #'
 #' @import stats
 #'
-#' @examples
-#' chi <- 0.5
-#' vario_spatemp(chi)
-#'
 #' @export
 vario_spatemp <- function(chi) {
   invphi <- qnorm(1 - 0.5 * chi)
@@ -573,13 +553,6 @@ vario_spatemp <- function(chi) {
 #'
 #' @return The calculated spatial or temporal variogram.
 #'
-#' @examples
-#' x <- c(1, 2, 3, 4, 5)
-#' c <- 1
-#' alpha <- 0.5
-#' vario <- vario(x, c, alpha)
-#' print(vario)
-#' # Output: [1] 2.718282 7.389056 20.085537 54.598150 148.413159
 #' @export
 vario <- function(x, c, alpha) {
   return(2 * exp(c) * x^alpha)
@@ -594,9 +567,6 @@ vario <- function(x, c, alpha) {
 #'
 #' @return The theorical spatio-temporal extremogram.
 #'
-#' @examples
-#' vario <- 0.5
-#' chi_vario(vario)
 #'
 #' @export
 chi_vario <- function(vario) {
@@ -697,10 +667,6 @@ chispatemp_dt <- function(lagt, lags, rad_mat, data_rain, quant_mat = NA,
 #' @param predicted_values A numeric vector of predicted values.
 #' @return The mean absolute error between true values and predicted values.
 #'
-#' @examples
-#' true <- c(1, 2, 3)
-#' predicted <- c(1.5, 2.5, 3.5)
-#' mae(true, predicted)
 #'
 #' @export
 mae <- function(true_values, predicted_values) {
@@ -715,13 +681,6 @@ mae <- function(true_values, predicted_values) {
 #' @param predicted_values The vector of predicted values.
 #' @return The root mean squared error (RMSE) between true values and
 #'         predicted values.
-#'
-#' @examples
-#' true_values <- c(1, 2, 3)
-#' predicted_values <- c(1.5, 2.5, 3.5)
-#' rmse <- calculate_rmse(true_values, predicted_values)
-#' print(rmse)
-#' # Output: 0.5
 #'
 #' @export
 calculate_rmse <- function(true_values, predicted_values) {

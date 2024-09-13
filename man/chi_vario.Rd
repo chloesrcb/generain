@@ -16,8 +16,3 @@ The theorical spatio-temporal extremogram.
 This function calculates the chi-squared variogram based on the given
 variogram value.
 }
-\examples{
-vario <- 0.5
-chi_vario(vario)
-
-}

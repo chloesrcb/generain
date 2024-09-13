@@ -19,10 +19,3 @@ The calculated temporal chi value.
 This function calculates the temporal chi using the Weighted Least Squares
 Estimation (WLSE) method.
 }
-\examples{
-data <- data.frame(time = c(1, 2, 3), value = c(10, 20, 30))
-weights <- c(0.5, 0.3, 0.2)
-result <- temporal_chi_WLSE(data, weights)
-print(result)
-
-}

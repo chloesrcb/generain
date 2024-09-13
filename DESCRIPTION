@@ -23,7 +23,6 @@ Imports:
   lmtest,
   kableExtra,
   knitr,
-  kableExtra,
   graphics,
   scoringRules,
   RandomFields,

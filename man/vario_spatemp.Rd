@@ -16,8 +16,3 @@ The theorical spatio-temporal variogram.
 This function calculates the theorical spatio-temporal variogram based on the
 given extremogram.
 }
-\examples{
-chi <- 0.5
-vario_spatemp(chi)
-
-}

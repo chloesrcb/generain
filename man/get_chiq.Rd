@@ -19,11 +19,3 @@ The chi value.
 This function calculates the chi extremogram for a given dataset
 and a quantile value.
 }
-\examples{
-data1 <- c(1, 2, 3, 4, 5)
-data2 <- c(2, 3, 4, 5, 6)
-data <- cbind(data1, data2)
-quantile <- 0.95
-get_chiq(data, quantile)
-
-}
