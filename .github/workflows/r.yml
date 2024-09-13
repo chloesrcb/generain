@@ -1,22 +1,17 @@
-# GitHub Actions Workflow for Continuous Integration with R
-# This workflow runs tests on different R versions using a matrix strategy.
-
 name: R-CI
 
-# Trigger the workflow on push or pull request on the main branch
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
-# Permissions for this workflow
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Use Ubuntu for faster execution
+    runs-on: ubuntu-latest  # Use Ubuntu runner for faster builds
     strategy:
       matrix:
         r-version: ['3.6.3', '4.1.1']  # Test on multiple R versions
@@ -31,15 +26,14 @@ jobs:
         with:
           r-version: ${{ matrix.r-version }}
 
-      # Step 3: Install R dependencies (e.g., remotes and rcmdcheck)
+      # Step 3: Install required R packages including rcmdcheck
       - name: Install dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck"))  # Install required R packages
+          install.packages(c("remotes", "rcmdcheck"))  # Ensure rcmdcheck is installed
           remotes::install_deps(dependencies = TRUE)   # Install the package dependencies
         shell: Rscript {0}
 
-      # Step 4: Run R CMD check to check the package
+      # Step 4: Run R CMD check using rcmdcheck
       - name: Run R CMD check
-        run: rcmdcheck::rcmdcheck(args = "--no-manual --no-build-vignettes", error_on = "error")  # Skip manual and vignettes for faster checks
+        run: rcmdcheck::rcmdcheck(args = "--no-manual --no-build-vignettes", error_on = "error")  # Skip manual and vignettes
         shell: Rscript {0}
-
