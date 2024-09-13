@@ -4,13 +4,15 @@
 \alias{simulate_excess_ind}
 \title{simulate_excess_ind function}
 \usage{
-simulate_excess_ind(Tmax, chi_h_t)
+simulate_excess_ind(Tmax, chi_h_t, p_marg)
 }
 \arguments{
 \item{Tmax}{The maximum time observation.}
 
 \item{chi_h_t}{The spatio-temporal extremogram value at a given spatial lag h
 and a given temporal lag t.}
+
+\item{p_marg}{The probability of marginal excesses.}
 }
 \value{
 The simulated individual excess.

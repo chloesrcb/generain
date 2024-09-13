@@ -2,8 +2,10 @@
 % Please edit documentation in R/dependence.R
 \name{chispatemp_dt}
 \alias{chispatemp_dt}
-\title{chispatemp_dt function}
+\title{chispatemp function}
 \usage{
+chispatemp_dt(lagt, lags, rad_mat, data_rain, quant_mat = NA, q_fixed = NA)
+
 chispatemp_dt(lagt, lags, rad_mat, data_rain, quant_mat = NA, q_fixed = NA)
 }
 \arguments{
@@ -20,8 +22,13 @@ chispatemp_dt(lagt, lags, rad_mat, data_rain, quant_mat = NA, q_fixed = NA)
 \item{q_fixed}{The fixed quantile value (optional).}
 }
 \value{
+The spatio-temporal chi value.
+
 The result of the chi spatial-temporal dependence.
 }
 \description{
+Calculate the spatio-temporal chi extremogram for a given dataset
+and a quantile value.
+
 This function calculates the chi spatial-temporal dependence
 }

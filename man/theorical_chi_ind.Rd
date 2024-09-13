@@ -2,7 +2,7 @@
 % Please edit documentation in R/optimization.R
 \name{theorical_chi_ind}
 \alias{theorical_chi_ind}
-\title{Calculate the theoretical chi-indicator value.}
+\title{Calculate the theoretical chi value.}
 \usage{
 theorical_chi_ind(params, h, tau)
 }

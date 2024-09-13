@@ -4,22 +4,18 @@
 \alias{empirical_excesses}
 \title{empirical_excesses function}
 \usage{
-empirical_excesses(data_rain, quantile, h_vect)
+empirical_excesses(data_rain, quantile, df_lags)
 }
 \arguments{
 \item{data_rain}{The rainfall data.}
 
 \item{quantile}{The quantile value.}
 
-\item{h_vect}{The spatial lag vectors and distances dataframe.}
-
-\item{tau}{The temporal lag vector.}
-
-\item{nmin}{The minimum number of observations to consider. Default is 5.}
+\item{df_lags}{The dataframe with spatial and temporal lag values.}
 }
 \value{
-A list with n_vect the number of excesses and N_vect the number of
-possible excesses ie the number of observations for each pair of sites.
+The empirical excesses dataframe with the number of excesses kij and
+the number of possible excesses Tobs, with the lag values.
 }
 \description{
 This function calculates the empirical excesses based on indicators above a

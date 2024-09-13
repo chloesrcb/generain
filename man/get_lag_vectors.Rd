@@ -4,7 +4,7 @@
 \alias{get_lag_vectors}
 \title{get_lag_vectors function}
 \usage{
-get_lag_vectors(df_coords, params, hmax = NA, tau_vect = 1:10)
+get_lag_vectors(df_coords, params, hmax = NA, tau_vect = 0:10)
 }
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
@@ -13,7 +13,7 @@ get_lag_vectors(df_coords, params, hmax = NA, tau_vect = 1:10)
 
 \item{hmax}{The maximum distance threshold. Default is NA.}
 
-\item{tau_vect}{A vector of temporal lags. Default is 1:10.}
+\item{tau_vect}{A vector of temporal lags. Default is 0:10.}
 }
 \value{
 A dataframe containing the lag vectors.

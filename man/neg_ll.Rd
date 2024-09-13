@@ -6,37 +6,34 @@
 \usage{
 neg_ll(
   params,
-  simu,
-  h_vect,
-  tau,
+  data,
+  df_lags,
   locations,
+  quantile,
+  excesses,
   latlon = FALSE,
-  quantile = 0.9,
-  nmin = 5,
-  simu_exp = FALSE,
-  excesses = NULL,
-  adv1 = 0,
-  adv2 = 0
+  simu_exp = FALSE
 )
 }
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}
 
-\item{h_vect}{The spatial lag vector.}
+\item{data}{The data dataframe.}
 
-\item{tau}{The temporal lag vector.}
+\item{df_lags}{The dataframe with spatial and temporal lag values.}
 
 \item{locations}{The locations dataframe.}
+
+\item{quantile}{The quantile value.}
+
+\item{excesses}{The excesses dataframe with the number of excesses kij and
+the number of possible excesses Tobs.}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
 
 \item{simu_exp}{A boolean value to indicate if the data is simulated with
 an exponential distribution.}
-
-\item{excesses}{List of excesses (N_vect, n_vect).}
-
-\item{df_dist}{The distances long dataframe.}
 }
 \value{
 The negative log-likelihood value.
@@ -45,6 +42,5 @@ The negative log-likelihood value.
 Calculate the negative log-likelihood for a given set of variogram
 parameters by considering excess indicators following a binomial distribution
 with a probability parameter equals to the theorical spatio-temporal chi
-value. The number observations is different for each spatio-temporal
-configuration.
+value.
 }

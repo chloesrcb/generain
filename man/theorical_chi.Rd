@@ -7,7 +7,7 @@
 theorical_chi(params, df_lags)
 }
 \arguments{
-\item{params}{A vector of parameters.}
+\item{params}{A vector of variogram parameters.}
 
 \item{df_lags}{A dataframe with spatial lag values.}
 
@@ -17,6 +17,6 @@ theorical_chi(params, df_lags)
 The theoretical chi matrix.
 }
 \description{
-This function calculates the theoretical chi dataframe. based on the given
-parameters.
+This function calculates the theoretical chi dataframe, based on the given
+variogram parameters.
 }
