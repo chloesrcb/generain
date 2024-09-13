@@ -3,6 +3,7 @@
 export(calculate_rmse)
 export(chi_vario)
 export(chispatemp_dt)
+export(chispatemp_empirical)
 export(choose_censore)
 export(dgpdExt1)
 export(dist_adv)

@@ -1430,12 +1430,6 @@ print(df_rmse) # super rapide, pq?
 
 
 
-## TO DO 
-
-Simu avec moins de sites et plus de temps 9s, 500t
-
-R pareto
-
 
 ## Profile log-likelihood
 

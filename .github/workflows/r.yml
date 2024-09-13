@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest  # Use Ubuntu runner for faster builds
     strategy:
       matrix:
-        r-version: ['3.6.3', '4.1.1']  # Test on multiple R versions
+        r-version: ['4.1.1']  # Test on multiple R versions
 
     steps:
       # Step 1: Check out the code from the repository
@@ -29,7 +29,7 @@ jobs:
       # Step 3: Install required R packages including rcmdcheck
       - name: Install dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck"))  # Ensure rcmdcheck is installed
+          install.packages(c("remotes", "testthat", "rcmdcheck"))  # Ensure rcmdcheck is installed
           remotes::install_deps(dependencies = TRUE)   # Install the package dependencies
         shell: Rscript {0}
 

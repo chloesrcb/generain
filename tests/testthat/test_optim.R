@@ -1,5 +1,3 @@
-library(testthat)
-
 test_that("get_criterion calculates the correct values", {
   # Create a sample dataframe
   df_result <- data.frame(

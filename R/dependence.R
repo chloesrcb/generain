@@ -38,7 +38,7 @@ get_chiq <- function(data, quantile) {
 }
 
 
-#' chispatemp function
+#' chispatemp_empirical function
 #' 
 #' Calculate the spatio-temporal chi extremogram for a given dataset
 #' and a quantile value.
@@ -54,7 +54,7 @@ get_chiq <- function(data, quantile) {
 #' @import tidyr
 #' 
 #' @export 
-chispatemp_dt <- function(data_rain, df_lags, quantile) {
+chispatemp_empirical <- function(data_rain, df_lags, quantile) {
   chi_st <- df_lags
   chi_st$chiemp <- NA
   chi_st$chiemp2 <- NA

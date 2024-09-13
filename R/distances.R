@@ -133,7 +133,7 @@ norm_Lp <- function(x, y, p) {
 #' @return The Euclidean distance between the two points.
 #'
 #' @examples
-#' euclidean_distance(c(0, 0), c(3, 4))
+#' get_euclidean_distance(c(0, 0), c(3, 4))
 #'
 #' @export
 get_euclidean_distance <- function(point1, point2) {

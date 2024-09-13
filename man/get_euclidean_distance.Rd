@@ -18,6 +18,6 @@ The Euclidean distance between the two points.
 Calculate the Euclidean distance between two points.
 }
 \examples{
-euclidean_distance(c(0, 0), c(3, 4))
+get_euclidean_distance(c(0, 0), c(3, 4))
 
 }
