@@ -38,6 +38,63 @@ get_chiq <- function(data, quantile) {
 }
 
 
+#' chispatemp function
+#' 
+#' Calculate the spatio-temporal chi extremogram for a given dataset
+#' and a quantile value.
+#' 
+#' @data_rain The data set.
+#' @df_lags The dataframe containing the spatial and temporal lags.
+#' @quantile The quantile value.
+#' 
+#' @return The spatio-temporal chi value.
+#' 
+#' @import stat
+#' @import dplyr
+#' @import tidyr
+#' 
+#' @export 
+chispatemp_dt <- function(data_rain, df_lags, quantile) {
+  chi_st <- df_lags
+  chi_st$chiemp <- NA
+  chi_st$chiemp2 <- NA
+  Tmax <- nrow(data_rain)
+  for (t in unique(df_lags$tau)) {
+    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each lag
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get index pairs
+      ind_s1 <- df_h_t$s1[i]
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      rain_cp <- na.omit(data_rain[, c(ind_s1, ind_s2)])
+      colnames(rain_cp) <- c("s1", "s2")
+      rain_lag <- rain_cp$s1[(t + 1):Tmax]
+      rain_nolag <- rain_cp$s2[1:(Tmax - t)]
+      data <- cbind(rain_lag, rain_nolag) # get couple
+      Tobs <- nrow(data) # T - tau
+      data_unif <- cbind(rank(data[, 2]) / (Tobs + 1),
+                          rank(data[, 1]) / (Tobs + 1))
+
+      # get the number of marginal excesses
+      n_marg <- sum(data_unif[, 1] > quantile)
+
+      # get the number of joint excesses
+      cp_cond <- data_unif[data_unif[, 1] > quantile,]
+      joint_excesses <- sum(cp_cond[, 2] > quantile)
+      chi_hat_h_tau <- joint_excesses / n_marg
+      chi_st$chiemp[chi_st$s1 == ind_s1 & chi_st$s2 == ind_s2 &
+                    chi_st$tau == t] <- chi_hat_h_tau
+      chi_val <- get_chiq(data_unif, quantile)
+      chi_st$chiemp2[chi_st$s1 == ind_s1 & chi_st$s2 == ind_s2 &
+                      chi_st$tau == t] <- chi_val
+    }
+  }
+  # if chi <= 0 then set it to 0.000001
+  chi_st$chiemp <- ifelse(chi_st$chiemp <= 0, 0.000001, chi_st$chiemp)
+  chi_st$chiemp2 <- ifelse(chi_st$chiemp2 <= 0, 0.000001, chi_st$chiemp2)
+  return(chi_st)
+}
+
+
 
 # TEMPORAL CHI -----------------------------------------------------------------
 

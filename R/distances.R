@@ -126,83 +126,6 @@ norm_Lp <- function(x, y, p) {
   return((abs(x)^p + abs(y)^p)^(1 / p))
 }
 
-#' get_lag_vectors function
-#'
-#' This function calculates the lag vectors between pairs of points.
-#'
-#' @param df_coords A dataframe containing the coordinates of the points.
-#' @param params A vector of parameters.
-#' @param hmax The maximum distance threshold. Default is NA.
-#' @param tau_vect A vector of temporal lags. Default is 1:10.
-#'
-#' @return A dataframe containing the lag vectors.
-#'
-#' @export
-get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
-  # alpha_spa <- params[3]
-
-  if (length(params) != 6) {
-    adv <- c(0, 0)
-  } else {
-    adv <- params[5:6]
-  }
-
-  n <- nrow(df_coords)
-  tau_len <- length(tau_vect)
-  total_combinations <- (n * (n - 1) / 2) * tau_len
-
-  # Preallocate the dataframe
-  lags <- data.frame(
-    s1 = integer(total_combinations),
-    s2 = integer(total_combinations),
-    h1 = numeric(total_combinations),
-    h2 = numeric(total_combinations),
-    tau = integer(total_combinations),
-    hnorm = numeric(total_combinations)
-  )
-
-  idx <- 1
-  for (i in 1:(n)) {
-    for (j in (i):n) {
-      lag_latitude <- df_coords$Latitude[j] - df_coords$Latitude[i]
-      lag_longitude <- df_coords$Longitude[j] - df_coords$Longitude[i]
-
-      # hnorm <- norm_Lp(lag_latitude, lag_longitude, alpha_spa)
-      hnorm <- sqrt(lag_latitude^2 + lag_longitude^2)
-
-      if (is.na(hmax) || hnorm <= hmax) {
-        for (tau in tau_vect) {
-          lags$s1[idx] <- i
-          lags$s2[idx] <- j
-          lags$h1[idx] <- lag_latitude
-          lags$h2[idx] <- lag_longitude
-          lags$tau[idx] <- tau
-          lags$hnorm[idx] <- hnorm
-          idx <- idx + 1
-        }
-      }
-    }
-  }
-
-  # Remove the unused preallocated space
-  lags <- lags[1:(idx - 1), ]
-
-  # modify with advection
-  if (all(adv != c(0, 0))) {
-    print("advection")
-    for (i in 1:nrow(lags)) {
-      lags$h1[i] <- lags$h1[i] - adv[1] * lags$tau[i]
-      lags$h2[i] <- lags$h2[i] - adv[2] * lags$tau[i]
-      lags$hnorm[i] <- sqrt(lags$h1[i]^2 + lags$h2[i]^2)
-      # lags$hnorm[i] <- norm_Lp(lags$h1[i], lags$h2[i], alpha_spa)
-    }
-  }
-
-  return(lags)
-}
-
-
-
 #' Calculate the Euclidean distance between two points.
 #'
 #' @param point1 The first point.
@@ -216,6 +139,84 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 1:10) {
 get_euclidean_distance <- function(point1, point2) {
   sqrt(sum((point1 - point2)^2))
 }
+
+#' get_lag_vectors function
+#'
+#' This function calculates the lag vectors between pairs of points.
+#'
+#' @param df_coords A dataframe containing the coordinates of the points.
+#' @param params A vector of parameters.
+#' @param hmax The maximum distance threshold. Default is NA.
+#' @param tau_vect A vector of temporal lags. Default is 0:10.
+#'
+#' @return A dataframe containing the lag vectors.
+#'
+#' @export
+get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
+  # Advection vector
+  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
+
+  n <- nrow(df_coords)
+  tau_len <- length(tau_vect)
+
+  # Create index combinations
+  pairs_comb <- combn(n, 2)
+  # indices <- pairs_comb
+
+  # # Add n,n pairs
+  diag_pairs <- matrix(rep(1:n, each = 2), nrow = 2)
+  indices <- cbind(pairs_comb, diag_pairs)
+
+  i_vals <- indices[1,]
+  j_vals <- indices[2,]
+
+  # Calculate lags
+  lag_latitudes <- df_coords$Latitude[j_vals] - df_coords$Latitude[i_vals]
+  lag_longitudes <- df_coords$Longitude[j_vals] - df_coords$Longitude[i_vals]
+
+  # Calculate hnorm for all pairs
+  hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
+  # hnorms <- norm_Lp(lag_latitudes, lag_longitudes, params[3])
+
+  # Filter based on hmax
+  if (!is.na(hmax)) {
+    valid_indices <- which(hnorms <= hmax)
+    i_vals <- i_vals[valid_indices]
+    j_vals <- j_vals[valid_indices]
+    lag_latitudes <- lag_latitudes[valid_indices]
+    lag_longitudes <- lag_longitudes[valid_indices]
+    hnorms <- hnorms[valid_indices]
+  }
+
+  # Replicate for tau_vect
+  num_pairs <- length(i_vals)
+  i_vals <- rep(i_vals, each = tau_len)
+  j_vals <- rep(j_vals, each = tau_len)
+  lag_latitudes <- rep(lag_latitudes, each = tau_len)
+  lag_longitudes <- rep(lag_longitudes, each = tau_len)
+  hnorms <- rep(hnorms, each = tau_len)
+  taus <- rep(tau_vect, times = num_pairs)
+
+  # Apply advection
+  if (all(adv != c(0, 0))) {
+    lag_latitudes <- lag_latitudes - adv[1] * taus
+    lag_longitudes <- lag_longitudes - adv[2] * taus
+    hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
+  }
+
+  # Create final dataframe
+  lags <- data.frame(
+    s1 = i_vals,
+    s2 = j_vals,
+    h1 = lag_latitudes,
+    h2 = lag_longitudes,
+    tau = taus,
+    hnorm = hnorms
+  )
+
+  return(lags)
+}
+
 
 #' distances_regular_grid calculates the distances between sites on a regular
 #' grid.

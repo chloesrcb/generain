@@ -1,0 +1,98 @@
+---
+title: "Debug optimisation with neg ll"
+author: " "
+date: "`r Sys.Date()`" 
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 7, fig.height = 7,
+                      fig.align = 'center', message = FALSE, warning = FALSE,
+                      fig.pos='H')
+par(cex.main = 0.8,
+    cex.lab = 0.7,
+    cex.axis = 0.6)
+```
+
+
+
+```{r lib, echo=FALSE}
+# setwd("./script")
+library(generain)
+library(reshape2)
+library(ggplot2)
+source("load_libraries.R")
+library(kableExtra)
+library(extRemes)
+library(bbmle)
+library(ismev)
+library(extRemes)
+library(evd)
+```
+
+
+# Simulation
+
+```{r sim25s300t, fig.width = 5, fig.height = 5}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+
+# load the simulations
+if (all(adv == c(0, 0))) {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+} else {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                  length(temp), "t_adv/")
+}
+
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1, 
+                    ".csv")
+simu_df <- read.csv(file_path)
+nsites <- ncol(simu_df)
+sites_coords <- generate_grid_coords(sqrt(nsites))
+```
+
+
+```{r}
+library(SpatialExtremes)
+
+data.2sites <- simu_df[, 1:2]
+# convert into unit Frechet margins
+data.frech <- apply(simu_df, 2, gev2frech, emp = TRUE)
+
+locations <- as.matrix(sites_coords)
+colnames(locations) <- c("lon", "lat")
+
+fit <- fitmaxstab(data.frech, locations, "powexp", nugget = 0)
+fit
+fit$fitted.values
+fit$cov.mod
+
+
+##Define the coordinate of each location
+n.site <- 30
+locations <- matrix(runif(2*n.site, 0, 10), ncol = 2)
+colnames(locations) <- c("lon", "lat")
+
+##Simulate a max-stable process - with unit Frechet margins
+data <- rmaxstab(40, locations, cov.mod = "whitmat", nugget = 0, range = 3,
+smooth = 0.5)
+
+n.cond <- 5
+x <- runif(n.cond, -5, 5)
+z <- rmaxstab(1, x, "brown", range = 3, smooth = 1.5)
+
+## Generate 2 x 5 conditional simulations
+n.sim <- 5
+s <- seq(-5, 5, length = 500)
+cond.sim <- condrmaxstab(n.sim, s, x, z, "brown", range = 3, smooth = 1.5)
+## The same with much smoother sample paths
+cond.sim2 <- condrmaxstab(n.sim, s, x, z, "brown", range = 3, smooth = 1.995)
+```
