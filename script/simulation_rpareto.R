@@ -4,6 +4,79 @@ library(ggplot2)
 library(reshape2)
 library(animation)
 
+
+
+################################################################################
+# Simulation r-Pareto process
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
+                        adv = c(0, 0)) {
+  # beta1, beta2, alpha1, alpha2 are variogram parameters
+  # x is the first dimension (spatial x in our case)
+  # y is the second dimension (spatial y in our case)
+  # z is the third dimension (time in our case)
+  # (adv1, adv2) advection coordinates vector
+  ## Setup
+  RandomFields::RFoptions(spConform = FALSE, install = "no")
+  lx <- length(sx <- seq_along(x))  # spatial
+  ly <- length(sy <- seq_along(y))  # spatial
+  lt <- length(st <- seq_along(t))  # temporal
+
+  ## Model-Variogram BuhlCklu
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+
+  ## Construct grid
+  Nxy <- lx * ly # spatial grid size
+  N <- Nxy * lt # spatio-temporal grid size
+  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
+
+  for (i in sx)
+    for (j in seq_len(ly * lt))
+      grid[i + (j - 1) * ly, 1] <- i
+
+  for (i in sy)
+    for (j in sx)
+      for (k in st)
+        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
+
+  for (i in st)
+    for (j in seq_len(Nxy))
+      grid[j + Nxy * (i - 1), 3] <- i
+
+  # Construct shifted grid with advected coordinates
+  grid[, 1] <- grid[, 1] - grid[, 3] * adv[1]
+  grid[, 2] <- grid[, 2] - grid[, 3] * adv[2]
+
+  s0_x <- 1 # Spatial x conditioning point
+  s0_y <- 1  # Spatial y conditioning point
+  t0 <- 1  # Temporal conditioning point
+  s0_t0 <- s0_x + (s0_y - 1) * lx + (t0 - 1) * Nxy
+  # s0_t0 <- s0 + (t0 - 1) * lx^2
+  # grid[,s0]
+
+  ## Construct shifted variogram
+  gamma <- vapply(seq_len(N), function(n)
+      RandomFields::RFvariogram(modelBuhlCklu,
+        x = sx - grid[n, 1],
+        y = sy - grid[n, 2],
+        z = st - grid[n, 3]),
+        array(NA_real_, dim = c(lx, ly, lt))) ## => (lx, ly, lt, N)-array
+
+
+  # Main
+  # s0 <- 1
+  Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
+  for (i in seq_len(n.res)) {
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # Gaussian process
+    Y <- exp(W - W[s0_x, s0_y, t0] - gamma[,,, s0_t0])
+    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+    Z[,,, i] <- R * Y
+  }
+  # Return
+  Z
+}
+
 # Simulate data using the rpareto model
 ngrid <- 5
 spa <- 1:ngrid

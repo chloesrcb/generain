@@ -241,8 +241,7 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 
   # Check if the parameters are in the bounds
   if (any(params < lower.bound) || any(params > upper.bound)) {
-    # message("out of bounds")
-    return(1e9)
+    return(1e50)
   }
 
   if (!all(adv == c(0, 0))) { # if we have the advection parameters
@@ -250,21 +249,19 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
     df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
   }
 
-  n_marg <- get_marginal_excess(data, quantile) # number of marginal excesses
-  Tobs <- excesses$Tobs # T - tau
-  p <- n_marg / nrow(data) # probability of marginal excesses
-  kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  # transform in chi vector
-  chi_vect <- as.vector(chi$chi)
-  chi_vect <- ifelse(chi_vect <= 0,  1e-10, chi_vect) # avoid log(0)
-  # get indices where kij == 0
-  non_excesses <- Tobs - kij # number of non-excesses
-  # log-likelihood vector
-  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - p * chi_vect)
-  # final negative log-likelihood
-  nll <- -sum(ll_vect, na.rm = TRUE)
-  # print(nll)
+  T_marg <- get_marginal_excess(data, quantile) # number of marginal excesses
+  Tmax <- nrow(data)
+  p <- T_marg / Tmax # probability of marginal excesses 
+  chi <- theorical_chi(params, excesses) # get chi matrix
+  ll_df <- chi
+  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
+  ll_df$pchi <- 1 - p * ll_df$chi
+
+  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij # number of non-excesses
+  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
+              ll_df$non_excesses * log(ll_df$pchi)
+
+  nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
 }
 
