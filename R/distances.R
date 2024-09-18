@@ -204,6 +204,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
     lag_latitudes <- lag_latitudes - adv[1] * taus
     lag_longitudes <- lag_longitudes - adv[2] * taus
     hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
+    # hnorms <- norm_Lp(lag_latitudes, lag_longitudes, params[3])
   }
 
   # Create final dataframe
@@ -220,7 +221,7 @@ get_lag_vectors <- function(df_coords, params, hmax = NA, tau_vect = 0:10) {
 }
 
 
-#' get_lag_vectors function
+#' get_conditional_lag_vectors function
 #'
 #' This function calculates the lag vectors between pairs of points.
 #'
@@ -260,6 +261,7 @@ get_conditional_lag_vectors <- function(df_coords, params, s0 = c(1, 1),
 
   # Distances
   hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
+  # hnorms <- norm_Lp(lag_latitudes, lag_longitudes, params[3])
 
   # Filter < hmax
   if (!is.na(hmax)) {
@@ -287,6 +289,7 @@ get_conditional_lag_vectors <- function(df_coords, params, s0 = c(1, 1),
     lag_latitudes <- lag_latitudes - adv[1] * taus
     lag_longitudes <- lag_longitudes - adv[2] * taus
     hnorms <- sqrt(lag_latitudes^2 + lag_longitudes^2)
+    # hnorms <- norm_Lp(lag_latitudes, lag_longitudes, params[3])
   }
 
   lags <- data.frame(
