@@ -19,7 +19,7 @@ par(cex.main = 0.8,
 
 
 ```{r lib, echo=FALSE}
-# setwd("./script")
+setwd("./script")
 library(generain)
 library(reshape2)
 library(ggplot2)
@@ -37,10 +37,10 @@ library(evd)
 ```{r sim25s300t, fig.width = 5, fig.height = 5}
 adv <- c(0, 0)
 true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
-ngrid <- 10
+ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:100
+temp <- 1:300
 
 # get folder name
 if (all(adv == c(0, 0))) {
@@ -98,7 +98,7 @@ chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
 spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
 print(spa_estim)
 
-q <- 0.75
+q <- 0.8
 tmax <- 10
 chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
@@ -285,12 +285,12 @@ for (q in q_values) {
 
 Without zeros $k_{ij, \tau} > 0$:
 ```{r plotdenskij, fig.height=7, fig.width=7}
-q_values <- c(0.8, 0.82, 0.85, 0.88, 0.9, 0.92)
+q_values <- c(0.75, 0.8, 0.85, 0.9)
 df_lags <- get_lag_vectors(sites_coords, true_param,
-                          hmax = sqrt(17), tau_vect = 0:10)
+                          hmax = sqrt(17), tau_vect = 0:2)
 chi_theorical <- theorical_chi(true_param, df_lags)
 
-png("../images/optim/density_100s_100t_byq.png")
+png("../images/optim/density_400s_50t_byq.png")
 
 par(mfrow = c(ceiling(length(q_values)/3), 3))
 for (q in q_values) {
@@ -379,8 +379,8 @@ Now we fix the quantile and $h = 1$ and vary the temporal lag $\tau$,
 using the theoretical chi.
 
 ```{r plotdenskij3, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.85
-tau_vect <- 0:10
+q <- 0.8
+tau_vect <- 0:2
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
 # excesses without zeros (function has changed)
@@ -439,8 +439,8 @@ plot_tau <- ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) 
 plot_tau
 
 # # Save plot as PNG file
-# ggsave("../images/optim/density_100s_100t_bytau.png",
-#       plot = plot_tau, width = 7, height = 7)
+ggsave("../images/optim/density_400s_50t_bytau.png",
+      plot = plot_tau, width = 7, height = 7)
 
 
 ```
@@ -455,7 +455,7 @@ We can also calculate the RMSE for each parameter.
 It is very sensitive to the quantile choice.
 
 ```{r optimquantile, echo=FALSE}
-q_values <- c(0.7, 0.75, 0.8, 0.85, 0.9) # quantiles
+q_values <- c(0.8, 0.85, 0.9) # quantiles
 
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
                            alpha1 = numeric(), alpha2 = numeric())
@@ -478,6 +478,7 @@ for (q in q_values) {
                   df_lags = df_lags,
                   excesses = excesses,
                   locations = sites_coords,
+                  hmax = sqrt(17),
                   method = "CG",
                   control = list(parscale = c(1, 1, 1, 1),
                                  maxit = 10000))
@@ -576,19 +577,18 @@ kable(df_valid, "latex", booktabs = TRUE,
 ```{r}
 library(graphics)
 
-# Définir les paramètres fixes
 fixed_params <- c(0.4, 0.2, 1.5, 1)
 
-# Créer une grille de valeurs pour deux paramètres (par exemple, paramètre 1 et paramètre 2)
 param1_values <- seq(0.05, 0.9, length.out = 50)
 param2_values <- seq(0.05, 0.9, length.out = 50)
 
-# Matrice pour stocker les résultats de la log-vraisemblance négative
 nll_matrix <- matrix(NA, nrow = length(param1_values), ncol = length(param2_values))
 
-quantile <- 0.85
+quantile <- 0.9
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
 excesses <- empirical_excesses(simu_df, quantile = quantile, df_lags = df_lags)
-# Calculer la log-vraisemblance pour chaque combinaison de param1 et param2
+
 for (i in 1:length(param1_values)) {
   for (j in 1:length(param2_values)) {
     params <- c(param1_values[i], param2_values[j], fixed_params[3:4])
@@ -598,7 +598,7 @@ for (i in 1:length(param1_values)) {
 
 par(mfrow=c(1,1))
 
-png("../images/optim/contour_100s_100t_betas_q85.png")
+png("../images/optim/contour_25s_300t_betas_q9.png")
 contour(param1_values, param2_values, nll_matrix, nlevels = 20, 
         xlab = "Beta1", ylab = "Beta2",
         main = "Contour plot of Negative Log-Likelihood")
@@ -621,12 +621,12 @@ plot_ly(x = ~param1_values, y = ~param2_values, z = ~nll_matrix) %>%
 
 ```{r}
 fixed_params <- c(0.4, 0.2, 1.5, 1)
-param1_values <- seq(0.5, 1.9, length.out = 50)
-param2_values <- seq(0.5, 1.9, length.out = 50)
+param1_values <- seq(0.1, 1.9, length.out = 50)
+param2_values <- seq(0.1, 1.9, length.out = 50)
 
 nll_matrix <- matrix(NA, nrow = length(param1_values), ncol = length(param2_values))
 
-quantile <- 0.92
+quantile <- 0.9
 excesses <- empirical_excesses(simu_df, quantile = quantile, df_lags = df_lags)
 for (i in 1:length(param1_values)) {
   for (j in 1:length(param2_values)) {
@@ -637,7 +637,7 @@ for (i in 1:length(param1_values)) {
 
 par(mfrow=c(1,1))
 
-png("../images/optim/contour_25s_300t_alphas_q92.png")
+png("../images/optim/contour_25s_300t_alphas_q9.png")
 contour(param1_values, param2_values, nll_matrix, nlevels = 20, 
         xlab = "Alpha1", ylab = "Alpha2",
         main = "Contour plot of Negative Log-Likelihood")
@@ -679,7 +679,7 @@ neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
   return(nll_composite)
 }
 
-quantile <- 0.92
+quantile <- 0.95
 list_excesses <- list()
 for (i in 1:nfiles) {
   excesses <- empirical_excesses(simu_list[[i]], quantile = quantile,
@@ -690,7 +690,7 @@ for (i in 1:nfiles) {
 
 # optim sur une seule simu
 simu <- simu_list[[12]]
-q <- 0.92
+q <- quantile
 excesses <- empirical_excesses(simu, quantile = q, df_lags = df_lags)
 result_1 <- optim(c(0.4, 0.2, 1.5, 1), neg_ll, data = simu,
                 df_lags = df_lags,
@@ -699,24 +699,126 @@ result_1 <- optim(c(0.4, 0.2, 1.5, 1), neg_ll, data = simu,
 
 print(result_1$par)
 # sur deux simu
-simu1 <- simu_list[[4]] # [1] 0.2363283 0.3130344 1.4740192 0.6683990
-simu2 <- simu_list[[12]] # [1] 0.5024269 0.1990440 1.4421766 0.9519488
-list_simu12 <- list(simu1, simu2)
-excesses1 <- list_excesses[[4]]
-excesses2 <- list_excesses[[12]]
-list_excesses12 <- list(excesses1, excesses2)
-result_2 <- optim(c(0.2, 0.1, 1.5, 1), neg_ll_composite, list_simu = list_simu12,
-                df_lags = df_lags, locations = locations, quantile = q,
-                list_excesses = list_excesses12, control = list(maxit = 10000))
+# simu1 <- simu_list[[2]] # [1] 0.2363283 0.3130344 1.4740192 0.6683990
+# simu2 <- simu_list[[12]] # [1 ]0.4948679 0.1995200 1.3153624 0.9025192
+# list_simu12 <- list(simu1, simu2)
+# excesses1 <- list_excesses[[3]]
+# excesses2 <- list_excesses[[4]]
+# list_excesses12 <- list(excesses1, excesses2)
+# q <- 0.9
+# result_2 <- optim(c(0.4, 0.2, 1.5, 1), neg_ll_composite, list_simu = list_simu12,
+#                 df_lags = df_lags, locations = locations, quantile = q,
+#                 list_excesses = list_excesses12, control = list(maxit = 10000))
 
-print(result_2$par) # [1] 0.3641106 0.2601334 1.3891222 0.7866030
+# print(result_2$par) # [1] 0.3641106 0.2601334 1.3891222 0.7866030
 
-q <- 0.92
 result_all <- optim(c(0.4, 0.2, 1.5, 1), neg_ll_composite, list_simu = simu_list,
                 df_lags = df_lags, locations = locations, quantile = q,
                 list_excesses = list_excesses, control = list(maxit = 10000))
 
 print(result_all$par)
-
 ```
 
+
+# Pour 400s et 50t 
+
+```{r}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+ngrid <- 20
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:50
+
+# get folder name
+if (all(adv == c(0, 0))) {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+} else {
+    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                  length(temp), "t_adv/")
+}
+
+# get number of files in the folder
+nfiles <- length(list.files(foldername))
+
+# load simulated data in a list
+simu_list <- list()
+
+for(i in 1:nfiles) {
+    file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", i,
+                        ".csv")
+    simu_temp <- read.csv(file_path)
+    simu_list[[i]] <- simu_temp
+}
+
+simu_df <- simu_list[[1]]
+nsites <- ncol(simu_df)
+sites_coords <- generate_grid_coords(sqrt(nsites))
+```
+
+```{r}
+df_lags <- get_lag_vectors(sites_coords, true_param,
+                          hmax = sqrt(17), tau_vect = 0:10)
+
+library(bbmle)
+
+neg_ll_par <- function(beta1, beta2, alpha1, alpha2,
+                  simu, df_lags, locations,
+                  latlon = FALSE, quantile = 0.9,
+                  simu_exp = FALSE, excesses = NULL) {
+  params <- c(beta1, beta2, alpha1, alpha2)
+
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -1e-6, -1e-6)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    message("out of bounds")
+    return(1e9)
+  }
+
+  n_marg <- get_marginal_excess(simu, quantile) # number of marginal excesses
+  Tmax <- nrow(simu)
+  pj <- n_marg / Tmax
+  kij <- excesses$kij # number of joint excesses
+  chi <- theorical_chi(params, df_lags) # get chi matrix
+  # transform in chi vector
+  chi_vect <- as.vector(chi$chi)
+  chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
+
+  non_excesses <- n - kij # number of non-excesses
+  # log-likelihood vector
+  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - pj * chi_vect)
+
+  # final negative log-likelihood
+  nll <- -sum(ll_vect, na.rm = TRUE)
+  return(nll)
+}
+
+quantile <- 0.7
+
+excesses <- empirical_excesses(simu_df, quantile = quantile, df_lags = df_lags)
+
+# fixing temporal parameters
+res <- mle2(neg_ll_par,
+              start = list(beta1 = true_param[1],
+                           beta2 = true_param[2],
+                           alpha1 = true_param[3],
+                           alpha2 = true_param[4]),
+              data = list(simu = simu_df,
+                          quantile = quantile,
+                          df_lags = df_lags,
+                          locations = sites_coords,
+                          excesses = excesses,
+                          method = "CG"),
+              control = list(maxit = 10000),
+              fixed = list(beta2 = 0.2, alpha2 = 1))
+
+
+res@coef
+```

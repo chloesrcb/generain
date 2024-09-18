@@ -12,14 +12,11 @@ nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
 # beta1, beta2, alpha1, alpha2
-param <- c(0.8, 0.4, 1.5, 1) # true parameters for the variogram
-beta1 <- param[1] / 2
-beta2 <- param[2] / 2
-# beta3 <- param[2] / 2
+param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
+beta1 <- param[1]
+beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-# alpha3 <- param[4]
-
 adv <- c(0, 0)
 true_param <- c(beta1, beta2, alpha1, alpha2)
 

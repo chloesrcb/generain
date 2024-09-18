@@ -4,7 +4,19 @@
 \alias{sim_rpareto}
 \title{sim_rpareto function}
 \usage{
-sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, n.res, adv = c(0, 0))
+sim_rpareto(
+  beta1,
+  beta2,
+  alpha1,
+  alpha2,
+  x,
+  y,
+  t,
+  adv = c(0, 0),
+  s0 = c(1, 1),
+  t0 = 1,
+  nres = 1
+)
 }
 \arguments{
 \item{beta1}{The value of beta1.}
@@ -21,9 +33,13 @@ sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, n.res, adv = c(0, 0))
 
 \item{t}{Vector for the third dimension (time in our case).}
 
-\item{n.res}{The number of simulations to perform.}
-
 \item{adv}{The advection coordinates vector. Default is c(0, 0).}
+
+\item{s0}{Conditional vector spatial point. Default is c(1, 1).}
+
+\item{t0}{Conditional temporal time. Default is 1.}
+
+\item{nres}{The number of simulations to perform. Default is 1.}
 }
 \value{
 The result of the simulation.

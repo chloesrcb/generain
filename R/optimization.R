@@ -220,11 +220,14 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #'
 #' @export
 neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, simu_exp = FALSE) {
-  hmax <- max(df_lags$hnorm)
+                   latlon = FALSE, simu_exp = FALSE, hmax = NA) {
+  if (is.na(hmax)) {
+    hmax <- max(df_lags$hnorm)
+  }
+
   tau <- unique(df_lags$tau)
 
-  print(params)
+  # print(params)
   if (length(params) == 6) {
     adv <- params[5:6]
   } else {
@@ -235,7 +238,7 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
+    lower.bound <- c(lower.bound, 1e-6, 1e-6)
     upper.bound <- c(upper.bound, Inf, Inf)
   }
 
@@ -251,9 +254,10 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 
   T_marg <- get_marginal_excess(data, quantile) # number of marginal excesses
   Tmax <- nrow(data)
-  p <- T_marg / Tmax # probability of marginal excesses 
-  chi <- theorical_chi(params, excesses) # get chi matrix
-  ll_df <- chi
+  p <- T_marg / Tmax # probability of marginal excesses
+  chi <- theorical_chi(params, df_lags) # get chi matrix
+  ll_df <- excesses
+  ll_df$chi <- chi$chi
   ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi
 

@@ -4,7 +4,7 @@
 \alias{sim_BR}
 \title{sim_BR_adv function}
 \usage{
-sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv)
+sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv, nres)
 }
 \arguments{
 \item{beta1}{The value of beta1.}
@@ -21,9 +21,9 @@ sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, n.BR, adv)
 
 \item{z}{Vector for the third dimension (time in our case).}
 
-\item{n.BR}{The number of BR simulations to perform.}
-
 \item{adv}{The advection coordinates vector. Default is c(0, 0).}
+
+\item{nres}{The number of simulations to perform. Default is 1.}
 }
 \value{
 The result of the simulation.

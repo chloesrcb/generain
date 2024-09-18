@@ -12,7 +12,8 @@ neg_ll(
   quantile,
   excesses,
   latlon = FALSE,
-  simu_exp = FALSE
+  simu_exp = FALSE,
+  hmax = NA
 )
 }
 \arguments{
