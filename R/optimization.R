@@ -15,7 +15,7 @@
 #' @export
 get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
   Tmax <- nrow(data_rain)
-  if (is.na(ind_s0) && is.na(t0)){
+  if (is.na(ind_s0) || is.na(t0)){
     ind_s0 <- 1
     t0 <- 1
   }
@@ -280,6 +280,44 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 
   nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
+}
+
+#' neg_ll_composite function
+#'
+#' Calculate the negative log-likelihood for a list of simulations.
+#'
+#' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2).
+#' @param list_simu A list of simulated data.
+#' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param locations The locations dataframe.
+#' @param quantile The quantile value.
+#' @param list_excesses A list of excesses dataframes.
+#' @param latlon A boolean value to indicate if the locations are in latitude
+#'              and longitude. Default is FALSE.
+#' @param s0 The starting location.
+#' @param t0 The starting time.
+#' @param hmax The maximum spatial lag value.
+#'
+#' @return The negative log-likelihood value.
+#'
+#' @import stats
+#'
+#' @export
+neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
+                  list_excesses, latlon = FALSE, s0 = NA, t0 = NA, hmax = NA) {
+
+  nll_composite <- 0
+  # number of simulations  in list_simu
+  nsim <- length(list_simu)
+  for (i in 1:nsim) {
+    simu <- list_simu[[i]]
+    excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
+                    latlon = latlon, excesses = excesses, hmax = hmax, s0 = s0,
+                    t0 = t0)
+    nll_composite <- nll_composite + nll_i
+  }
+  return(nll_composite)
 }
 
 # SIMU -------------------------------------------------------------------------
