@@ -7,16 +7,16 @@ library(animation)
 
 ################################################################################
 # Simulate data using the rpareto model
-ngrid <- 10
+ngrid <- 5
 spa <- 1:ngrid
-temp <- 1:1000
+temp <- 1:300
 n.res <- 10
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(0.5, 0.3)
+adv <- c(0.05, 0.03)
 s0 <- c(1, 1)
 t0 <- 1
 
@@ -134,6 +134,7 @@ sites_coords <- generate_grid_coords(sqrt(nsites))
 
 params <- c(param, adv)
 
+# get the lag vectors
 df_lags <- get_conditional_lag_vectors(sites_coords, params, s0, t0,
                           hmax = sqrt(17), tau_vect = 0:10)
 
@@ -141,7 +142,7 @@ chi_theorical <- theorical_chi(params, df_lags)
 chi <- unique(chi_theorical$chi)
 plot(chi)
 tau <- 0:10 # temporal lags
-quantile <- 0.6
+quantile <- 0.7
 
 # get the empirical excesses
 excesses <- empirical_excesses(simu_df, quantile, df_lags)
@@ -165,6 +166,112 @@ rmse_optim <- sqrt((result$par - params)^2)
 print(rmse_optim)
 
 ################################################################################
+# All simulations together
+################################################################################
+# get combination of all simulations in list_rpar
+simu_all <- do.call(rbind, list_rpar)
+dim(simu_all)
+# get the empirical excesses
+df_lags <- get_conditional_lag_vectors(sites_coords, params, s0, t0,
+                          hmax = sqrt(17), tau_vect = 0:10)
+quantile <- 0.8
+excesses_all <- empirical_excesses(simu_all, quantile, df_lags)
+dim(excesses_all)
+
+chi_all <- theorical_chi(params, df_lags)
+dim(chi_all)
+
+
+neg_ll_composite <- function(params, data, df_lags, locations, quantile,
+                    excesses, latlon = FALSE, hmax = NA, nsample = 1, s0 = NA,
+                    t0 = NA) {
+  ntemp <- nrow(data) / nsample # number of time steps in each simulation
+
+  nll_composite <- 0 # composite negative log-likelihood
+  for (i in 1:nsample) {
+    # extract simulation data from i-th simulation
+    simu <- data[((i - 1) * ntemp + 1):(i * ntemp), ]
+
+    # excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
+                    latlon = latlon, hmax = hmax,
+                     excesses = excesses, s0 = s0, t0 = t0)
+
+    nll_composite <- nll_composite + nll_i
+  }
+
+  return(nll_composite)
+}
+
+
+neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
+                    list_excesses, latlon = FALSE, s0 = NA, t0 = NA, hmax = NA) {
+
+  nll_composite <- 0
+  # number of simulations  in list_simu
+  nsim <- length(list_simu)
+  for (i in 1:nsim) {
+    simu <- list_simu[[i]]
+    excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
+                    latlon = latlon, excesses = excesses, hmax = hmax, s0 = s0,
+                    t0 = t0)
+
+    nll_composite <- nll_composite + nll_i
+  }
+
+  return(nll_composite)
+}
+
+foldername <- "../data/simulations_rpar"
+nfiles <- 10
+list_simu <- list()
+for (i in 1:nfiles) {
+  file_path <- paste0(foldername, "/rpar_",
+                      ngrid^2, "s_", length(temp), "t_", i, ".csv")
+  simu_df <- read.csv(file_path)
+  list_simu[[i]] <- simu_df
+}
+
+quantile <- 0.7
+list_excesses <- list()
+for (i in 1:nfiles) {
+  excesses <- empirical_excesses(list_simu[[i]], quantile = quantile,
+                                df_lags = df_lags)
+  list_excesses[[i]] <- excesses
+}
+
+result <- optim(par = c(params), fn = neg_ll_composite,
+                  list_simu = list_simu,
+                  df_lags = df_lags,
+                  quantile = quantile,
+                  list_excesses = list_excesses,
+                  locations = sites_coords,
+                  hmax = sqrt(17),
+                  s0 = s0,
+                  t0 = t0,
+                  method = "BFGS",
+                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
+                                 maxit = 10000))
+
+excesses_all <- empirical_excesses(simu_all, quantile, df_lags)
+
+result <- optim(par = c(params), fn = neg_ll_composite,
+                  data = simu_all,
+                  quantile = quantile,
+                  df_lags = df_lags,
+                  excesses = excesses_all,
+                  locations = sites_coords,
+                  hmax = sqrt(17),
+                  s0 = s0,
+                  t0 = t0,
+                  nsample = n.res,
+                  method = "BFGS",
+                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
+                                 maxit = 10000))
+
+
+################################################################################
 # Verification
 ################################################################################
 
@@ -185,4 +292,18 @@ theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc),
 qqplot(rpar_exc, theorical_qgpd, main = "GPD Q-Q plot",
   xlab = "Empirical quantiles",
   ylab = "Theoretical quantiles")
+
+
+
+model <- RMfbm(alpha=1, var = 0.4, proj = 1) +
+         RMfbm(alpha=1.5, var = 0.8, proj = 2)
+x <- seq(0, 10, 0.02)
+y <- x
+plot(model)
+plot(RFsimulate(model, x=x, y=y))
+model
+
+model <- RMexp(scale=2, var=5)
+
+plot(model)
 
