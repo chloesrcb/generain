@@ -10,17 +10,19 @@ library(animation)
 ngrid <- 10
 spa <- 1:ngrid
 temp <- 1:1000
-n.res <- 2
+n.res <- 10
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
 adv <- c(0.5, 0.3)
+s0 <- c(1, 1)
+t0 <- 1
 
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
-                          n.res, adv = adv)
+                          adv, s0, t0, n.res)
 
 # Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
@@ -48,6 +50,11 @@ create_simu_gif <- function(simulation_data, params, type = "rpar",
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
+  if (length(params) == 6) {
+    adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
+  }
 
   if (length(params) == 6) {
     adv <- params[5:6]
@@ -105,7 +112,7 @@ create_simu_gif <- function(simulation_data, params, type = "rpar",
 
 }
 
-create_simu_gif(simulation_data, param, type = "rpar", forcedtemp = 30)
+create_simu_gif(simulation_data, c(param, adv), type = "rpar", forcedtemp = 30)
 
 ################################################################################
 # Simulation
@@ -127,18 +134,19 @@ sites_coords <- generate_grid_coords(sqrt(nsites))
 
 params <- c(param, adv)
 
-df_lags <- get_lag_vectors(sites_coords, params,
+df_lags <- get_conditional_lag_vectors(sites_coords, params, s0, t0,
                           hmax = sqrt(17), tau_vect = 0:10)
-chi_theorical <- theorical_chi(param, df_lags)
+
+chi_theorical <- theorical_chi(params, df_lags)
 chi <- unique(chi_theorical$chi)
 plot(chi)
 tau <- 0:10 # temporal lags
-quantile <- 0.8
+quantile <- 0.6
 
 # get the empirical excesses
 excesses <- empirical_excesses(simu_df, quantile, df_lags)
-
 # plot(density(excesses$kij), main = "Excesses")
+
 
 result <- optim(par = c(params), fn = neg_ll,
                   data = simu_df,
@@ -147,27 +155,14 @@ result <- optim(par = c(params), fn = neg_ll,
                   excesses = excesses,
                   locations = sites_coords,
                   hmax = sqrt(17),
+                  s0 = s0,
+                  t0 = t0,
                   method = "BFGS",
                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                  maxit = 10000))
 
 rmse_optim <- sqrt((result$par - params)^2)
 print(rmse_optim)
-
-res <- nlm(p = c(params), f = neg_ll,
-                  data = simu_df,
-                  quantile = quantile,
-                  df_lags = df_lags,
-                  excesses = excesses,
-                  locations = sites_coords,
-                  hmax = sqrt(17),
-                  hessian = TRUE,
-                  print.level = 2,
-                  stepmax = 2)
-
-res$estimate
-rmse_nlm <- sqrt((res$estimate - params)^2)
-print(rmse_nlm)
 
 ################################################################################
 # Verification
@@ -178,13 +173,13 @@ library(ismev)
 library(POT)
 
 rpar <- simulation_data$S1
-threshold <- quantile(rpar, probs = 0.85)
+threshold <- quantile(rpar, probs = 0.98)
 rpar_exc <- rpar[rpar > threshold]
 fit_gpd <- gpd.fit(rpar, threshold)
 sigma <- fit_gpd$mle[1]
 xi <- fit_gpd$mle[2]
 
-theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc),
                        shape=xi, scale=sigma)
 
 qqplot(rpar_exc, theorical_qgpd, main = "GPD Q-Q plot",

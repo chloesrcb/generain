@@ -12,8 +12,9 @@ neg_ll(
   quantile,
   excesses,
   latlon = FALSE,
-  simu_exp = FALSE,
-  hmax = NA
+  hmax = NA,
+  s0 = NA,
+  t0 = NA
 )
 }
 \arguments{
@@ -32,9 +33,6 @@ the number of possible excesses Tobs.}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
-
-\item{simu_exp}{A boolean value to indicate if the data is simulated with
-an exponential distribution.}
 }
 \value{
 The negative log-likelihood value.

@@ -43,7 +43,7 @@ registerDoParallel(cl)
 results <- foreach(i = 1:num_iterations, .combine = "c") %dopar% {
   BR <- sim_BR(param[1], param[2], param[3], param[4], spa, spa, temp, n.BR)
   save_simulations(BR, ngrid, n.BR,
-                  folder = paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
+                folder = paste0("../data/simulations_BR/oldsim_", ngrid^2, "s_",
                                 length(temp), "t/"),
                   file = paste0("br_", ngrid^2, "s_",
                                 length(temp), "t"), forcedind = i)

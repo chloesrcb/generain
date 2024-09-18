@@ -13,9 +13,16 @@
 #' @import stats
 #'
 #' @export
-get_marginal_excess <- function(data_rain, quantile) {
+get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
   Tmax <- nrow(data_rain)
-  rain_unif <- rank(data_rain[, 1]) / (Tmax + 1)
+  if (is.na(ind_s0) && is.na(t0)){
+    ind_s0 <- 1
+    t0 <- 1
+  }
+  # shifted data
+  data <- data_rain[t0:Tmax,]
+  Tobs <- nrow(data)
+  rain_unif <- rank(data[, ind_s0]) / (Tobs + 1)
   marginal_excesses <- sum(rain_unif > quantile)
   return(marginal_excesses)
 }
@@ -81,6 +88,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
   }
   return(excesses)
 }
+
 
 # THEORICAL CHI ----------------------------------------------------------------
 
@@ -213,26 +221,24 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param quantile The quantile value.
 #' @param latlon A boolean value to indicate if the locations are in latitude
 #'               and longitude. Default is FALSE.
-#' @param simu_exp A boolean value to indicate if the data is simulated with
-#'                 an exponential distribution.
 #'
 #' @return The negative log-likelihood value.
 #'
 #' @export
 neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, simu_exp = FALSE, hmax = NA) {
+                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA) {
   if (is.na(hmax)) {
     hmax <- max(df_lags$hnorm)
   }
 
   tau <- unique(df_lags$tau)
 
-  # print(params)
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
+  print(params)
+
+  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
+  ind_s0 <- if (all(is.na(s0))) 1 else which(locations$Latitude == s0[1] &&
+                                             locations$Longitude == s0[2])
+
 
   # Bounds for the parameters
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
@@ -249,11 +255,18 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 
   if (!all(adv == c(0, 0))) { # if we have the advection parameters
     # then the lag vectors are different
-    df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
+    if (is.na(s0) && is.na(t0)) {
+      df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
+    } else {
+      df_lags <- get_conditional_lag_vectors(locations, params, hmax = hmax,
+                                       tau_vect = tau, s0 = s0, t0 = t0)
+      excesses <- empirical_excesses(data, quantile, df_lags)
+    }
   }
 
-  T_marg <- get_marginal_excess(data, quantile) # number of marginal excesses
-  Tmax <- nrow(data)
+  # number of marginal excesses
+  T_marg <- get_marginal_excess(data, quantile, ind_s0, t0)
+  Tmax <- if (is.na(t0)) nrow(data) else nrow(data) + 1 - t0
   p <- T_marg / Tmax # probability of marginal excesses
   chi <- theorical_chi(params, df_lags) # get chi matrix
   ll_df <- excesses
