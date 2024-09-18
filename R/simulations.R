@@ -122,7 +122,7 @@ advected_variogram <- function(x, y, z, grid, model, adv) {
   return(gamma)
 }
 
-#' sim_BR_adv function
+#' sim_BR function
 #'
 #' This function performs a simulation of a spatio-temporal Brown-Resnick
 #' process using a fractionnal Brownian motion model and based on the
@@ -152,12 +152,9 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv, nres) {
   lz <- length(sz <- seq_along(z))
 
   ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
-                                                       proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
-                                       proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2,
-                                       proj = 3)
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = 2*beta2, proj = 3)
 
   ## Construct grid
   Nxy <- lx * ly
@@ -257,10 +254,11 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   lt <- length(st <- seq_along(t))  # temporal
 
   ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
+  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = 2*beta2, proj = 3)
 
+  print(modelBuhlCklu)
   ## Construct grid
   Nxy <- lx * ly # spatial grid size
   N <- Nxy * lt # spatio-temporal grid size
