@@ -120,7 +120,7 @@ chitemp_eta_estim
 
 # spatial structure with an almost constant amount of pairs in each intervals
 df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 14
+num_intervals <- 20
 quantiles_rad <- quantile(df_dist_order$value,
                             probs = seq(0, 1, length.out = num_intervals + 1))
 radius_intervals <- unique(quantiles_rad)
@@ -168,11 +168,10 @@ chimat_dslag <- matrix(1, nrow = n - 1, ncol = nb_col)
 
 # plot chi for each distance
 chispa_df <- spatial_chi(rad_mat, rain_new,
-                         quantile = quant_mat, zeros = FALSE)
+                         quantile = 0.998, zeros = TRUE)
 
-
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
-                           lagspa = log(chispa_df$lagspa))
+etachispa_df <- data.frame(chi = eta(chispa$chi),
+                           lagspa = log(chispa$lagspa))
 
 
 par(mfrow = c(1, 1))
@@ -215,7 +214,7 @@ chispa_eta <- ggplot(etachispa_df, aes(lagspa, chi)) +
 chispa_eta
 
 
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
+wlse_spa <- get_estimate_variospa(chispa, weights = "exp", summary = TRUE)
 alpha1 <- wlse_spa[[2]]
 beta1 <- wlse_spa[[1]]
 c1 <- log(beta1)
