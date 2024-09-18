@@ -2,7 +2,7 @@ test_that("conditional_variogram", {
     x <- 1:10
     y <- 1:10
     t <- 1:30
-    beta1 <- 0.4
+    beta1 <- 0.8
     beta2 <- 0.2
     alpha1 <- 1.5
     alpha2 <- 1
@@ -12,11 +12,11 @@ test_that("conditional_variogram", {
     ly <- length(sy <- seq_along(y))
     lz <- length(sz <- seq_along(z))
 
-    modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
+    modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1,
                                                        proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1,
                                        proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2,
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2,
                                        proj = 3)
 
     ## Construct grid
@@ -60,7 +60,7 @@ test_that("conditional_variogram", {
                  beta1 * abs(s_y - s0_y)^alpha1 +
                  beta2 * abs(time - t0)^alpha2
 
-    expect_equal(gamma_s0_t0[s_x, s_y, time], 2 * semivario_s_t)
+    expect_equal(gamma_s0_t0[s_x, s_y, time], semivario_s_t)
 
     # Check values
     s_x <- 2
@@ -70,7 +70,7 @@ test_that("conditional_variogram", {
                  beta1 * abs(s_y - s0_y)^alpha1 +
                  beta2 * abs(time - t0)^alpha2
 
-    expect_equal(gamma_s0_t0[s_x, s_y, time], 2 * semivario_s_t)
+    expect_equal(gamma_s0_t0[s_x, s_y, time], semivario_s_t)
 
     # Check values
     s_x <- 3
@@ -80,7 +80,7 @@ test_that("conditional_variogram", {
                  beta1 * abs(s_y - s0_y)^alpha1 +
                  beta2 * abs(time - t0)^alpha2
 
-    expect_equal(gamma_s0_t0[s_x, s_y, time], 2 * semivario_s_t)
+    expect_equal(gamma_s0_t0[s_x, s_y, time], semivario_s_t)
 
 
     # With advection
@@ -101,7 +101,7 @@ test_that("conditional_variogram", {
                  beta1 * abs(s0_y - s0_y - adv2 * 0)^alpha1 +
                  beta2 * abs(t0 - t0)^alpha2
 
-    expect_equal(gamma_s0_t0[s0_x, s0_y, t0], 2 * semivario_s_t)
+    expect_equal(gamma_s0_t0[s0_x, s0_y, t0], semivario_s_t)
 
     # Check the other value
     s_x <- 1
@@ -112,7 +112,7 @@ test_that("conditional_variogram", {
                  beta1 * abs(s_y - s0_y - adv[2] * tau)^alpha1 +
                  beta2 * abs(tau)^alpha2
 
-    expect_equal(gamma_s0_t0_adv[s_x, s_y, time], 2 * semivario_s_t)
+    expect_equal(gamma_s0_t0_adv[s_x, s_y, time], semivario_s_t)
 
 })
 
