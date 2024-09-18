@@ -217,3 +217,57 @@ results <- foreach(i = 1:num_iterations, .combine = rbind) %dopar% {
 }
 
 stopCluster(cl)
+
+# model <- modelBuhlCklu
+# library(parallel)
+# advected_variogram <- function(x, y, z, grid, model, adv) {
+#   lx <- length(x)
+#   ly <- length(y)
+#   lz <- length(z)
+#   N <- nrow(grid)  # spatio-temporal dimension
+
+#   # Initialize the result array
+#   gamma <- array(0, dim = c(lx, ly, lz, N)) # variogram
+
+#   # Precompute common values that will be reused in the loop
+#   adv_x <- adv[1]
+#   adv_y <- adv[2]
+
+#   # Use parallelization to distribute the work across multiple cores
+#   cl <- makeCluster(detectCores() - 1)  # Use all cores except one
+#   print(model)
+#   # Export necessary variables and functions to each worker
+#   clusterExport(cl, varlist = c("x", "y", "z", "grid", "model",
+#             "adv_x", "adv_y", "lx", "ly", "lz", "RFvariogram"))
+
+#   # Apply parallelized loop using parLapply
+#   gamma_list <- parLapply(cl, seq_len(N), function(n) {
+#     print(model)
+#     gamma_n <- array(0, dim = c(lx, ly, lz))  # Temporary array for current 'n'
+#     for (i in seq_len(lx)) {
+#       for (j in seq_len(ly)) {
+#         for (k in seq_len(lz)) {
+#           gamma_n[i, j, k] <- RandomFields::RFvariogram(
+#             model,
+#             x = x[i] - grid[n, 1] - adv_x * (z[k] - grid[n, 3]),
+#             y = y[j] - grid[n, 2] - adv_y * (z[k] - grid[n, 3]),
+#             z = z[k] - grid[n, 3]
+#           )
+#         }
+#       }
+#     }
+#     return(gamma_n)
+#   })
+
+#   # Stop the cluster after computation
+#   stopCluster(cl)
+
+#   # Combine results back into the original array
+#   for (n in seq_len(N)) {
+#     gamma[, , , n] <- gamma_list[[n]]
+#   }
+
+#   return(gamma)
+# }
+
+# gamma = advected_variogram(x, y, z, grid, modelBuhlCklu, adv = c(0.1, 0.2))

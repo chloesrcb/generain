@@ -5,94 +5,22 @@ library(reshape2)
 library(animation)
 
 
-
 ################################################################################
-# Simulation r-Pareto process
-sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t, n.res,
-                        adv = c(0, 0)) {
-  # beta1, beta2, alpha1, alpha2 are variogram parameters
-  # x is the first dimension (spatial x in our case)
-  # y is the second dimension (spatial y in our case)
-  # z is the third dimension (time in our case)
-  # (adv1, adv2) advection coordinates vector
-  ## Setup
-  RandomFields::RFoptions(spConform = FALSE, install = "no")
-  lx <- length(sx <- seq_along(x))  # spatial
-  ly <- length(sy <- seq_along(y))  # spatial
-  lt <- length(st <- seq_along(t))  # temporal
-
-  ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = beta2, proj = 3)
-
-  ## Construct grid
-  Nxy <- lx * ly # spatial grid size
-  N <- Nxy * lt # spatio-temporal grid size
-  grid <- matrix(0, nrow = N, ncol = 3) # (N,3)-matrix
-
-  for (i in sx)
-    for (j in seq_len(ly * lt))
-      grid[i + (j - 1) * ly, 1] <- i
-
-  for (i in sy)
-    for (j in sx)
-      for (k in st)
-        grid[j + lx * (i - 1) + (k - 1) * Nxy, 2] <- i
-
-  for (i in st)
-    for (j in seq_len(Nxy))
-      grid[j + Nxy * (i - 1), 3] <- i
-
-  # Construct shifted grid with advected coordinates
-  grid[, 1] <- grid[, 1] - grid[, 3] * adv[1]
-  grid[, 2] <- grid[, 2] - grid[, 3] * adv[2]
-
-  s0_x <- 1 # Spatial x conditioning point
-  s0_y <- 1  # Spatial y conditioning point
-  t0 <- 1  # Temporal conditioning point
-  s0_t0 <- s0_x + (s0_y - 1) * lx + (t0 - 1) * Nxy
-  # s0_t0 <- s0 + (t0 - 1) * lx^2
-  # grid[,s0]
-
-  ## Construct shifted variogram
-  gamma <- vapply(seq_len(N), function(n)
-      RandomFields::RFvariogram(modelBuhlCklu,
-        x = sx - grid[n, 1],
-        y = sy - grid[n, 2],
-        z = st - grid[n, 3]),
-        array(NA_real_, dim = c(lx, ly, lt))) ## => (lx, ly, lt, N)-array
-
-
-  # Main
-  # s0 <- 1
-  Z <- array(, dim = c(lx, ly, lt, n.res)) # 3d array
-  for (i in seq_len(n.res)) {
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # Gaussian process
-    Y <- exp(W - W[s0_x, s0_y, t0] - gamma[,,, s0_t0])
-    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
-    Z[,,, i] <- R * Y
-  }
-  # Return
-  Z
-}
-
 # Simulate data using the rpareto model
-ngrid <- 5
+ngrid <- 10
 spa <- 1:ngrid
-temp <- 1:300
+temp <- 1:1000
 n.res <- 2
-param <- c(0.2, 0.1, 1.5, 0.8) # true parameters for the variogram
-beta1 <- param[1] / 2
-beta2 <- param[2] / 2
+param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
+beta1 <- param[1]
+beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(0.1, 0.5)
+adv <- c(0.5, 0.3)
 
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
                           n.res, adv = adv)
-plot(simu_rpar[1,2,,1], main = "rpar simulation")
 
 # Save the simulations
 save_simulations(simu_rpar, ngrid, n.res,
@@ -104,17 +32,27 @@ file_path <- paste0("../data/simulations_rpar/rpar_", ngrid^2, "s_",
                                 length(temp), "t_1.csv")
 simulation_data <- read.csv(file_path)
 
-create_simu_gif <- function(simulation_data, params, type = "rpar") {
+
+create_simu_gif <- function(simulation_data, params, type = "rpar", 
+                            forcedtemp = NA) {
   # type = "rpar" or "br"
   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
-  temp <- nrow(simulation_data)  # Number of observations in time
-  beta1 <- param[1]
-  beta2 <- param[2]
-  alpha1 <- param[3]
-  alpha2 <- param[4]
+  Tmax <- nrow(simulation_data) # Number of time steps
+  if (is.na(forcedtemp)) {
+    temp <- 1:Tmax
+  } else {
+    temp <- 1:forcedtemp
+  }
+
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
 
   if (length(params) == 6) {
     adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
   }
 
   simulation_data$Time <- rownames(simulation_data) # Add a time column
@@ -124,24 +62,26 @@ create_simu_gif <- function(simulation_data, params, type = "rpar") {
   grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
 
   plots <- list()
+  cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
   # for each time step
-  for (i in unique(simulation_data_long$Time)) {
+  for (i in unique(cropped_data$Time)) {
     # Add the simulated values to the grid dataframe
-    grid$value <- simulation_data_long$value[simulation_data_long$Time == i]
+    grid$value <- cropped_data$value[cropped_data$Time == i]
 
     # Plot
     p <-  ggplot(data = grid, aes(x = x, y = y, fill = value)) +
       geom_tile() +
       scale_fill_gradient(low = "#70a7ae", high = "#9d503d",
                           name = "Rainfall in mm",
-                          limits = c(min(simulation_data_long$value),
-                                     max(simulation_data_long$value))) +
+                          limits = c(min(cropped_data$value),
+                                     max(cropped_data$value))) +
       labs(title = paste0("t =", i, " | Betas: ", beta1, ", ", beta2,
                           " | Alphas: ",
                           alpha1, ", ", alpha2, " | Advection: ", adv[1],
                           ", ", adv[2])) +
       theme_minimal() +
-      theme(plot.background = element_rect(fill = "#F9F8F6", color = "#F9F8F6"),
+      theme(plot.background = element_rect(fill = "#F9F8F6",
+                                         color = "#F9F8F6"),
             panel.border = element_blank(),
             panel.grid = element_blank(),
             axis.text.x = element_blank(),
@@ -160,15 +100,14 @@ create_simu_gif <- function(simulation_data, params, type = "rpar") {
     }
   }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
                          "/simu_gif/simu_", type, "/", type, "_", ngrid^2, "s_",
-                         length(temp), "t.gif"),
+                         Tmax, "t.gif"),
   ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
 
 }
 
+create_simu_gif(simulation_data, param, type = "rpar", forcedtemp = 30)
 
-
-# validation
-
+################################################################################
 # Simulation
 list_rpar <- list()
 for (i in 1:n.res) {
@@ -181,53 +120,65 @@ for (i in 1:n.res) {
 # dependece buhl
 simu_df <- list_rpar[[1]] # first simulation
 nsites <- ncol(simu_df) # number of sites
-
+par(mfrow = c(1, 1))
+plot(simu_df[, 1], main = "rpareto simulation")
 # get grid coordinates
 sites_coords <- generate_grid_coords(sqrt(nsites))
 
 params <- c(param, adv)
 
-h_vect <- get_lag_vectors(sites_coords, params,
-                          hmax = sqrt(17), tau_vect = 1:10) # lag vectors
-
-tau <- 1:10 # temporal lags
-quantile <- 0.9
-nmin <- 5
+df_lags <- get_lag_vectors(sites_coords, params,
+                          hmax = sqrt(17), tau_vect = 0:10)
+chi_theorical <- theorical_chi(param, df_lags)
+chi <- unique(chi_theorical$chi)
+plot(chi)
+tau <- 0:10 # temporal lags
+quantile <- 0.8
 
 # get the empirical excesses
-excesses <- empirical_excesses(simu_df, quantile, tau, h_vect,
-                              nmin)
+excesses <- empirical_excesses(simu_df, quantile, df_lags)
 
-parscale <- c(1, 1, 1, 1, 1, 1)  # scale parameters
-lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -1e-6, -1e-6)
-upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+# plot(density(excesses$kij), main = "Excesses")
 
-result <- optimr(par = params, method = "Rcgmin",
-                  gr = "grfwd", fn = function(par) {
-                  neg_ll(par, simu = simu_df, quantile = quantile,
-                        h_vect = h_vect, tau = tau,
-                        locations = sites_coords)
-                  }, lower = lower.bound, upper = upper.bound,
-                  control = list(parscale = parscale,
+result <- optim(par = c(params), fn = neg_ll,
+                  data = simu_df,
+                  quantile = quantile,
+                  df_lags = df_lags,
+                  excesses = excesses,
+                  locations = sites_coords,
+                  hmax = sqrt(17),
+                  method = "BFGS",
+                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                  maxit = 10000))
 
+rmse_optim <- sqrt((result$par - params)^2)
+print(rmse_optim)
 
-result <- optimr(par = params, method = "CG", fn = function(par) {
-                  neg_ll(par, simu = simu_df, quantile = quantile,
-                        h_vect = h_vect, tau = tau,
-                        locations = sites_coords)
-                  },
-                  control = list(parscale = parscale,
-                                 maxit = 10000, maximise = FALSE))
+res <- nlm(p = c(params), f = neg_ll,
+                  data = simu_df,
+                  quantile = quantile,
+                  df_lags = df_lags,
+                  excesses = excesses,
+                  locations = sites_coords,
+                  hmax = sqrt(17),
+                  hessian = TRUE,
+                  print.level = 2,
+                  stepmax = 2)
 
+res$estimate
+rmse_nlm <- sqrt((res$estimate - params)^2)
+print(rmse_nlm)
 
 ################################################################################
 # Verification
 ################################################################################
 
+library(extRemes)
+library(ismev)
+library(POT)
 
-rpar <- simulation_data$S8
-threshold <- quantile(rpar, probs = 0.95)
+rpar <- simulation_data$S1
+threshold <- quantile(rpar, probs = 0.85)
 rpar_exc <- rpar[rpar > threshold]
 fit_gpd <- gpd.fit(rpar, threshold)
 sigma <- fit_gpd$mle[1]
@@ -239,3 +190,4 @@ theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc),
 qqplot(rpar_exc, theorical_qgpd, main = "GPD Q-Q plot",
   xlab = "Empirical quantiles",
   ylab = "Theoretical quantiles")
+
