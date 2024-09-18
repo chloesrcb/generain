@@ -40,6 +40,9 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      - name: Install remotes
+        run: Rscript -e 'install.packages("remotes")'
+
       - name: Install RandomFields from GitHub
         run: Rscript -e 'remotes::install_github("cran/RandomFields")'
 
