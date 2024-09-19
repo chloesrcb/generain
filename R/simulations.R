@@ -71,9 +71,9 @@ conditional_variogram <- function(x, y, t, s0, t0, grid, model, adv = c(0,0)) {
           for (k in seq_len(lt)) {
           gamma_s0_t0[i, j, k] <- RandomFields::RFvariogram(
               model,
-              x = x[i] - grid[s0_x, 1] - adv[1] * (t[k] - grid[t0, 3]),
-              y = y[j] - grid[s0_y, 2] - adv[2] * (t[k] - grid[t0, 3]),
-              z = t[k] - grid[t0, 3]
+              x = x[i] - grid[s0_x, 1] - adv[1] * (t[k] - t0),
+              y = y[j] - grid[s0_y, 2] - adv[2] * (t[k] - t0),
+              z = t[k] - t0
           )
           }
       }

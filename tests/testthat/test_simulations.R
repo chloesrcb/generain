@@ -42,15 +42,19 @@ test_that("conditional_variogram", {
     s0 <- c(1, 1)
     s0_x <- s0[1]
     s0_y <- s0[2]
-    t0 <- 1
+    t0 <- 10
 
     # Conditional semivariogram
     gamma_s0_t0 <- conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu)
 
     expect_equal(dim(gamma_s0_t0), c(length(x), length(y), length(t)))
 
+    semivario_s_t <- beta1 * abs(s0_x - s0_x)^alpha1 +
+                 beta1 * abs(s0_y - s0_y)^alpha1 +
+                 beta2 * abs(t0 - t0)^alpha2
+
     # Check the first value
-    expect_equal(gamma_s0_t0[s0_x, s0_y, t0], 0)
+    expect_equal(gamma_s0_t0[s0_x, s0_y, t0], semivario_s_t)
 
     # Check the second value
     s_x <- 1

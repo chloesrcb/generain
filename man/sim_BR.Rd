@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulations.R
 \name{sim_BR}
 \alias{sim_BR}
-\title{sim_BR_adv function}
+\title{sim_BR function}
 \usage{
 sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv, nres)
 }

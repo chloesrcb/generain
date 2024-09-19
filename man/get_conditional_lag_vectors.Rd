@@ -2,7 +2,7 @@
 % Please edit documentation in R/distances.R
 \name{get_conditional_lag_vectors}
 \alias{get_conditional_lag_vectors}
-\title{get_lag_vectors function}
+\title{get_conditional_lag_vectors function}
 \usage{
 get_conditional_lag_vectors(
   df_coords,

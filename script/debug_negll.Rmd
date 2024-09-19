@@ -35,45 +35,48 @@ library(evd)
 # Simulation
 
 ```{r sim25s300t, fig.width = 5, fig.height = 5}
-adv <- c(0, 0)
+adv <- c(0.1, 0.5)
 true_param <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 temp <- 1:300
 
-library(doParallel)
-library(foreach)
+if (!all(adv == c(0, 0))) {
+    true_param <- c(true_param, adv)
+} 
+# library(doParallel)
+# library(foreach)
 
-num_iter <- 10
+# num_iter <- 10
 
-if (all(adv == c(0, 0))) {
-    foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t/")
-} else {
-  foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t_adv/")
-}
+# if (all(adv == c(0, 0))) {
+#     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t/")
+# } else {
+#   foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+#                                 length(temp), "t_adv/")
+# }
 
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
 
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores())
+# registerDoParallel(cl)
 
-results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
-  library(generain)
-  BR <- sim_BR(true_param[1], true_param[2], true_param[3],
-                true_param[4], spa, spa, temp, adv, 1)
+# results <- foreach(i = 1:num_iter, .combine = rbind) %dopar% {
+#   library(generain)
+#   BR <- sim_BR(true_param[1], true_param[2], true_param[3],
+#                 true_param[4], spa, spa, temp, adv, 1)
 
-  save_simulations(BR, ngrid, 1, folder = foldername,
-          file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
-          forcedind = i)
+#   save_simulations(BR, ngrid, 1, folder = foldername,
+#           file = paste0("br_", ngrid^2, "s_", length(temp), "t"),
+#           forcedind = i)
 
-}
+# }
 
-stopCluster(cl)
+# stopCluster(cl)
 
 # load the simulations
 if (all(adv == c(0, 0))) {
@@ -81,7 +84,7 @@ if (all(adv == c(0, 0))) {
                                 length(temp), "t/")
 } else {
     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                  length(temp), "t_adv/")
+                                  length(temp), "t_adv_0105/")
 }
 
 file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", 1,
@@ -949,103 +952,6 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 
 ## Log likelihood
 
-```{r negll}
-empirical_excesses <- function(data_rain, quantile, df_lags) {
-  excesses <- df_lags # copy the dataframe
-  unique_tau <- unique(df_lags$tau) # unique temporal lags
-
-  for (t in unique_tau) { # loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
-
-    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-      # get the indices of the sites
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      ind_s1 <- df_h_t$s1[i]
-
-      # get the data for the pair of sites
-      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
-      rain_cp <- as.data.frame(na.omit(rain_cp))
-      colnames(rain_cp) <- c("s1", "s2")
-
-      Tmax <- nrow(rain_cp) # number of total observations
-      rain_nolag <- rain_cp$s1[1:(Tmax - t)] # get the data without lag
-      rain_lag <- rain_cp$s2[(1 + t):Tmax] # get the data with lag
-
-      Tobs <- length(rain_nolag) # number of observations for the lagged pair
-                                 # i.e. T - tau
-
-      # transform the data in uniform data
-      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
-                         rank(rain_lag) / (Tobs + 1))
-
-      # get the conditional excesses on s2
-      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
-      # number of joint excesses
-      joint_excesses <- sum(cp_cond[, 1] > quantile)
-
-      # store the number of excesses and T - tau
-      excesses$Tobs[excesses$s1 == ind_s1
-                      & excesses$s2 == ind_s2
-                      & excesses$tau == t] <- Tobs
-
-      excesses$kij[excesses$s1 == ind_s1
-                    & excesses$s2 == ind_s2
-                    & excesses$tau == t] <- joint_excesses
-    }
-  }
-  return(excesses)
-}
-
-neg_ll <- function(params, simu, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, simu_exp = FALSE) {
-  hmax <- max(df_lags$hnorm)
-  tau <- unique(df_lags$tau)
-
-  print(params)
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
-
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    # message("out of bounds")
-    return(1e9)
-  }
-
-  if (!all(adv == c(0, 0))) { # if we have the advection parameters
-    # then the lag vectors are different
-    df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-  }
-
-  n_marg <- get_marginal_excess(simu, quantile) # number of marginal excesses
-  Tobs <- excesses$Tobs # T - tau
-  p <- n_marg / nrow(simu) # probability of marginal excesses
-  kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  # transform in chi vector
-  chi_vect <- as.vector(chi$chi)
-  chi_vect <- ifelse(chi_vect <= 0,  1e-10, chi_vect) # avoid log(0)
-  # get indices where kij == 0
-  non_excesses <- Tobs - kij # number of non-excesses
-  # log-likelihood vector
-  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - p * chi_vect)
-  # final negative log-likelihood
-  nll <- -sum(ll_vect, na.rm = TRUE)
-  # print(nll)
-  return(nll)
-}
-```
-
 
 Si je réduis le nombre de décalage temporel:
 
@@ -1287,6 +1193,11 @@ q_values <- seq(0.8, 0.95, by = 0.005) # quantiles
 
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
                            alpha1 = numeric(), alpha2 = numeric())
+if (!all(adv == c(0, 0))) {
+  result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
+                           alpha1 = numeric(), alpha2 = numeric(),
+                           adv1 = numeric(), adv2 = numeric())
+}
 
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
@@ -1302,29 +1213,59 @@ for (q in q_values) {
                   locations = sites_coords,
                   hmax = sqrt(17),
                   method = "BFGS",
-                  control = list(parscale = c(1, 1, 1, 1), maxit = 10000))
+                  control = list(maxit = 10000))
 
   # Check convergence
   if (result$convergence == 0) {
-    result_table <- rbind(result_table,
-                          data.frame(q = q,
-                                     beta1 = result$par[1],
-                                     beta2 = result$par[2],
-                                     alpha1 = result$par[3],
-                                     alpha2 = result$par[4]))
+    if (!all(adv == c(0, 0))) {
+      result_table <- rbind(result_table,
+                        data.frame(q = q,
+                                    beta1 = result$par[1],
+                                    beta2 = result$par[2],
+                                    alpha1 = result$par[3],
+                                    alpha2 = result$par[4],
+                                    adv1 = result$par[5],
+                                    adv2 = result$par[6]))
+    } else {
+      result_table <- rbind(result_table,
+                        data.frame(q = q,
+                                    beta1 = result$par[1],
+                                    beta2 = result$par[2],
+                                    alpha1 = result$par[3],
+                                    alpha2 = result$par[4]))
+  
+    }
   } else {
     # In case of non-convergence, store NAs
-    result_table <- rbind(result_table,
+    if(!all(adv == c(0, 0))) {
+      result_table <- rbind(result_table,
+        data.frame(q = q, beta1 = NA, beta2 = NA, alpha1 = NA, alpha2 = NA,
+                   adv1 = NA, adv2 = NA))
+    } else {
+      result_table <- rbind(result_table,
         data.frame(q = q, beta1 = NA, beta2 = NA, alpha1 = NA, alpha2 = NA))
+    }
   }
 }
 
 result_table <- round(result_table, 5)
-df_rmse <- data.frame(q = result_table$q,
+
+if(!all(adv == c(0, 0))) {
+  df_rmse <- data.frame(q = result_table$q,
+                rmse_beta1 = sqrt((result_table$beta1 - true_param[1])^2),
+                rmse_beta2 = sqrt((result_table$beta2 - true_param[2])^2),
+                rmse_alpha1 = sqrt((result_table$alpha1 - true_param[3])^2),
+                rmse_alpha2 = sqrt((result_table$alpha2 - true_param[4])^2),
+                rmse_adv1 = sqrt((result_table$adv1 - adv[1])^2),
+                rmse_adv2 = sqrt((result_table$adv2 - adv[2])^2))
+} else {
+  df_rmse <- data.frame(q = result_table$q,
                 rmse_beta1 = sqrt((result_table$beta1 - true_param[1])^2),
                 rmse_beta2 = sqrt((result_table$beta2 - true_param[2])^2),
                 rmse_alpha1 = sqrt((result_table$alpha1 - true_param[3])^2),
                 rmse_alpha2 = sqrt((result_table$alpha2 - true_param[4])^2))
+
+}
 
 kable(result_table, "latex", booktabs = TRUE,
       caption = "Optim estimations for each quantile for one simulation")  %>%
@@ -1335,7 +1276,7 @@ kable(result_table, "latex", booktabs = TRUE,
 kable(df_rmse, "latex", booktabs = TRUE,
       caption = "RMSE for each parameter and 
                   different quantiles for one simulation")  %>%
-  kable_styling(latex_options = "H", 
+  kable_styling(latex_options = "H",
                 bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
@@ -1573,59 +1514,6 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 
 ## Optimisation en fixant des parametres
 
-
-```{r negllpar, echo=FALSE}
-neg_ll_par <- function(beta1, beta2, alpha1, alpha2,
-                  simu, df_lags, locations,
-                  latlon = FALSE, quantile = 0.9,
-                  simu_exp = FALSE, excesses = NULL) {
-  # adv <- c(adv1, adv2)
-  params <- c(beta1, beta2, alpha1, alpha2)
-  # if (adv1 == 0 && adv2 == 0) {
-  #   params <- params[1:4]
-  # }
-  # print(params)
-  # hmax <- max(df_lags$hnorm)
-  # tau <- unique(df_lags$tau)
-  # print(params)
-
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -1e-6, -1e-6)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    message("out of bounds")
-    return(1e9)
-  }
-
-  # if (!all(adv == c(0, 0))) { # if we have the advection parameters
-  #   # then the lag vectors are different
-  #   df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-  # }
-  # excesses <- empirical_excesses(simu, quantile, df_lags)
-
-  n_marg <- get_marginal_excess(simu, quantile) # number of marginal excesses
-  Tmax <- nrow(simu)
-  pj <- n_marg / Tmax
-  kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  # transform in chi vector
-  chi_vect <- as.vector(chi$chi)
-  chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
-
-  non_excesses <- n - kij # number of non-excesses
-  # log-likelihood vector
-  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - pj * chi_vect)
-
-  # final negative log-likelihood
-  nll <- -sum(ll_vect, na.rm = TRUE)
-  return(nll)
-}
-```
 
 ### Fixer trois paramètres
 
@@ -1876,10 +1764,10 @@ for (q in quantiles) {
 
 rownames(results) <- NULL
 kable(results, "latex", booktabs = TRUE,
-      caption = "Optim estimations for each quantile fixing beta1 and alpha1, true beta2 = 0.2, 
+    caption = "Optim estimations for each quantile fixing beta1 and alpha1, true beta2 = 0.2, 
       alpha2 = 1") %>%
   kable_styling(latex_options = "H", 
-                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+          bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
 
@@ -1927,7 +1815,7 @@ kable(results, "latex", booktabs = TRUE,
       caption = "Optim estimations for each  fixing alpha2, true beta1 = 0.4,
       beta2 = 0.2, alpha1 = 1.5") %>%
   kable_styling(latex_options = "H", 
-                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+          bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
 
@@ -2185,59 +2073,6 @@ p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 ```
 
-
-```{r negllparadv, echo=FALSE}
-neg_ll_par_adv <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
-                  simu, df_lags, locations,
-                  latlon = FALSE, quantile = 0.9,
-                  simu_exp = FALSE, excesses = NULL) {
-  adv <- c(adv1, adv2)
-  params <- c(beta1, beta2, alpha1, alpha2, adv)
-
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    message("out of bounds")
-    return(1e9)
-  }
-
-  tau <- unique(df_lags$tau)
-  hmax <- max(df_lags$hnorm)
-
-  if (!all(adv == c(0, 0))) { # if we have the advection parameters
-    # then the lag vectors are different
-    df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-  }
-  # excesses <- empirical_excesses(simu, quantile, df_lags)
-
-  n_marg <- get_marginal_excess(simu, quantile) # number of marginal excesses
-  Tmax <- nrow(simu)
-  pj <- n_marg / Tmax
-  kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  # transform in chi vector
-  chi_vect <- as.vector(chi$chi)
-  chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
-
-  non_excesses <- n - kij # number of non-excesses
-  # log-likelihood vector
-  ll_vect <- kij * log(chi_vect) + non_excesses * log(1 - pj * chi_vect)
-
-  # final negative log-likelihood
-  nll <- -sum(ll_vect, na.rm = TRUE)
-  return(nll)
-}
-
-q <- 0.9
-excesses <- empirical_excesses(simu_df_adv, quantile = q, df_lags = df_lags)
-nll <- neg_ll_par_adv(true_param[1], true_param[2], true_param[3],
-                      true_param[4], true_param[5], true_param[6],
-                      simu_df_adv, df_lags, sites_coords, quantile = q, 
-                      excesses = excesses)
-print(nll)
-```
 
 ### Fixer cinq paramètres
 
