@@ -43,11 +43,11 @@ jobs:
       - name: Install remotes
         run: Rscript -e 'install.packages("remotes")'
 
-      - name: Install RandomFields from GitHub
-        run: Rscript -e 'remotes::install_github("cran/RandomFields")'
+      - name: Install RandomFields
+        run:  Rscript -e 'install.packages("RandomFields", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
 
       - name: Install RandomFieldsUtils from GitHub
-        run: Rscript -e 'remotes::install_github("cran/RandomFieldsUtils")'
+        run:  Rscript -e 'install.packages("RandomFieldsUtils", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
 
       - name: Install sessioninfo and rcmdcheck
         run: Rscript -e 'install.packages(c("sessioninfo", "rcmdcheck"))'
