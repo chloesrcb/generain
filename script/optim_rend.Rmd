@@ -47,8 +47,13 @@ if (all(adv == c(0, 0))) {
     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
                                 length(temp), "t/")
 } else {
+    adv_int <- adv * 10
+    adv_str <- sprintf("%02d%02d", adv_int[1], adv_int[2])
+
+    # Save the data
     foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                  length(temp), "t_adv/")
+                                    length(temp), "t_adv_", adv_str, "/")
+
 }
 
 # get number of files in the folder
