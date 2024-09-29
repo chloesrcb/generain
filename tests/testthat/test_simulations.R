@@ -1,7 +1,7 @@
 test_that("conditional_variogram", {
     x <- 1:10
     y <- 1:10
-    t <- 1:30
+    z <- 1:30
     beta1 <- 0.8
     beta2 <- 0.2
     alpha1 <- 1.5
@@ -45,9 +45,9 @@ test_that("conditional_variogram", {
     t0 <- 10
 
     # Conditional semivariogram
-    gamma_s0_t0 <- conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu)
+    gamma_s0_t0 <- conditional_variogram(x, y, z, s0, t0, grid, modelBuhlCklu)
 
-    expect_equal(dim(gamma_s0_t0), c(length(x), length(y), length(t)))
+    expect_equal(dim(gamma_s0_t0), c(length(x), length(y), length(z)))
 
     semivario_s_t <- beta1 * abs(s0_x - s0_x)^alpha1 +
                  beta1 * abs(s0_y - s0_y)^alpha1 +
@@ -95,14 +95,14 @@ test_that("conditional_variogram", {
     expect_equal(grid[1, 2], 1)
 
     # Conditional semivariogram
-    gamma_s0_t0_adv <- conditional_variogram(x, y, t, s0, t0,
+    gamma_s0_t0_adv <- conditional_variogram(x, y, z, s0, t0,
                                          grid, modelBuhlCklu, adv)
 
-    expect_equal(dim(gamma_s0_t0_adv), c(length(x), length(y), length(t)))
+    expect_equal(dim(gamma_s0_t0_adv), c(length(x), length(y), length(z)))
 
     # Check the first value
-    semivario_s_t <- beta1 * abs(s0_x - s0_x - adv1 * 0)^alpha1 +
-                 beta1 * abs(s0_y - s0_y - adv2 * 0)^alpha1 +
+    semivario_s_t <- beta1 * abs(s0_x - s0_x - adv[1] * 0)^alpha1 +
+                 beta1 * abs(s0_y - s0_y - adv[2] * 0)^alpha1 +
                  beta2 * abs(t0 - t0)^alpha2
 
     expect_equal(gamma_s0_t0[s0_x, s0_y, t0], semivario_s_t)
@@ -131,15 +131,23 @@ test_that("sim_rpareto", {
     alpha2 <- 1
     adv <- c(0.5, 0.3)
 
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
+    modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = beta1,
+                                                       proj = 1) +
+                   RandomFields::RMfbm(alpha = alpha1, var = beta1,
+                                       proj = 2) +
+                   RandomFields::RMfbm(alpha = alpha2, var = beta2,
+                                       proj = 3)
+
+    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t)
 
     # conditional point
     s0 <- c(1, 1)
     t0 <- 1
+
     # check gaussian process
     expect_equal(dim(W), c(length(x), length(y), length(t)))
     # check conditional gaussian process W_s0,t0
-    expect_equal(W[1, 1, t0], W[1]) # W_s0,t0 = W[s0[1], s0[2], t0]
+    expect_equal( W[s0[1], s0[2], t0], W[1]) # W_s0,t0 = W[s0[1], s0[2], t0]
 
     # Test the function
     Z <- sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, adv, s0, t0, 10)
@@ -218,8 +226,8 @@ test_that("Check vario inside sim_BR", {
                  beta1 * abs(s1_y - s2_y)^alpha1 +
                  beta2 * abs(t1 - t2)^alpha2
 
-    expect_equal(gamma[s1_x,s1_y, t1, s2t2_index], 2 * semivario_s_t)
-    expect_equal(gamma[s2_x,s2_y, t2, s1t1_index], 2 * semivario_s_t)
+    expect_equal(gamma[s1_x, s1_y, t1, s2t2_index], 2 * semivario_s_t)
+    expect_equal(gamma[s2_x, s2_y, t2, s1t1_index], 2 * semivario_s_t)
 
     s1_x <- 3
     s1_y <- 4
@@ -239,65 +247,87 @@ test_that("Check vario inside sim_BR", {
     expect_equal(gamma[s1_x, s1_y, t1, s2t2_index], 2 * semivario_s_t)
     expect_equal(gamma[s2_x, s2_y, t2, s1t1_index], 2 * semivario_s_t)
 
-    # With advection
-    adv <- c(0.5, 0.3)
+    # get simu from csv
+    # simu_df <- read.csv("../data/simulations_BR/sim_25s_300t/br_25s_300t_1.csv")
+    # nsites <- ncol(simu_df)
+    # sites_coords <- generate_grid_coords(sqrt(nsites))
 
-    # start.time <- Sys.time()
-    # gamma <- array(0, dim = c(lx, ly, lz, N))
+    # beta1 <- 0.4
+    # beta2 <- 0.2
+    # alpha1 <- 1.5
+    # alpha2 <- 1
+    # adv <- c(0, 0)
+    # x <- 1:5
+    # y <- 1:5
+    # z <- 1:300
+    # expect_equal(dim(simu_df), c(length(z), length(x) * length(y)))
 
-    # for (n in seq_len(N)) {
-    #     for (i in seq_len(lx)) {
-    #         for (j in seq_len(ly)) {
-    #             for (k in seq_len(lz)) {
-    #                 gamma[i, j, k, n] <- RandomFields::RFvariogram(
-    #                     modelBuhlCklu,
-    #                     x = x[i] - grid[n, 1] - adv[1] * (z[k] - grid[n, 3]),
-    #                     y = y[j] - grid[n, 2] - adv[2] * (z[k] - grid[n, 3]),
-    #                     z = z[k] - grid[n, 3]
-    #                 )
-    #                 }
-    #             }
-    #         }
-    #     }
-    # }
-    # end.time <- Sys.time()
-    # print(end.time - start.time)
+    # modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
+    #                                                     proj = 1) +
+    #                 RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1,
+    #                                     proj = 2) +
+    #                 RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2,
+    #                                     proj = 3)
 
-    # # check dimension
-    # expect_equal(dim(gamma), c(length(x), length(y), length(t), N))
+    # Check the variogram
 
-    # # Check value
-    # s1_x <- 1
-    # s1_y <- 1
-    # s2_x <- 1
-    # s2_y <- 1
-    # t1 <- 1
-    # t2 <- 1
-    # s2t2_index <- 1 + (s2_x - 1) + (s2_y - 1) * length(x) +
-    #               (t2 - 1) * length(x) * length(y)
-    # s1t1_index <- 1 + (s1_x - 1) + (s1_y - 1) * length(x) +
-    #                 (t1 - 1) * length(x) * length(y)
-    # semivario_s_t <- beta1 * abs(s1_x - s2_x - adv[1] * (t1 - t2))^alpha1 +
-    #              beta1 * abs(s1_y - s2_y - adv[2] * (t1 - t2))^alpha1 +
-    #              beta2 * abs(t1 - t2)^alpha2
+    # gamma <- vapply(seq_len(N), function(n)
+    #     RandomFields::RFvariogram(modelBuhlCklu,
+    #         x = sx - grid[n, 1],
+    #         y = sy - grid[n, 2],
+    #         z = sz - grid[n, 3]),
+    #         array(NA_real_, dim = c(lx, ly, lz))) ## => (lx, ly, lz, N)-array
+
+#     library(gstat)
+#     library(sp)
+#     library(spacetime)
+#     coordinates <- SpatialPoints(sites_coords[, c("Longitude", "Latitude")])
+#     time_index <- seq(as.POSIXct("2023-01-01"), by = "day", length.out = 300)
+
+#     data_matrix <- as.matrix(simu_df)
+
+#     # Flatten the matrix row-wise (so each site's 300 time steps are consecutive in the data frame)
+# data_matrix_flat <- as.vector(t(data_matrix))  # transpose and then flatten
+
+# # Now create the data frame (7500 rows, 1 column for the values)
+# data_df <- data.frame(values = data_matrix_flat)
     
-    # expect_equal(gamma[s1_x, s1_y, t1, s2t2_index], semivario_s_t)
+#     # Create the STFDF object
+#     stfdf <- STFDF(
+#         sp = coordinates,  # Spatial points
+#         time = time_index, # Time index
+#         data = data_df     # Values
+#     )
 
+#     # create a STFDF object
+#     gammaemp <- gstat::variogramST(
+#         formula = values ~ 1,
+#         data = stfdf,
+#         locations = ~Longitude + Latitude + time
+#     )
 
-    # # Check value
-    # s1_x <- 2
-    # s1_y <- 3
-    # s2_x <- 1
-    # s2_y <- 2
-    # t1 <- 10
-    # t2 <- 1
-    # s2t2_index <- 1 + (s2_x - 1) + (s2_y - 1) * length(x) +
-    #               (t2 - 1) * length(x) * length(y)
-    # s1t1_index <- 1 + (s1_x - 1) + (s1_y - 1) * length(x) +
-    #                 (t1 - 1) * length(x) * length(y)
-    # semivario_s_t <- beta1 * abs(s1_x - s2_x - adv[1] * (t1 - t2))^alpha1 +
-    #              beta1 * abs(s1_y - s2_y - adv[2] * (t1 - t2))^alpha1 +
-    #              beta2 * abs(t1 - t2)^alpha2
+#     # drop na 
+#     gammaemp <- na.omit(gammaemp)
 
-    # expect_equal(gamma[s1_x, s1_y, t1, s2t2_index], semivario_s_t)
+#     # Theorical variogram    
+#     s1_x <- 2
+#     s1_y <- 2
+#     s2_x <- 1
+#     s2_y <- 1
+#     t1 <- 10
+#     t2 <- 1
+#     dist_s1_s2 <- sqrt((s1_x - s2_x)^2 + (s1_y - s2_y)^2)
+#     dist <- get_euclidean_distance(c(s1_x, s1_y), c(s2_x, s2_y))
+#     s2t2_index <- 1 + (s2_x - 1) + (s2_y - 1) * length(x) +
+#                   (t2 - 1) * length(x) * length(y)
+#     s1t1_index <- 1 + (s1_x - 1) + (s1_y - 1) * length(x) +
+#                   (t1 - 1) * length(x) * length(y)
+#     semivario_s_t <- beta1 * abs(s1_x - s2_x)^alpha1 +
+#                  beta1 * abs(s1_y - s2_y)^alpha1 +
+#                  beta2 * abs(t1 - t2)^alpha2
+
+#     gammaemp$spacelag
+#     gamma12 <- gammaemp[gammaemp$dist == dist_s1_s2,]
+#     expect_equal(gamma[s1_x, s1_y, t1, s2t2_index], 2 * semivario_s_t)
+
 })

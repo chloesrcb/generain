@@ -258,7 +258,6 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
                    RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 2) +
                    RandomFields::RMfbm(alpha = alpha2, var = 2*beta2, proj = 3)
 
-  print(modelBuhlCklu)
   ## Construct grid
   Nxy <- lx * ly # spatial grid size
   N <- Nxy * lt # spatio-temporal grid size

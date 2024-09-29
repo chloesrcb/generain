@@ -13,7 +13,8 @@
 #' @import stats
 #'
 #' @export
-get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
+get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA,
+                                threshold = FALSE) {
   Tmax <- nrow(data_rain)
   if (is.na(ind_s0) || is.na(t0)){
     ind_s0 <- 1
@@ -22,7 +23,11 @@ get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
   # shifted data
   data <- data_rain[t0:Tmax,]
   Tobs <- nrow(data)
-  rain_unif <- rank(data[, ind_s0]) / (Tobs + 1)
+  if(!threshold) {
+    rain_unif <- rank(data[, ind_s0]) / (Tobs + 1)
+  } else {
+    rain_unif <- data[, ind_s0]
+  }
   marginal_excesses <- sum(rain_unif > quantile)
   return(marginal_excesses)
 }
@@ -36,6 +41,8 @@ get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
 #' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param threshold A boolean value to indicate if the quantile variable is a
+#'                 threshold value and not a uniform quantile. Default is FALSE.
 #'
 #' @return The empirical excesses dataframe with the number of excesses kij and
 #' the number of possible excesses Tobs, with the lag values.
@@ -43,7 +50,7 @@ get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA) {
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, df_lags) {
+empirical_excesses <- function(data_rain, quantile, df_lags, threshold=FALSE) {
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
 
@@ -68,13 +75,19 @@ empirical_excesses <- function(data_rain, quantile, df_lags) {
                                  # i.e. T - tau
 
       # transform the data in uniform data
-      rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
-                         rank(rain_lag) / (Tobs + 1))
+      if (!threshold) {
+        rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
+                           rank(rain_lag) / (Tobs + 1))
+      } else {
+        rain_unif <- cbind(rain_nolag, rain_lag)
+      }
 
-      # get the conditional excesses on s2
-      cp_cond <- rain_unif[rain_unif[, 2] > quantile, ]
-      # number of joint excesses
-      joint_excesses <- sum(cp_cond[, 1] > quantile)
+      joint_excesses <- sum(rain_unif[, 2] > quantile &
+                            rain_unif[, 1] > quantile)
+      # # get the conditional excesses on s2
+      # cp_cond <- as.data.frame(rain_unif[rain_unif[, 2] > quantile, ])
+      # # number of joint excesses
+      # joint_excesses <- sum(cp_cond[, 1] > quantile)
 
       # store the number of excesses and T - tau
       excesses$Tobs[excesses$s1 == ind_s1
@@ -221,30 +234,30 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param quantile The quantile value.
 #' @param latlon A boolean value to indicate if the locations are in latitude
 #'               and longitude. Default is FALSE.
+#' @param hmax The maximum spatial lag value. Default is NA.
+#' @param s0 The conditioning location. Default is NA.
+#' @param t0 The conditioning time. Default is NA.
+#' @param pmarg The probability of marginal excesses. Default is NA.
+#' @param threshold A boolean value to indicate if the quantile variable is a
+#'                threshold value and not a uniform quantile. Default is FALSE.
 #'
 #' @return The negative log-likelihood value.
 #'
 #' @export
 neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA) {
-  if (is.na(hmax)) {
-    hmax <- max(df_lags$hnorm)
-  }
+                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA, pmarg = NA,
+                   threshold = FALSE) {
+  tau <- unique(df_lags$tau) # unique temporal lags
 
-  tau <- unique(df_lags$tau)
-
-  print(params)
-
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
+  # get the index of the conditioning site s0
   ind_s0 <- if (all(is.na(s0))) 1 else which(locations$Latitude == s0[1] &&
                                              locations$Longitude == s0[2])
-
 
   # Bounds for the parameters
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
   if (length(params) == 6) {
-    lower.bound <- c(lower.bound, 1e-6, 1e-6)
+    lower.bound <- c(lower.bound, -0.1, -0.1)
     upper.bound <- c(upper.bound, Inf, Inf)
   }
 
@@ -253,30 +266,42 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
     return(1e50)
   }
 
-  if (!all(adv == c(0, 0))) { # if we have the advection parameters
+  if (length(params) == 6) { # if we have the advection parameters
     # then the lag vectors are different
     if (is.na(s0) && is.na(t0)) {
-      df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-    } else {
-      df_lags <- get_conditional_lag_vectors(locations, params, hmax = hmax,
+      df_lags <- get_lag_vectors(locations, params, tau_vect = tau)
+    } else { # else we have to consider the conditioning location and time
+      df_lags <- get_conditional_lag_vectors(locations, params,
                                        tau_vect = tau, s0 = s0, t0 = t0)
-      excesses <- empirical_excesses(data, quantile, df_lags)
+      excesses <- empirical_excesses(data, quantile, df_lags, threshold)
     }
+    # excesses <- empirical_excesses(data, quantile, df_lags) # get excesses
   }
 
   # number of marginal excesses
-  T_marg <- get_marginal_excess(data, quantile, ind_s0, t0)
+  nmarg <- get_marginal_excess(data, quantile, ind_s0, t0, threshold)
   Tmax <- if (is.na(t0)) nrow(data) else nrow(data) + 1 - t0
-  p <- T_marg / Tmax # probability of marginal excesses
+  if (is.na(pmarg)) {
+    p <- nmarg / Tmax # probability of marginal excesses
+  } else {
+    p <- pmarg
+  }
   chi <- theorical_chi(params, df_lags) # get chi matrix
-  ll_df <- excesses
+  ll_df <- df_lags # copy the dataframe
+  ll_df$kij <- excesses$kij # number of excesses
+  ll_df$Tobs <- Tmax - ll_df$tau # number of possible excesses
   ll_df$chi <- chi$chi
   ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi
+  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
 
   ll_df$non_excesses <- ll_df$Tobs - ll_df$kij # number of non-excesses
   ll_df$ll <- ll_df$kij * log(ll_df$chi) +
               ll_df$non_excesses * log(ll_df$pchi)
+
+  if (!is.na(hmax)) {
+    ll_df <- ll_df[ll_df$hnorm <= hmax, ]
+  }
 
   nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
@@ -304,17 +329,37 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 #'
 #' @export
 neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
-                  list_excesses, latlon = FALSE, s0 = NA, t0 = NA, hmax = NA) {
+                    list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
+                    t0 = NA, threshold = FALSE) {
+  ind_s0 <- which(locations$Latitude == s0[1] && locations$Longitude == s0[2])
+  data <- do.call(rbind, list_simu)
+  nmarg <- get_marginal_excess(data, quantile, ind_s0, t0, threshold)
+  pmarg <- nmarg / nrow(data)
+  nll_composite <- 0 # composite negative log-likelihood
+  print(params)
 
-  nll_composite <- 0
-  # number of simulations  in list_simu
-  nsim <- length(list_simu)
-  for (i in 1:nsim) {
+  # Bounds for the parameters
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(1e50)
+  }
+
+  nsample <- length(list_simu)
+  for (i in 1:nsample) {
+    # extract simulation data from i-th simulation
     simu <- list_simu[[i]]
     excesses <- list_excesses[[i]]
     nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
-                    latlon = latlon, excesses = excesses, hmax = hmax, s0 = s0,
-                    t0 = t0)
+                    latlon = latlon, hmax = hmax,
+                    excesses = excesses, s0 = s0, t0 = t0, pmarg = pmarg,
+                    threshold = threshold)
     nll_composite <- nll_composite + nll_i
   }
   return(nll_composite)
@@ -466,13 +511,32 @@ get_criterion <- function(df_result, true_param) {
     mae_beta2 <- mean(abs(true_param[2] - df_result$beta2))
     mae_alpha2 <- mean(abs(true_param[4] - df_result$alpha2))
 
-    # create a dataframe to store the results
-    df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
-                                mean_alpha2),
-                        rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
-                                rmse_alpha2),
-                        mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2),
-                        row.names = c("beta1", "beta2", "alpha1", "alpha2"))
+    if (length(true_param) == 6) {
+      mean_adv1 <- mean(df_result$adv1)
+      mean_adv2 <- mean(df_result$adv2)
+
+      rmse_adv1 <- sqrt(mean((true_param[5] - df_result$adv1)^2))
+      rmse_adv2 <- sqrt(mean((true_param[6] - df_result$adv2)^2))
+
+      mae_adv1 <- mean(abs(true_param[5] - df_result$adv1))
+      mae_adv2 <- mean(abs(true_param[6] - df_result$adv2))
+
+      df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
+                                  mean_alpha2, mean_adv1, mean_adv2),
+                          rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
+                                  rmse_alpha2, rmse_adv1, rmse_adv2),
+                          mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2,
+                                  mae_adv1, mae_adv2),
+                          row.names = c("beta1", "beta2", "alpha1", "alpha2",
+                                        "adv1", "adv2"))
+    } else {
+      df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
+                                  mean_alpha2),
+                          rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
+                                  rmse_alpha2),
+                          mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2),
+                          row.names = c("beta1", "beta2", "alpha1", "alpha2"))
+    }
     return(df_valid)
 }
 
