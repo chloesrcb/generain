@@ -32,7 +32,9 @@ library(extRemes)
 library(evd)
 ```
 
-# Simulation
+# Simulations of max-stable processes with Brown-Resnick dependence
+
+## Without advection
 
 ```{r sim25s300t, fig.width = 5, fig.height = 5}
 adv <- c(0, 0)
@@ -56,13 +58,19 @@ if (all(adv == c(0, 0))) {
 
 }
 
+# BR <- sim_BR(true_param[1], true_param[2], true_param[3],
+#             true_param[4], spa, spa, temp, adv = adv, nres = 10)
+
+# save_simulations(BR, ngrid, n.BR, folder = foldername,
+#         file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
 # get number of files in the folder
 nfiles <- length(list.files(foldername))
 
 # load simulated data in a list
 simu_list <- list()
 
-for(i in 1:nfiles) {
+for (i in 1:nfiles) {
     file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp), "t_", i,
                         ".csv")
     simu_temp <- read.csv(file_path)
@@ -84,8 +92,6 @@ plot(simu_df[, 4], main = "Site 4")
 ```
 
 
-
-
 # Bulh model WLSE
 
 Validation of the model with the WLSE method (Bulh model).
@@ -97,13 +103,13 @@ dist_mat <- get_dist_mat(sites_coords,
 df_dist <- reshape_distances(dist_mat) # reshape the distance matrix
 
 hmax <- sqrt(17)
-q <- 0.8
+q <- 0.7
 chispa <- spatial_chi_alldist(df_dist, simu_df, quantile = q,
                                hmax = hmax)
-spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
+spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = FALSE)
 print(spa_estim)
 
-q <- 0.8
+q <- 0.9
 tmax <- 10
 chitemp <- temporal_chi(simu_df, tmax = tmax, quantile = q)
 temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(simu_df),
@@ -173,7 +179,7 @@ chi <- unique(chi_theorical$chi)
 # print(head(chi_theorical))
 
 par(mfrow = c(2, 3))
-q_values <- c(0.85, 0.88, 0.9, 0.92, 0.95, 0.96) - 0.1
+q_values <- c(0.91, 0.92, 0.93, 0.94, 0.95, 0.96)
 for (q in q_values) {
   chi_emp <- chispatemp_empirical(simu_df, df_lags, q)
   chi_vect_th <- c()
@@ -201,12 +207,7 @@ for (q in q_values) {
 
 Second method of calculating the empirical chi:
 ```{r plotchithemp2, fig.height=5, fig.width=5, echo=FALSE}
-chi_theorical <- theorical_chi(true_param, df_lags)
-chi <- unique(chi_theorical$chi)
-# print(head(chi_theorical))
-
 par(mfrow = c(2, 3))
-q_values <- c(0.82, 0.85, 0.88, 0.9, 0.92, 0.95)
 for (q in q_values) {
   chi_emp <- chispatemp_empirical(simu_df, df_lags, q)
   chi_vect_th <- c()
@@ -271,14 +272,19 @@ for (q in q_values) {
               excesses$hnorm == hnorm])
   x <- 0:Tobs_tau_h
   # Density
-  plot(density(k_tau_h), main = paste("q =",
-                      q), xlab = "Number of excesses",
-                      ylim = c(0, 0.3), cex.main = 0.8,
-                      cex.lab = 0.8, cex.axis = 0.8)
+  # plot(density(k_tau_h), main = paste("q =",
+  #                     q), xlab = "Number of excesses",
+  #                     ylim = c(0, 0.3), cex.main = 0.8,
+  #                     cex.lab = 0.8, cex.axis = 0.8)
   # histogram
-  # hist(k_tau_h, freq = FALSE, breaks = 20, main = paste("q =", q),
-  #    xlab = "Number of excesses", ylim = c(0, 0.2), cex.main = 0.8,
-  #    cex.lab = 0.8, cex.axis = 0.8)
+  hist(k_tau_h, freq = FALSE, breaks = 20, main = paste("q =", q),
+     xlab = "Number of excesses", ylim = c(0, 0.2), cex.main = 0.8,
+     cex.lab = 0.8, cex.axis = 0.8)
+
+  lines(density(k_tau_h), main = paste("q =",
+                      q), xlab = "Number of excesses",
+                      ylim = c(0, 0.25), cex.main = 0.8,
+                      cex.lab = 0.8, cex.axis = 0.8)
 
 
   # binomial density
@@ -290,12 +296,12 @@ for (q in q_values) {
 
 Without zeros $k_{ij, \tau} > 0$:
 ```{r plotdenskij, fig.height=7, fig.width=7}
-q_values <- c(0.75, 0.8, 0.85, 0.9)
+q_values <-  seq(0.9, 0.95, by = 0.01)
 df_lags <- get_lag_vectors(sites_coords, true_param,
-                          hmax = sqrt(17), tau_vect = 0:2)
+                         hmax = sqrt(17), tau_vect = 0:2)
 chi_theorical <- theorical_chi(true_param, df_lags)
 
-png("../images/optim/density_400s_50t_byq.png")
+png("../images/optim/density_25s_300t_byq.png")
 
 par(mfrow = c(ceiling(length(q_values)/3), 3))
 for (q in q_values) {
@@ -384,8 +390,8 @@ Now we fix the quantile and $h = 1$ and vary the temporal lag $\tau$,
 using the theoretical chi.
 
 ```{r plotdenskij3, fig.height=7, fig.width=7, echo=FALSE}
-q <- 0.8
-tau_vect <- 0:2
+q <- 0.94
+tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
 # excesses without zeros (function has changed)
@@ -444,7 +450,7 @@ plot_tau <- ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) 
 plot_tau
 
 # # Save plot as PNG file
-ggsave("../images/optim/density_400s_50t_bytau.png",
+ggsave("../images/optim/density_25s_300t_bytau.png",
       plot = plot_tau, width = 7, height = 7)
 
 
@@ -460,9 +466,9 @@ We can also calculate the RMSE for each parameter.
 It is very sensitive to the quantile choice.
 
 ```{r optimquantile, echo=FALSE}
-q_values <- c(0.8, 0.85, 0.9) # quantiles
+q_values <- c(0.8, 0.85, 0.9, 0.91, 0.915, 0.92) # quantiles
 
-result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(), 
+result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric())
 
 df_lags <- get_lag_vectors(sites_coords, true_param,
@@ -474,7 +480,6 @@ df_lags <- get_lag_vectors(sites_coords, true_param,
 # For each quantile
 for (q in q_values) {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-
 
   # Optimization
   result <- optim(par = c(true_param), fn = neg_ll,
@@ -513,14 +518,14 @@ df_rmse <- data.frame(q = result_table$q,
 kable(result_table, "latex", booktabs = TRUE,
       caption = "Optim estimations for each quantile for one simulation")  %>%
   kable_styling(latex_options = "H",
-                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+      bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 
 kable(df_rmse, "latex", booktabs = TRUE,
       caption = "RMSE for each parameter and 
                   different quantiles for one simulation")  %>%
-  kable_styling(latex_options = "H", 
-                bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+  kable_styling(latex_options = "H",
+      bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
 
@@ -528,7 +533,7 @@ kable(df_rmse, "latex", booktabs = TRUE,
 ## For all simulations
 
 ```{r optimall, echo=FALSE}
-q <- 0.85
+q <- 0.92
 result_table <- data.frame(beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric())
 
@@ -548,7 +553,7 @@ for (i in 1:nfiles) {
                   excesses = excesses,
                   locations = sites_coords,
                   method = "CG",
-                  control = list(parscale = c(1, 1, 0.1, 0.1),
+                  control = list(parscale = c(1, 1, 1, 1),
                                  maxit = 10000))
 
   # Check convergence
@@ -569,9 +574,9 @@ for (i in 1:nfiles) {
 df_valid <- get_criterion(result_table, true_param)
 
 kable(df_valid, "latex", booktabs = TRUE,
-      caption = "RMSE for each parameter for all simulations and q=0.9")  %>%
+      caption = "RMSE for each parameter for all simulations and q=0.92")  %>%
   kable_styling(latex_options = "H",
-                bootstrap_options = c("striped", "hover", 
+                bootstrap_options = c("striped", "hover",
                 "condensed", "responsive"))
 
 ```
@@ -587,7 +592,8 @@ fixed_params <- c(0.4, 0.2, 1.5, 1)
 param1_values <- seq(0.05, 0.9, length.out = 50)
 param2_values <- seq(0.05, 0.9, length.out = 50)
 
-nll_matrix <- matrix(NA, nrow = length(param1_values), ncol = length(param2_values))
+nll_matrix <- matrix(NA, nrow = length(param1_values),
+                         ncol = length(param2_values))
 
 quantile <- 0.9
 df_lags <- get_lag_vectors(sites_coords, true_param,
@@ -597,14 +603,15 @@ excesses <- empirical_excesses(simu_df, quantile = quantile, df_lags = df_lags)
 for (i in 1:length(param1_values)) {
   for (j in 1:length(param2_values)) {
     params <- c(param1_values[i], param2_values[j], fixed_params[3:4])
-    nll_matrix[i, j] <- neg_ll(params, simu_df, df_lags, locations, quantile, excesses)
+    nll_matrix[i, j] <- neg_ll(params, simu_df, df_lags, locations, quantile,
+                               excesses)
   }
 }
 
 par(mfrow=c(1,1))
 
 png("../images/optim/contour_25s_300t_betas_q9.png")
-contour(param1_values, param2_values, nll_matrix, nlevels = 20, 
+contour(param1_values, param2_values, nll_matrix, nlevels = 20,
         xlab = "Beta1", ylab = "Beta2",
         main = "Contour plot of Negative Log-Likelihood")
 

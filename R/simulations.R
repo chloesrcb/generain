@@ -144,7 +144,7 @@ advected_variogram <- function(x, y, z, grid, model, adv) {
 #' @import stats
 #'
 #' @export
-sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv, nres) {
+sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA, nres = 1) {
   ## Setup
   RandomFields::RFoptions(spConform = FALSE)
   lx <- length(sx <- seq_along(x))

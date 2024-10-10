@@ -4,7 +4,13 @@
 \alias{get_marginal_excess}
 \title{get_marginal_excess function}
 \usage{
-get_marginal_excess(data_rain, quantile, ind_s0 = NA, t0 = NA)
+get_marginal_excess(
+  data_rain,
+  quantile,
+  ind_s0 = NA,
+  t0 = NA,
+  threshold = FALSE
+)
 }
 \arguments{
 \item{data_rain}{The rainfall data.}

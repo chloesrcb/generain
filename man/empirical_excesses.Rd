@@ -4,7 +4,7 @@
 \alias{empirical_excesses}
 \title{empirical_excesses function}
 \usage{
-empirical_excesses(data_rain, quantile, df_lags)
+empirical_excesses(data_rain, quantile, df_lags, threshold = FALSE)
 }
 \arguments{
 \item{data_rain}{The rainfall data.}
@@ -12,6 +12,9 @@ empirical_excesses(data_rain, quantile, df_lags)
 \item{quantile}{The quantile value.}
 
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
+
+\item{threshold}{A boolean value to indicate if the quantile variable is a
+threshold value and not a uniform quantile. Default is FALSE.}
 }
 \value{
 The empirical excesses dataframe with the number of excesses kij and

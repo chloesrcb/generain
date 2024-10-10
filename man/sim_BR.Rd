@@ -4,7 +4,7 @@
 \alias{sim_BR}
 \title{sim_BR function}
 \usage{
-sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv, nres)
+sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA, nres = 1)
 }
 \arguments{
 \item{beta1}{The value of beta1.}

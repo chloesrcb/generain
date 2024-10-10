@@ -157,7 +157,7 @@ get_euclidean_distance <- function(point1, point2) {
 #'
 #' @export
 get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
-                            norm = "euclidean") {
+                            norm = "euclidean", index_s0 = 0) {
   # Advection vector
   adv <- if (length(params) == 6) params[5:6] else c(0, 0)
 
@@ -167,11 +167,14 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 
   # Create index combinations
   pairs_comb <- utils::combn(n, 2)
-  # indices <- pairs_comb
 
   # Add n,n pairs
   diag_pairs <- matrix(rep(1:n, each = 2), nrow = 2)
   indices <- cbind(pairs_comb, diag_pairs)
+
+  # Remove s0
+  indices <- indices[, !indices[1, ] %in% index_s0 &
+                        !indices[2, ] %in% index_s0]
 
   # Get indices
   i_vals <- indices[1, ]
@@ -220,16 +223,16 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
   return(lags)
 }
 
-
 #' get_conditional_lag_vectors function
 #'
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
 #' @param params A vector of parameters.
+#' @param temp The temporal sequence.
 #' @param s0 Conditional spatial point coordinates.
 #' @param t0 Conditional temporal point.
-#' @param tau_vect A vector of temporal lags. Default is 0:10.
+#' @param tau_max The maximum temporal lag. Default is 10.
 #' @param hmax The maximum distance threshold. Default is NA.
 #' @param norm The norm to use. Can be "euclidean" or "Lp". Default
 #'            is "euclidean".
@@ -239,8 +242,8 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
-get_conditional_lag_vectors <- function(df_coords, params, s0 = c(1, 1),
-                                        t0 = 1, tau_vect = 0:10, hmax = NA,
+get_conditional_lag_vectors <- function(df_coords, params, temp, s0 = c(1, 1),
+                                        t0 = 1, tau_max = 10, hmax = NA,
                                         norm = "euclidean") {
   # Advection
   adv <- if (length(params) == 6) params[5:6] else c(0, 0)
@@ -254,7 +257,7 @@ get_conditional_lag_vectors <- function(df_coords, params, s0 = c(1, 1),
 
   # Dimensions
   n <- nrow(df_coords)
-  tau_lag <- sort(unique(abs(tau_vect - t0))) # tau - t0
+  tau_lag <- 0:tau_max
   tau_len <- length(tau_lag)
 
   # Index of pairs (s0, si)

@@ -115,6 +115,7 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #' This function creates a GIF from a simulation.
 #'
 #' @param simulation_data The data from the simulation.
+#' @param sites_coords The coordinates of the sites.
 #' @param params The parameters used for the simulation.
 #' @param type The type of simulation.
 #' @param forcedtemp The number of time steps to include in the GIF.
@@ -126,9 +127,8 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #' @import animation
 #'
 #' @export
-create_simu_gif <- function(simulation_data, params, type = "rpar", 
-                            forcedtemp = NA) {
-  # type = "rpar" or "br"
+create_simu_gif <- function(simulation_data, sites_coords, params,
+                            type = "rpar", forcedtemp = NA) {
   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
   Tmax <- nrow(simulation_data) # Number of time steps
   if (is.na(forcedtemp)) {

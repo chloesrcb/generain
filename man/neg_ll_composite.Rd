@@ -12,9 +12,10 @@ neg_ll_composite(
   quantile,
   list_excesses,
   latlon = FALSE,
+  hmax = NA,
   s0 = NA,
   t0 = NA,
-  hmax = NA
+  threshold = FALSE
 )
 }
 \arguments{
@@ -33,11 +34,11 @@ neg_ll_composite(
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
 
+\item{hmax}{The maximum spatial lag value.}
+
 \item{s0}{The starting location.}
 
 \item{t0}{The starting time.}
-
-\item{hmax}{The maximum spatial lag value.}
 }
 \value{
 The negative log-likelihood value.

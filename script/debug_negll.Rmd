@@ -172,13 +172,15 @@ df_result <- data.frame(beta1 =  spa_estim[1],
                         alpha2 = temp_estim[2])
 colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
 
-df_valid <- get_criterion(df_result, true_param)
+df_valid <- get_criterion(df_result, true_param[1:4])
 colnames(df_valid) <- c("estim", "rmse", "mae")
 
 kable(df_valid, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
   "responsive"), latex_options = "H")
 ```
+
+Probleme : cela estime bien les parametres alors que j'ai de l'advection... pq???
 
 # Set of lags
 
@@ -236,16 +238,16 @@ ggplot(excesses[excesses$kij > 1, ], aes(x = kij)) +
        x = "Number of excesses", y = "Density")
 
 # density plot of the number of excesses
-ggplot(k_h_tau, aes(x = kij)) +
-  geom_density() +
-  labs(title = "Density plot of the number of excesses",
-       x = "Number of excesses", y = "Density")
+# ggplot(k_h_tau, aes(x = kij)) +
+#   geom_density() +
+#   labs(title = "Density plot of the number of excesses",
+#        x = "Number of excesses", y = "Density")
 
 # histogram
-ggplot(k_h_tau, aes(x = kij)) +
-  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
-  labs(title = "Histogram of the number of excesses",
-       x = "Number of excesses", y = "Frequency")
+# ggplot(k_h_tau, aes(x = kij)) +
+#   geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+#   labs(title = "Histogram of the number of excesses",
+#        x = "Number of excesses", y = "Frequency")
 
 ```
 
@@ -348,30 +350,6 @@ Pour le calcul du chi théorique, on utilise la formule suivante:
 $\chi(h, \tau) = 2 - 2 \Phi(\sqrt{0.5 \gamma(h, \tau)})$ où $\Phi$ est la fonction de répartition
 de la loi normale et $\gamma(h, \tau) = 2(\beta_1 ||h||^{\alpha_1} + \beta_2 \tau^{\alpha_2})$.
 
-```{r theochi}
-theorical_chi_ind <- function(params, h, tau) {
-  # get variogram parameter
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-
-  # Get vario and chi for each lagtemp
-  varioval <- 2 * (beta1 * h^alpha1 + beta2 * tau^alpha2)
-  phi <- pnorm(sqrt(0.5 * varioval))
-  chival <- 2 * (1 - phi)
-
-  return(chival)
-}
-
-
-theorical_chi <- function(params, df_lags) {
-  chi_df <- df_lags # copy the dataframe
-  chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
-  return(chi_df)
-}
-```
-
 ```{r theochicalc}
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
@@ -381,7 +359,7 @@ print(tail(chi_theorical))
 
 true_param <- c(0.4, 0.2, 1.5, 1)
 # for one hnorm and one tau
-hnorm <- 1
+hnorm <- df_lags$hnorm[1]
 tau <- 3
 semivar <- true_param[1]*hnorm^true_param[3] + true_param[2]*tau^true_param[4]
 chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
@@ -543,7 +521,7 @@ for (q in q_values) {
   }
   plot(chi_vect_th, chi_vect_emp, xlab = "Theorical chi",
        ylab = "Empirical chi",
-       main = paste("Quantile =", 
+       main = paste("Quantile =",
               q),
        cex = 0.3, cex.main = 1, cex.axis = 0.8)
   abline(0, 1, col = "red")

@@ -7,10 +7,12 @@
 get_conditional_lag_vectors(
   df_coords,
   params,
+  temp,
   s0 = c(1, 1),
   t0 = 1,
+  tau_max = 10,
   hmax = NA,
-  tau_vect = 0:10
+  norm = "euclidean"
 )
 }
 \arguments{
@@ -18,13 +20,18 @@ get_conditional_lag_vectors(
 
 \item{params}{A vector of parameters.}
 
+\item{temp}{The temporal sequence.}
+
 \item{s0}{Conditional spatial point coordinates.}
 
 \item{t0}{Conditional temporal point.}
 
+\item{tau_max}{The maximum temporal lag. Default is 10.}
+
 \item{hmax}{The maximum distance threshold. Default is NA.}
 
-\item{tau_vect}{A vector of temporal lags. Default is 0:10.}
+\item{norm}{The norm to use. Can be "euclidean" or "Lp". Default
+is "euclidean".}
 }
 \value{
 A dataframe containing the lag vectors.

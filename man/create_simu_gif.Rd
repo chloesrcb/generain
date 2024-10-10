@@ -4,10 +4,18 @@
 \alias{create_simu_gif}
 \title{Create a GIF from a simulation}
 \usage{
-create_simu_gif(simulation_data, params, type = "rpar", forcedtemp = NA)
+create_simu_gif(
+  simulation_data,
+  sites_coords,
+  params,
+  type = "rpar",
+  forcedtemp = NA
+)
 }
 \arguments{
 \item{simulation_data}{The data from the simulation.}
+
+\item{sites_coords}{The coordinates of the sites.}
 
 \item{params}{The parameters used for the simulation.}
 

@@ -38,17 +38,17 @@ library(evd)
 Risk function $r(X_{s, t}) = X_{s_0, t_0}$.
 
 ```{r rparetosim, fig.width = 5, fig.height = 5}
-adv <- c(0.5, 0.3)
-params <- c(0.4, 0.2, 1, 1.2) # ok verif sur simu
+adv <- c(0.5, 0.5) # no advection
+params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 true_param <- c(params, adv)
-beta1 <- 0.4
-beta2 <- 0.2
-alpha1 <- 1.5
-alpha2 <- 1
+beta1 <- params[1]
+beta2 <- params[2]
+alpha1 <- params[3]
+alpha2 <- params[4]
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:30
+temp <- 1:50
 
 # Conditional point
 s0 <- c(1, 1)
@@ -58,8 +58,8 @@ t0 <- 1
 nres <- 100
 
 # Simulate the process
-# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
-#                     t0, nres)
+simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+                    t0, nres)
 
 adv_int <- adv * 10
 adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
@@ -73,30 +73,50 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-# save_simulations(simu, ngrid, nres, folder = foldername,
-#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+save_simulations(simu, ngrid, nres, folder = foldername,
+        file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
 
-
+nres <- length(list.files(foldername))
 list_simu <- list()
-for (i in 1:nres) {
+for (i in 1:10) {
   file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
                         length(temp), "t_", i, ".csv")
   list_simu[[i]] <- read.csv(file_name)
 }
 
 # Plot the first realization
-simu_df <- list_simu[[1]]
+simu_df <- list_simu[[9]]
 par(mfrow = c(2, 2))
 plot(simu_df$S1, main = "S1")
 plot(simu_df$S2, main = "S2")
-plot(simu_df$S3, main = "S3")
-plot(simu_df$S4, main = "S4")
+plot(simu_df$S10, main = "S3")
+plot(simu_df$S7, main = "S4")
 ```
 
 
+```{r, fig.width = 5, fig.height = 5}
+# Test the function
+adv <- c(0, 0)
+par(mfrow=c(2,2))
+set.seed(1234)
+Z <- sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, adv, s0, t0, 1)
+plot(Z[1,1,,1])
+plot(Z[2,2,,1])
+plot(Z[4,4,,1])
+plot(Z[5,5,,1])
+adv <- c(0.5, 0.5)
+set.seed(1234)
+Z <- sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, adv, s0, t0, 1)
+par(mfrow=c(2,2))
+plot(Z[1,1,,1])
+plot(Z[1,2,,1])
+plot(Z[4,4,,1])
+plot(Z[5,5,,1])
+```
+
 ```{r rpargif, fig.width = 5, fig.height = 5}
-library(animation)
-create_simu_gif(simu_df, true_param, "rpar", forcedtemp = 30)
+# library(animation)
+# create_simu_gif(simu_df, true_param, "rpar", forcedtemp = 30)
 ```
 
 # Get conditional lag vectors
@@ -110,136 +130,9 @@ head(df_lags)
 
 # Optimisation of variogram parameters
 
-```{r negll, echo=FALSE}
-neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA, pmarg = NA,
-                   threshold = FALSE) {
-  if (is.na(hmax)) {
-    hmax <- max(df_lags$hnorm) # maximum spatial lag
-  }
-  tau <- unique(df_lags$tau) # unique temporal lags
-
-  # advection parameters
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
-  # get the index of the conditioning site s0
-  ind_s0 <- if (all(is.na(s0))) 1 else which(locations$Latitude == s0[1] &&
-                                             locations$Longitude == s0[2])
-
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
-
-  if (!all(adv == c(0, 0))) { # if we have the advection parameters
-    # then the lag vectors are different
-    if (is.na(s0) && is.na(t0)) {
-      df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-    } else { # else we have to consider the conditioning location and time
-      df_lags <- get_conditional_lag_vectors(locations, params, hmax = hmax,
-                                       tau_vect = tau, s0 = s0, t0 = t0)
-      excesses <- empirical_excesses(data, quantile, df_lags, threshold) # TODO: to remove if possible
-    }
-  }
-
-  # number of marginal excesses
-  nmarg <- get_marginal_excess(data, quantile, ind_s0, t0, threshold)
-  Tmax <- if (is.na(t0)) nrow(data) else nrow(data) + 1 - t0
-  if (is.na(pmarg)) {
-    p <- nmarg / Tmax # probability of marginal excesses
-  } else {
-    p <- pmarg
-  }
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  ll_df <- excesses
-  ll_df$Tobs <- Tmax - ll_df$tau # number of possible excesses
-  ll_df$chi <- chi$chi
-  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
-  ll_df$pchi <- 1 - p * ll_df$chi
-
-  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij # number of non-excesses
-  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
-              ll_df$non_excesses * log(ll_df$pchi)
-
-  nll <- -sum(ll_df$ll, na.rm = TRUE)
-  return(nll)
-}
-
-neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
-                   data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA, pmarg = NA) {
-  params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
-  adv <- c(adv1, adv2)
-  if (is.na(hmax)) {
-    hmax <- max(df_lags$hnorm) # maximum spatial lag
-  }
-  print(params)
-  tau <- unique(df_lags$tau) # unique temporal lags
-
-  # advection parameters
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
-  # get the index of the conditioning site s0
-  ind_s0 <- if (all(is.na(s0))) 1 else which(locations$Latitude == s0[1] &&
-                                             locations$Longitude == s0[2])
-
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
-
-  if (!all(adv == c(0, 0))) { # if we have the advection parameters
-    # then the lag vectors are different
-    if (is.na(s0) && is.na(t0)) {
-      df_lags <- get_lag_vectors(locations, params, hmax = hmax, tau_vect = tau)
-    } else { # else we have to consider the conditioning location and time
-      df_lags <- get_conditional_lag_vectors(locations, params, hmax = hmax,
-                                       tau_vect = tau, s0 = s0, t0 = t0)
-      excesses <- empirical_excesses(data, quantile, df_lags) # TODO: to remove if possible
-    }
-  }
-
-  # number of marginal excesses
-  nmarg <- get_marginal_excess(data, quantile, ind_s0, t0)
-  Tmax <- if (is.na(t0)) nrow(data) else nrow(data) + 1 - t0
-  if (is.na(pmarg)) {
-    p <- nmarg / Tmax # probability of marginal excesses
-  } else {
-    p <- pmarg
-  }
-  chi <- theorical_chi(params, df_lags) # get chi matrix
-  ll_df <- excesses
-  ll_df$Tobs <- Tmax - ll_df$tau # number of possible excesses
-  ll_df$chi <- chi$chi
-  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
-  ll_df$pchi <- 1 - p * ll_df$chi
-
-  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij # number of non-excesses
-  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
-              ll_df$non_excesses * log(ll_df$pchi)
-
-  nll <- -sum(ll_df$ll, na.rm = TRUE)
-  return(nll)
-}
-```
-
-```{r optim, fig.width = 5, fig.height = 5}
+```{r optim, fig.width = 5, fig.height = 5, echo=FALSE}
 # Optimisation of the variogram parameters
-q_values <- c(1, 1.1, 1.2)
+q_values <- c(0.9, 1)
 
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric(),
@@ -252,8 +145,6 @@ for (q in q_values) {
   # Get the empirical excesses
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
                                 threshold = TRUE)
-  n_marg <- get_marginal_excess(simu_df, q, 1, 1, threshold = TRUE)
-  pmarg <- n_marg / nrow(simu_df)
   # Optimization
   result <- optim(par = true_param, fn = neg_ll,
                   data = simu_df,
@@ -268,24 +159,6 @@ for (q in q_values) {
                   method = "BFGS",
                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                  maxit = 10000))
-
-    res <- mle2(neg_ll_par,
-              start = list(beta1 = true_param[1],
-                           beta2 = true_param[2],
-                           alpha1 = true_param[3],
-                           alpha2 = true_param[4],
-                           adv1 = true_param[5],
-                           adv2 = true_param[6]),
-              data = list(data = simu_df,
-                          quantile = q,
-                          df_lags = df_lags,
-                          locations = sites_coords,
-                          excesses = excesses,
-                          s0 = s0,
-                          t0 = t0,
-                          method = "CG"),
-              control = list(maxit = 10000),
-              fixed = list(beta2 = 0.2))
 
 
   # Check convergence
@@ -333,47 +206,10 @@ kable(df_rmse, "latex", booktabs = TRUE,
 # Combining simulations together
 
 ```{r comb, fig.width = 5, fig.height = 5}
-neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
-                    list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
-                    t0 = NA, threshold = FALSE) {
-  ind_s0 <- which(locations$Latitude == s0[1] && locations$Longitude == s0[2])
-  data <- do.call(rbind, list_simu)
-  nmarg <- get_marginal_excess(data, quantile, ind_s0, t0, threshold)
-  pmarg <- nmarg / nrow(data)
-  nll_composite <- 0 # composite negative log-likelihood
-  print(params)
-
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
-
-  nsample <- length(list_simu)
-  for (i in 1:nsample) {
-    # extract simulation data from i-th simulation
-    simu <- list_simu[[i]]
-    excesses <- list_excesses[[i]]
-    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
-                    latlon = latlon, hmax = hmax,
-                    excesses = excesses, s0 = s0, t0 = t0, pmarg = pmarg,
-                    threshold = threshold)
-    nll_composite <- nll_composite + nll_i
-  }
-  print(nll_composite)
-  return(nll_composite)
-}
-
 # Combine all simulations
 simu_all <- do.call(rbind, list_simu)
 
+length(list_simu)
 # plot simu for 4 sites
 par(mfrow = c(2, 2))
 plot(simu_all$S1, main = "S1")
@@ -386,7 +222,7 @@ df_lags <- get_conditional_lag_vectors(sites_coords, true_param, s0, t0,
 
 u <- 1
 list_excesses <- list()
-for (i in 1:nres) {
+for (i in 1:10) {
   list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
                                            threshold = TRUE)
 }
@@ -401,7 +237,9 @@ result <- optim(par = c(true_param), fn = neg_ll_composite,
                   s0 = s0,
                   t0 = t0,
                   threshold = TRUE,
-                  method = "CG",
+                  method = "L-BFGS-B",
+                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -10, -10),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                  maxit = 10000))
 
@@ -434,12 +272,12 @@ kable(df_result, "latex", booktabs = TRUE,
 
 ```{r rparetosimnoadv, fig.width = 5, fig.height = 5}
 adv <- c(0, 0)
-params <- c(0.4, 0.2, 1, 1.2) # ok verif sur simu
-true_param <- c(params, adv)
-beta1 <- 0.4
-beta2 <- 0.2
-alpha1 <- 1.5
-alpha2 <- 1
+params <- c(0.4, 0.2, 1, 1.2)
+true_param <- c(params)
+beta1 <- params[1]
+beta2 <- params[2]
+alpha1 <- params[3]
+alpha2 <- params[4]
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
@@ -501,8 +339,11 @@ plot(simu_all$S2, main = "S2")
 plot(simu_all$S10, main = "S10")
 plot(simu_all$S11, main = "S11")
 
+hmax <- sqrt(17)
+# df_lags <- get_lag_vectors(sites_coords, true_param, hmax = hmax,
+#                            tau_vect = 0:10)
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, s0, t0,
-                                       hmax = sqrt(17), tau_vect = 0:10)
+                                       hmax = hmax, tau_vect = 0:10)
 
 u <- 1
 list_excesses <- list()
@@ -517,27 +358,23 @@ result <- optim(par = c(true_param), fn = neg_ll_composite,
                   df_lags = df_lags,
                   list_excesses = list_excesses,
                   locations = sites_coords,
-                  hmax = sqrt(17),
+                  hmax = hmax,
                   s0 = s0,
                   t0 = t0,
                   threshold = TRUE,
                   method = "CG",
-                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
+                  control = list(parscale = c(1, 1, 1, 1),
                                  maxit = 10000))
 
 df_result <- data.frame(beta1 =  result$par[1],
                         beta2 = result$par[2],
                         alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+                        alpha2 = result$par[4])
 
 df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
                 beta2 = sqrt((result$par[2] - true_param[2])^2),
                 alpha1 = sqrt((result$par[3] - true_param[3])^2),
-                alpha2 = sqrt((result$par[4] - true_param[4])^2),
-                adv1 = sqrt((result$par[5] - true_param[5])^2),
-                adv2 = sqrt((result$par[6] - true_param[6])^2))
+                alpha2 = sqrt((result$par[4] - true_param[4])^2))
 
 df_result <- rbind(df_result, df_rmse)
 rownames(df_result) <- c("estim", "rmse")
@@ -548,6 +385,51 @@ kable(df_result, "latex", booktabs = TRUE,
 
 ```
 
+```{r}
+library(bbmle)
+
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, s0, t0,
+                                       hmax = hmax, tau_vect = 0:10)
+
+u <- 1
+list_excesses <- list()
+for (i in 1:nres) {
+  list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
+                                           threshold = TRUE)
+}
+
+result <- optim(par = c(true_param), fn = neg_ll_composite,
+                  list_simu = list_simu,
+                  quantile = u,
+                  df_lags = df_lags,
+                  list_excesses = list_excesses,
+                  locations = sites_coords,
+                  hmax = hmax,
+                  s0 = s0,
+                  t0 = t0,
+                  threshold = TRUE,
+                  method = "CG",
+                  control = list(parscale = c(1, 1, 1, 1),
+                                 maxit = 10000))
+
+df_result <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4])
+
+df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
+                beta2 = sqrt((result$par[2] - true_param[2])^2),
+                alpha1 = sqrt((result$par[3] - true_param[3])^2),
+                alpha2 = sqrt((result$par[4] - true_param[4])^2))
+
+df_result <- rbind(df_result, df_rmse)
+rownames(df_result) <- c("estim", "rmse")
+kable(df_result, "latex", booktabs = TRUE,
+        caption = "RMSE for all simulations together")  %>%
+    kable_styling(latex_options = "H",
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
 
 ## Retour sur les simulations de Brown-Resnick 
 
@@ -609,7 +491,7 @@ q_values <- seq(0.80, 0.95, 0.005)
 
 df_lags <- get_lag_vectors(sites_coords, true_param, hmax = sqrt(17),
                            tau_vect = 0:10)
-                           
+
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric())
 
@@ -674,7 +556,7 @@ q_values <- seq(0.9, 0.95, 0.005)
 
 df_lags <- get_lag_vectors(sites_coords, true_param, hmax = sqrt(17),
                            tau_vect = 0:10)
-                           
+
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric(),
                            adv1 = numeric(), adv2 = numeric())
@@ -795,7 +677,7 @@ q_values <- seq(0.80, 0.95, 0.01)
 
 df_lags <- get_lag_vectors(sites_coords, true_param, hmax = sqrt(17),
                            tau_vect = 0:10)
-                           
+
 result_table <- data.frame(q = numeric(), beta1 = numeric(), beta2 = numeric(),
                            alpha1 = numeric(), alpha2 = numeric(),
                            adv1 = numeric(), adv2 = numeric())

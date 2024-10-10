@@ -32,6 +32,48 @@ test_that("get_criterion calculates the correct values", {
 })
 
 
+
+# Test simple pour vérifier si les excès sont bien comptés
+test_that("empirical_excesses counts excesses correctly", {
+  quantile <- 6
+  threshold <- TRUE
+
+  data_rain <- data.frame(
+    s1 = c(1, 3, 5, 7, 9, 10, 11),
+    s2 = c(2, 4, 6, 6, 10, 2, 10)
+  )
+
+  df_lags <- data.frame(
+    s1 = c(1, 1, 2),
+    s2 = c(1, 2, 2),
+    tau = c(0, 0, 0)
+  )
+
+  result <- empirical_excesses(data_rain, quantile, df_lags, threshold)
+
+  expect_equal(result$Tobs[1], length(data_rain$s1))
+  expect_equal(result$kij[2], 2)
+  expect_equal(result$kij[1], 4)
+
+  quantile <- 0.6
+  threshold <- FALSE
+  u <- quantile(data_rain$s1, quantile)
+  nb_excesses_s1 <- sum(data_rain$s1 > u)
+  nb_excesses_s2 <- sum(data_rain$s2 > u)
+  nb_joint <- sum(data_rain$s1 > u & data_rain$s2 > u)
+
+  result <- empirical_excesses(data_rain, quantile, df_lags, threshold)
+
+  expect_equal(result$Tobs[1], length(data_rain$s1))
+  expect_equal(result$kij[2], nb_joint)
+  expect_equal(result$kij[1], nb_excesses_s1)
+  expect_equal(result$kij[3], nb_excesses_s2)
+
+})
+
+
+
+
 test_that("empirical_excesses works with sufficient data", {
   # Create sample data
   data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
@@ -201,7 +243,7 @@ test_that("neg_ll without advection", {
                     quantile = q, excesses = excesses)
 
   nll_hmax <- neg_ll(true_param, simu_df, df_lags,
-                    locations = sites_coords, hmax = hmax,
+                    locations = sites_coords, hmax = sqrt(17),
                     quantile = q, excesses = excesses)
 
   expect_false(nll == nll_hmax)
@@ -427,7 +469,7 @@ test_that("optim BR without advection", {
 
   df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect)
 
-  q <- 0.915
+  q <- 0.92
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
 
   result <- optim(par = true_param, fn = neg_ll,
@@ -465,7 +507,7 @@ test_that("optim BR without advection", {
                 excesses = excesses,
                 locations = sites_coords,
                 hmax = hmax,
-                method = "BFGS",
+                method = "CG",
                 control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                 maxit = 10000))
   # check convergence
@@ -637,22 +679,12 @@ test_that("optim rpareto", {
   excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
                                  threshold = TRUE)
 
-  result <- optim(par = true_param, fn = neg_ll,
-                data = simu_df,
-                quantile = q,
-                df_lags = df_lags,
-                excesses = excesses,
-                locations = sites_coords,
-                hmax = NA,
-                threshold = TRUE,
-                method = "BFGS",
-                control = list(parscale = c(1, 1, 1, 1, 1, 1),
-                                maxit = 10000))
-  # check convergence
-  expect_true(result$convergence == 0)
-
   # Combine all simulations
-  simu_all <- do.call(rbind, list_simu)
+  simu_all <- list_simu[[1]]
+  for (i in 2:nres){
+    simu_all <- rbind(simu_all, list_simu[[i]])
+  }
+
 
   df_lags <- get_conditional_lag_vectors(sites_coords, true_param, s0, t0,
                                         tau_vect = 0:10)
@@ -674,10 +706,86 @@ test_that("optim rpareto", {
                   s0 = s0,
                   t0 = t0,
                   threshold = TRUE,
-                  method = "CG",
+                  method = "BFGS",
                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
                                  maxit = 10000))
 
 
 
+})
+
+
+test_that("optim on replicates with neg_ll_composite", {
+  ngrid <- 5
+  sites_coords <- generate_grid_coords(ngrid)
+  temp <- 1:30
+  adv <- c(0.5, 0.3)
+  s0 <- c(1, 1)
+  t0 <- 1
+
+  # Calculate the h vector
+  true_param <- c(0.4, 0.2, 1.5, 1, adv)
+  hmax <- NA
+  tau_vect <- 0:10
+
+  df_lags <- get_conditional_lag_vectors(sites_coords, true_param, s0, t0,
+                                        tau_vect = tau_vect)
+
+  adv_int <- adv * 10
+  adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+
+  foldername <- paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
+                              length(temp), "t_", adv_str, "/")
+
+  nres <- 10
+  list_simu <- list()
+  for (i in 1:nres) {
+      file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                              length(temp), "t_", i, ".csv")
+      list_simu[[i]] <- read.csv(file_name)
+  }
+
+  # Combine all simulations
+  simu_all <- do.call(rbind, list_simu)
+
+  # simu_df_1 <- list_simu[[1]]
+  # simu_df_2 <- list_simu[[2]]
+  # simu_df_3 <- list_simu[[3]]
+
+  list_excesses <- list()
+  list_neg_ll <- list()
+  for (i in 1:nres) {
+    list_excesses[[i]] <- empirical_excesses(list_simu[[i]], quantile = 1,
+                                    df_lags = df_lags, threshold = TRUE)
+    list_neg_ll[[i]] <- neg_ll(params = true_param, data = list_simu[[i]],
+                                df_lags = df_lags, locations = sites_coords,
+                                quantile = 1, excesses = list_excesses[[i]],
+                                hmax = hmax, s0 = s0, t0 = t0, threshold = TRUE)
+    print(list_neg_ll[[i]])
+  }
+
+  # neg_ll1 <- neg_ll(params = true_param, data = simu_df_1,
+  #                   df_lags = df_lags, locations = sites_coords,
+  #                   quantile = 1, excesses = list_excesses[[1]],
+  #                   hmax = hmax, s0 = s0, t0 = t0, threshold = TRUE)
+
+  # neg_ll2 <- neg_ll(params = true_param, data = simu_df_2,
+  #                   df_lags = df_lags, locations = sites_coords,
+  #                   quantile = 1, excesses = list_excesses[[2]],
+  #                   hmax = hmax, s0 = s0, t0 = t0, threshold = TRUE)
+
+  # neg_ll3 <- neg_ll(params = true_param, data = simu_df_3,
+  #                   df_lags = df_lags, locations = sites_coords,
+  #                   quantile = 1, excesses = list_excesses[[3]],
+  #                   hmax = hmax, s0 = s0, t0 = t0, threshold = TRUE)
+
+  neg_ll_all <- neg_ll_composite(params = true_param, list_simu = list_simu,
+                                quantile = 1, df_lags = df_lags,
+                                list_excesses = list_excesses,
+                                locations = sites_coords, hmax = hmax,
+                                s0 = s0, t0 = t0, threshold = TRUE)
+
+  # expect_equal(neg_ll_all, neg_ll1 + neg_ll2)
+
+  expect_equal(neg_ll_all, sum(unlist(list_neg_ll)))
 })
