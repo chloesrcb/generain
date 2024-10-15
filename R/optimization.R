@@ -102,6 +102,57 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold=FALSE) {
   return(excesses)
 }
 
+empirical_excesses_rpar <- function(data, u, df_lags, threshold = TRUE, 
+                                    t0 = 1) {
+  df_lags$kij <- 0
+
+  for (i in 1:nrow(df_lags)) {
+    tau <- df_lags$tau[i]
+    site <- df_lags$s2[i]
+    df_lags$kij[i] <- sum(data[t0 + tau, site] > u)
+  }
+
+  return(df_lags[, c("hnorm", "tau", "kij")])
+}
+
+
+
+
+empirical_excesses_rpar <- function(data_rain, quantile, df_lags, 
+                                    threshold=FALSE, t0 = 1) {
+  excesses <- df_lags # copy the dataframe
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+  Tmax <- nrow(data_rain) # number of total observations
+  for (t in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s1 <- 1 # s0
+
+      # get the data for the pair of sites
+      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- as.data.frame(na.omit(rain_cp))
+      colnames(rain_cp) <- c("s1", "s2")
+
+      # shifted data
+      # Tmax <- nrow(rain_cp) # number of total observations
+      X_s_t <- rain_cp$s2[(t0 + t)]
+      nmargin <- sum(X_s_t > quantile) # 0 or 1
+      # store the number of excesses and T - tau
+      excesses$Tobs[excesses$s1 == ind_s1
+                      & excesses$s2 == ind_s2
+                      & excesses$tau == t] <- 1
+
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == t] <- nmargin
+    }
+  }
+  return(excesses)
+}
+
 
 # THEORICAL CHI ----------------------------------------------------------------
 
@@ -125,9 +176,10 @@ theorical_chi_ind <- function(params, h, tau) {
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
+  adv <- params[5:6]
 
   # Get vario and chi for each lagtemp
-  varioval <- 2 * (beta1) * h^alpha1 + (beta2) * tau^alpha2
+  varioval <- (beta1) * h^alpha1 + (beta2) * tau^alpha2
   phi <- pnorm(sqrt(0.5 * varioval))
   chival <- 2 * (1 - phi)
 
@@ -171,12 +223,32 @@ theorical_chi_mat <- function(params, h_vect, tau) {
 #' @param params A vector of variogram parameters.
 #' @param df_lags A dataframe with spatial and temporal lag values.
 #'
-#' @return The theoretical chi matrix.
+#' @return The theoretical chi
 #'
 #' @export
 theorical_chi <- function(params, df_lags) {
-  chi_df <- df_lags # copy the dataframe
-  chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  if (length(params) == 6) {
+    adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
+  }
+  # print(adv)
+
+  chi_df <- df_lags[c("s1", "s2", "tau")]
+
+  # Get vario and chi for each lagtemp
+  chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+  chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+  chi_df$hnorm <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  chi_df$hnorm <- norm_Lp(chi_df$hx, chi_df$hy, p = alpha1)
+
+  chi_df$vario <- (2*beta1) * chi_df$hnorm^alpha1 + (2*beta2) * chi_df$tau^alpha2
+  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+  # chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
   return(chi_df)
 }
 
@@ -249,16 +321,10 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
                    threshold = FALSE, norm = "euclidean") {
   tau <- unique(df_lags$tau) # unique temporal lags
   Tmax <- nrow(data) # number of total observations
-  temp <- 1:Tmax # time vector
-
+  # temp <- 1:Tmax # time vector
+  # print(params)
   if (all(!is.na(s0))) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
-    # ind_s0 <- which(locations$Latitude == s0[1] &&
-    #                 locations$Longitude == s0[2])
-    # nmarg <- sum(data[1:(Tmax - t0), ind_s0] > quantile)
-    # p <- nmarg / (Tmax - t0) # probability of marginal excesses
-    # nmarg <- get_marginal_excess(data, quantile, ind_s0, t0, threshold)
-    # p <- nmarg / (Tmax - t0) # probability of marginal excesses
   } else {
     # number of marginal excesses
     nmarg <- get_marginal_excess(data, quantile, 1, 1, threshold)
@@ -278,31 +344,48 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
     return(1e50)
   }
 
-  if (length(params) == 6) { # if we have the advection parameters
-    # then the lag vectors are different
-    if (all(is.na(s0)) && is.na(t0)) {
-      df_lags <- get_lag_vectors(locations, params, tau_vect = tau, norm = norm)
-    } else { # else we have to consider the conditioning location and time
-      df_lags <- get_conditional_lag_vectors(locations, params, temp,
-                                              tau_max = max(tau),
-                                              s0 = s0, t0 = t0)
-      # excesses <- empirical_excesses(data, quantile, df_lags, threshold)
-    }
-  }
+  # if (length(params) == 6) { # if we have the advection parameters
+  #   # then the lag vectors are different
+  #   adv <- params[5:6]
+  #   if (all(is.na(s0)) && is.na(t0)) {
+  #     # df_lags <- get_lag_vectors(locations, params, tau_vect = tau)
+  #     df_lags$hx <- df_lags$hx - adv[1] * df_lags$tau
+  #     df_lags$hy <- df_lags$hy - adv[2] * df_lags$tau
+  #     df_lags$hnorm <- sqrt(df_lags$hx^2 + df_lags$hy^2)
+  #   } else { # else we have to consider the conditioning location and time
+  #     df_lags <- get_conditional_lag_vectors(locations, params, temp,
+  #                                             tau_max = max(tau),
+  #                                             s0 = s0, t0 = t0)
+  #     # excesses <- empirical_excesses(data, quantile, df_lags, threshold)
+  #   }
+  # }
 
   chi <- theorical_chi(params, df_lags) # get chi matrix
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
-  ll_df$chi <- chi$chi
+  ll_df$chi <- chi$chi # TODO calcul du chi théorique pour r-Pareto...
   ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi
   ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
+  ll_df$N_h_tau <- 0
+  ll_df$N_h <- 0
+  # Compute the number of pairs of sites for each spatial lag h
+  # h_vect <- sort(unique(df_lags$hnorm))
+  # for (h in h_vect) {
+  #   for (t in tau) {
+  #     N_h_tau <- sum(ll_df$Tobs[ll_df$hnorm == h & ll_df$tau == t])
+  #     N_h <- length(ll_df$hnorm[ll_df$hnorm == h])
+  #     ll_df$N_h_tau[ll_df$tau == t & ll_df$hnorm == h] <- N_h_tau
+  #     ll_df$N_h[ll_df$tau == t & ll_df$hnorm == h] <- N_h
+  #   }
+  # }
 
-  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij # number of non-excesses
+  # number of non-excesses
+  # ll_df$non_excesses <- ll_df$N_h - ll_df$kij
+  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
   ll_df$ll <- ll_df$kij * log(ll_df$chi) +
               ll_df$non_excesses * log(ll_df$pchi)
-
   if (!is.na(hmax)) {
     ll_df <- ll_df[ll_df$hnorm <= hmax, ]
   }
@@ -429,6 +512,63 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data,
 neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
                     list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
                     t0 = NA, threshold = FALSE) {
+  print(params)
+  # Bounds for the parameters
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(1e50)
+  }
+
+  m <- length(list_simu) # number of replicates
+  nll_composite <- 0 # composite negative log-likelihood
+  for (i in 1:m) {
+    # extract simulation data from i-th simulation
+    simu <- list_simu[[i]]
+    excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
+                    latlon = latlon, hmax = hmax,
+                    excesses = excesses, s0 = s0, t0 = t0,
+                    threshold = threshold)
+    nll_composite <- nll_composite + nll_i
+  }
+  return(nll_composite)
+}
+
+
+#' neg_ll_composite function
+#'
+#' Calculate the negative log-likelihood for a list of simulations.
+#'
+#' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2).
+#' @param list_simu A list of simulated data.
+#' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param locations The locations dataframe.
+#' @param quantile The quantile value.
+#' @param list_excesses A list of excesses dataframes.
+#' @param latlon A boolean value to indicate if the locations are in latitude
+#'              and longitude. Default is FALSE.
+#' @param s0 The starting location.
+#' @param t0 The starting time.
+#' @param hmax The maximum spatial lag value.
+#'
+#' @return The negative log-likelihood value.
+#'
+#' @import stats
+#'
+#' @export
+neg_ll_composite_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
+                    list_simu, df_lags, locations, quantile,
+                    list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
+                    t0 = NA, threshold = FALSE) {
+  params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
+  print(params)
   # Bounds for the parameters
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
