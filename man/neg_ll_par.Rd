@@ -25,6 +25,18 @@ neg_ll_par(
 )
 }
 \arguments{
+\item{beta1}{The beta1 parameter.}
+
+\item{beta2}{The beta2 parameter.}
+
+\item{alpha1}{The alpha1 parameter.}
+
+\item{alpha2}{The alpha2 parameter.}
+
+\item{adv1}{The advection parameter 1.}
+
+\item{adv2}{The advection parameter 2.}
+
 \item{data}{The data dataframe.}
 
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
@@ -48,8 +60,6 @@ and longitude. Default is FALSE.}
 \item{threshold}{A boolean value to indicate if the quantile variable is a
 threshold value and not a uniform quantile. Default is FALSE.}
 
-\item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}
-
 \item{pmarg}{The probability of marginal excesses. Default is NA.}
 }
 \value{
@@ -59,5 +69,5 @@ The negative log-likelihood value.
 Calculate the negative log-likelihood for a given set of variogram
 parameters by considering excess indicators following a binomial distribution
 with a probability parameter equals to the theorical spatio-temporal chi
-value. We can vary params.
+value. Used for fixing parameters in the optimization process.
 }

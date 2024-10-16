@@ -4,14 +4,7 @@
 \alias{get_dist_mat}
 \title{This function reshapes a distance matrix into a long dataframe.}
 \usage{
-get_dist_mat(
-  locations,
-  dmax = NA,
-  latlon = TRUE,
-  adv = c(0, 0),
-  tau = 1:10,
-  alpha_spa = 1.5
-)
+get_dist_mat(locations, dmax = NA, latlon = TRUE)
 }
 \arguments{
 \item{locations}{A matrix or data frame containing the coordinates of the
@@ -21,12 +14,6 @@ locations.}
 
 \item{latlon}{Logical indicating whether the coordinates are in latitude and
 longitude format. Default is TRUE.}
-
-\item{adv}{A vector of advection values. Default is c(0, 0).}
-
-\item{tau}{A vector of temporal lags. Default is 1:10.}
-
-\item{alpha_spa}{The spatial lag exponent. Default is 1.5.}
 }
 \value{
 A distance matrix containing the reshaped distances.

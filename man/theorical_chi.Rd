@@ -12,7 +12,7 @@ theorical_chi(params, df_lags)
 \item{df_lags}{A dataframe with spatial and temporal lag values.}
 }
 \value{
-The theoretical chi matrix.
+The theoretical chi
 }
 \description{
 This function calculates the theoretical chi dataframe, based on the given
