@@ -5,16 +5,13 @@
 #' @param dmax The maximum distance threshold if specified.
 #' @param latlon Logical indicating whether the coordinates are in latitude and
 #' longitude format. Default is TRUE.
-#' @param adv A vector of advection values. Default is c(0, 0).
-#' @param tau A vector of temporal lags. Default is 1:10.
-#' @param alpha_spa The spatial lag exponent. Default is 1.5.
+#' 
 #' @return A distance matrix containing the reshaped distances.
 #'
 #' @import geodist
 #'
 #' @export
-get_dist_mat <- function(locations, dmax = NA, latlon = TRUE,
-                                   adv = c(0, 0), tau = 1:10, alpha_spa = 1.5) {
+get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
   # get longitude and latitude in a dataframe to get distance between points
   loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
 
@@ -29,28 +26,7 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE,
     dist_mat[dist_mat > dmax] <- 0
   }
 
-  if (all(adv == c(0, 0))) {
-    return(dist_mat)
-  } else { # with advection
-    dist_mats_adv <- list()
-    for (t in tau) {
-      adv_t <- adv * t
-      dist_mat_adv <- matrix(0, nrow = nrow(dist_mat), ncol = ncol(dist_mat))
-
-      for (i in 1:nrow(dist_mat)) {
-        for (j in 1:ncol(dist_mat)) {
-          h <- c(locations$Longitude[j] - locations$Longitude[i],
-                 locations$Latitude[j] - locations$Latitude[i])
-          dist_mat_adv[i, j] <- sqrt(sum((h - adv_t)^2))
-          # dist_mat_adv[i, j] <- norm_Lp(h[1] - adv_t[1], h[2] - adv_t[2], alpha_spa)
-        }
-      }
-
-      dist_mats_adv[[paste0("t", t)]] <- dist_mat_adv
-    }
-
-    return(dist_mats_adv)
-  }
+  return(dist_mat)
 }
 
 #' This function reshapes a distance matrix into a long dataframe.
@@ -204,21 +180,21 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
   lags$hx <- lags$s1x - lags$s2x
   lags$hy <- lags$s1y - lags$s2y
 
-  # Add advection
-  lags$hx <- lags$hx - adv[1] * lags$tau
-  lags$hy <- lags$hy - adv[2] * lags$tau
+  # # Add advection
+  # lags$hx <- lags$hx - adv[1] * lags$tau
+  # lags$hy <- lags$hy - adv[2] * lags$tau
 
-  # Calculate the norm
-  if (norm == "euclidean") {
-    lags$hnorm <- sqrt(lags$hx^2 +  lags$hy^2)
-  } else if (norm == "Lp") {
-    lags$hnorm <- norm_Lp(lags$hx, lags$hy, params[3])
-  }
+  # # Calculate the norm
+  # if (norm == "euclidean") {
+  #   lags$hnorm <- sqrt(lags$hx^2 +  lags$hy^2)
+  # } else if (norm == "Lp") {
+  #   lags$hnorm <- norm_Lp(lags$hx, lags$hy, params[3])
+  # }
 
-  # Filter based on hmax
-  if (!is.na(hmax)) {
-    lags <- lags[lags$hnorm <= hmax, ]
-  }
+  # # Filter based on hmax
+  # if (!is.na(hmax)) {
+  #   lags <- lags[lags$hnorm <= hmax, ]
+  # }
 
   return(lags)
 }
@@ -233,9 +209,6 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 #' @param s0 Conditional spatial point coordinates.
 #' @param t0 Conditional temporal point.
 #' @param tau_max The maximum temporal lag. Default is 10.
-#' @param hmax The maximum distance threshold. Default is NA.
-#' @param norm The norm to use. Can be "euclidean" or "Lp". Default
-#'            is "euclidean".
 #'
 #' @import utils
 #'
@@ -243,11 +216,7 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 #'
 #' @export
 get_conditional_lag_vectors <- function(df_coords, params, temp, s0 = c(1, 1),
-                                        t0 = 1, tau_max = 10, hmax = NA,
-                                        norm = "euclidean") {
-  # Advection
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
-
+                                        t0 = 1, tau_max = 10) {
   # Conditional point index in df_coords
   ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])
 
@@ -285,24 +254,8 @@ get_conditional_lag_vectors <- function(df_coords, params, temp, s0 = c(1, 1),
   lags$s2y <- df_coords$Latitude[lags$s2]
 
   # Vector coordinates between two sites
-  lags$hx <- lags$s1x - lags$s2x
-  lags$hy <- lags$s1y - lags$s2y
-
-  # Add advection
-  lags$hx <- lags$hx - adv[1] * lags$tau
-  lags$hy <- lags$hy - adv[2] * lags$tau
-
-  # Calculate the norm
-  if (norm == "euclidean") {
-    lags$hnorm <- sqrt(lags$hx^2 +  lags$hy^2)
-  } else if (norm == "Lp") {
-    lags$hnorm <- norm_Lp(lags$hx, lags$hy, params[3])
-  }
-
-  # Filter < hmax
-  if (!is.na(hmax)) {
-    lags <- lags[lags$hnorm <= hmax, ]
-  }
+  lags$hx <- lags$s2x - lags$s1x # s - s0
+  lags$hy <- lags$s2y - lags$s1y
 
   return(lags)
 }
