@@ -161,7 +161,7 @@ test_that("sim_rpareto", {
     expect_equal(dim(W), c(length(x), length(y), length(t)))
     # check conditional gaussian process W_s0,t0
     expect_equal(W[s0[1], s0[2], t0], W[1]) # W_s0,t0 = W[s0[1], s0[2], t0]
-  
+
     Z <- sim_rpareto(beta1, beta2, alpha1, alpha2, x, y, t, adv, nres=10)
     # Check the length
     expect_equal(dim(Z), c(length(x), length(y), length(t), 10))
