@@ -1,0 +1,474 @@
+---
+title: "Simulations"
+author: " "
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 5,
+                      fig.align = 'center', message = FALSE, warning = FALSE,
+                      fig.pos='H', echo=FALSE)
+
+```
+
+
+```{r lib, echo=FALSE}
+# setwd("./script")
+library(generain)
+library(latex2exp)
+library(reshape2)
+library(ggplot2)
+source("load_libraries.R")
+library(kableExtra)
+library(extRemes)
+library(bbmle)
+library(ismev)
+library(extRemes)
+library(evd)
+library(dplyr)
+
+btf_theme <- theme_minimal() +
+  theme(axis.text.x = element_text(size =  6, angle = 0),
+        axis.text.y = element_text(size = 6),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 6),
+        title = element_text(size = 10),
+        axis.line = element_blank(),  # Remove axis lines
+        panel.border = element_blank(),  # Remove plot border
+        panel.background = element_rect(fill = "transparent", color = NA),
+        # Remove plot background
+        axis.text = element_blank(),  # Remove axis text
+        axis.ticks = element_blank(),  # Remove axis ticks
+        plot.background = element_rect(fill = "transparent", color = NA),
+        panel.grid = element_line(color = "#5c595943"))
+
+# my green color
+btfgreen <- "#69b3a2"
+```
+
+# Simulation Brown-Resnick
+
+Comparison with and without advection on a 2x2 grid, 30 time steps and 2 sites. The 
+advection is set to 0.5 in the x direction and 0.2 in the y direction. Seed is fixed.
+
+```{r, echo=FALSE, fig.height=4, fig.width=7, fig.cap="Rainfall simulation with and without advection"}
+adv <- c(0.5, 0.2)
+true_param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 2
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+n.BR <- 1
+
+# generate the simulations
+set.seed(123)
+BR_adv <- sim_BR(true_param[1], true_param[2], true_param[3],
+                    true_param[4], spa, spa, temp, adv)
+# plot(BR_adv[1, 1, , ], main = "Rainfall simulation with advection")
+
+set.seed(123)
+BR_noadv <- sim_BR(true_param[1], true_param[2], true_param[3],
+                   true_param[4], spa, spa, temp, adv=c(0, 0))
+# plot(BR_noadv[1, 1, , ], main = "Rainfall simulation without advection")
+
+# plot on the same graph with ggplot
+df_adv <- data.frame(time = temp,
+                     value = BR_adv[1, 1, , ],
+                     type = "advection")
+df_noadv <- data.frame(time = temp,
+                      value = BR_noadv[1, 1, , ],
+                      type = "no_advection")
+
+df_plot <- rbind(df_adv, df_noadv)
+
+ggplot(df_plot, aes(x = time, y = value, color = type)) +
+  geom_point() +
+  labs(title = "",
+       x = "Time", y = "Rainfall")
+```
+
+
+## Simulation with 25 sites and 300 time steps without advection
+
+```{r}
+adv <- c(0, 0)
+true_param <- c(0.4, 0.2, 1.5, 1, adv)
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:300
+
+# BR <- sim_BR(true_param[1], true_param[2], true_param[3],
+#                     true_param[4], spa, spa, temp, adv)
+
+foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
+                                length(temp), "t/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+# save_simulations(BR, ngrid, n.BR, folder = foldername,
+#         file = paste0("br_", ngrid^2, "s_", length(temp), "t"), forcedind = 1)
+
+# load the simulations
+file_path <- paste0(foldername, "br_", ngrid^2, "s_", length(temp),
+                "t_", 1, ".csv")
+simu_df <- read.csv(file_path)
+```
+
+
+```{r}
+# simulation gif
+# create_simu_gif(simu_df, true_param, type = "br", forcedtemp = 50)
+```
+
+
+```{r,echo=FALSE, fig.height=5, fig.width=5, fig.cap="Rainfall simulation with 25 sites and 300 time steps"}
+# plot the simulation for one site
+par(mfrow = c(2, 2), cex = 0.5)
+plot(simu_df[, 1], main = "Site 1")
+plot(simu_df[, 2], main = "Site 2")
+plot(simu_df[, 3], main = "Site 3")
+plot(simu_df[, 4], main = "Site 4")
+```
+
+
+```{r, fig.height=4, fig.width=7, fig.cap="Rainfall simulation with 25 sites and 300 time steps on the same plot"}
+# plot the simulation at four different sites on 100 time steps
+df_plot <- data.frame(time = 1:300,
+                      S3 = simu_df[, 3],
+                      S4 = simu_df[, 4],
+                      S5 = simu_df[, 5])
+
+ggplot(df_plot, aes(x = time)) +
+    geom_point(aes(y = S3, color = "S4")) +
+    geom_point(aes(y = S4, color = "S5")) +
+    geom_point(aes(y = S5, color = "S6")) +
+    labs(title = "For four different sites",
+         x = "Time", y = "Rainfall") +
+    theme_minimal()
+```
+
+
+## Verification of marginal distributions (Gumbel)
+
+```{r, fig.height=5, fig.width=5, fig.cap="QQ-plot of the Gumbel distribution for two sites"}
+# qq-plots margins
+par(mfrow = c(2, 2))
+
+BR_loc <- simu_df$S4
+plot(BR_loc, main = "Site 4")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log, show=FALSE)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+
+
+BR_loc <- simu_df$S5
+plot(BR_loc, main = "Site 5")
+BR_loc_log <- log(BR_loc)
+gumbel.fit <- gum.fit(BR_loc_log, show=FALSE)
+
+mu <- gumbel.fit$mle[1]
+sigma <- gumbel.fit$mle[2]
+
+theorical_qgum <- qgumbel(ppoints(BR_loc_log), mu, sigma)
+
+qqplot(BR_loc_log, theorical_qgum, main = "Gumbel Q-Q plot",
+       xlab = "Empirical quantiles",
+       ylab = "Theoretical quantiles")
+```
+
+
+## Simulation of r-pareto with advection
+
+The optimisation of the variogram parameters without advection works. So I need to 
+focus on the advection part and see if my r-pareto advected simulation works. I will
+simulate a 5x5 grid with 30 time steps and 20 realizations.
+
+```{r rparetosim1, echo=FALSE}
+adv <- c(0.5, 0.3) # advection
+params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+true_param <- c(params, adv)
+beta1 <- params[1]
+beta2 <- params[2]
+alpha1 <- params[3]
+alpha2 <- params[4]
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+
+# Conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Number of realizations
+nres <- 20
+
+# Simulate the process
+# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+#                     t0, nres)
+
+if (any(adv < 1)) {
+  adv_int <- adv * 10
+} else {
+  adv_int <- adv
+}
+adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+
+# Save the data
+foldername <- paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
+                                length(temp), "t_", adv_str, "/")
+
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+# save_simulations(simu, ngrid, nres, folder = foldername,
+#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+
+# nres <- length(list.files(foldername))
+```
+
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
+list_simu <- list()
+for (i in 1:nres) {
+  file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                        length(temp), "t_", i, ".csv")
+  list_simu[[i]] <- read.csv(file_name)
+}
+
+# Plot the first realization
+simu_df <- list_simu[[2]]
+sites_coords <- generate_grid_coords(ngrid)
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+plot(simu_df$S1, main = "S1=S0=(1,1)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S7, main = "S7=(2,2)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S10, main = "S13=(3,3)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
+```
+
+## Verification of marginal distributions (GPD)
+
+```{r, fig.height=5, fig.width=5, fig.cap="QQ-plot of the GPD distribution for four sites, with quantile at 0.8 and threshold is 0.147"}
+# qq-plots margins for 1 site
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+rpar <- simu_df$S1
+threshold <- quantile(rpar, probs = 0.8)
+rpar_exc <- rpar[rpar > threshold]
+fit_gpd <- gpd.fit(rpar, threshold, show=FALSE)
+sigma <- fit_gpd$mle[1]
+xi <- fit_gpd$mle[2]
+
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+                       shape=xi, scale=sigma)
+
+qqplot(rpar_exc, theorical_qgpd, main = "Site 1",
+  xlab = "Empirical quantiles",
+  ylab = "Theoretical quantiles")
+
+rpar <- simu_df$S3
+threshold <- quantile(rpar, probs = 0.8)
+rpar_exc <- rpar[rpar > threshold]
+fit_gpd <- gpd.fit(rpar, threshold, show=FALSE)
+sigma <- fit_gpd$mle[1]
+xi <- fit_gpd$mle[2]
+
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+                       shape=xi, scale=sigma)
+
+qqplot(rpar_exc, theorical_qgpd, main = "Site 3",
+  xlab = "Empirical quantiles",
+  ylab = "Theoretical quantiles")
+
+rpar <- simu_df$S8
+threshold <- quantile(rpar, probs = 0.8)
+rpar_exc <- rpar[rpar > threshold]
+fit_gpd <- gpd.fit(rpar, threshold)
+sigma <- fit_gpd$mle[1]
+xi <- fit_gpd$mle[2]
+
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+                       shape=xi, scale=sigma)
+
+qqplot(rpar_exc, theorical_qgpd, main = "Site 8",
+  xlab = "Empirical quantiles",
+  ylab = "Theoretical quantiles")
+
+rpar <- simu_df$S10
+threshold <- quantile(rpar, probs = 0.8)
+rpar_exc <- rpar[rpar > threshold]
+fit_gpd <- gpd.fit(rpar, threshold, show=FALSE)
+sigma <- fit_gpd$mle[1]
+xi <- fit_gpd$mle[2]
+
+theorical_qgpd <- qgpd(ppoints(rpar_exc), loc=min(rpar_exc), 
+                       shape=xi, scale=sigma)
+
+qqplot(rpar_exc, theorical_qgpd, main = "Site 10",
+  xlab = "Empirical quantiles",
+  ylab = "Theoretical quantiles")
+```
+
+With the threshold $u=1$, some sites do not have exceedances.
+
+## Check variogram inside the simulation
+
+```{r, message=FALSE}
+x <- spa
+y <- spa
+t <- temp
+RandomFields::RFoptions(spConform = FALSE, install = "no")
+lx <- length(sx <- seq_along(x))  # spatial
+ly <- length(sy <- seq_along(y))  # spatial
+lt <- length(st <- seq_along(t))  # temporal
+s0 <- c(1, 1)
+t0 <- 1
+
+## Model-Variogram BuhlCklu
+modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 1) +
+                  RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 2) +
+                  RandomFields::RMfbm(alpha = alpha2, var = 2*beta2, proj = 3)
+
+## Construct grid
+Nxy <- lx * ly # spatial grid size
+N <- Nxy * lt # spatio-temporal grid size
+grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix
+
+for (i in sx)
+  for (j in seq_len(ly*lt))
+    grid[i+(j-1)*ly, 1] <- i
+
+for (i in sy)
+  for (j in sx)
+    for(k in st)
+      grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i
+
+for (i in st)
+  for (j in seq_len(Nxy))
+    grid[j+Nxy*(i-1), 3] <- i
+
+# Construct shifted variogram for conditional spatio-temporal point
+gamma <-  conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu, adv)
+```
+
+```{r, fig.height=3, fig.width=3, fig.cap="Variogram relative to the conditional spatio-temporal point for all sites"}
+par(mfrow = c(1, 1),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+# Plot the variogram
+plot(gamma, main = "", xlab = "Time lag",
+    ylab = "Variogram")
+```
+
+
+```{r, fig.height=5, fig.width=5, fig.cap="Variogram relative to the conditional spatio-temporal point for four sites"}
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+
+# Plot the variogram for one site
+plot(gamma[1,1, ], main = TeX(r"($\gamma(s-s_0, \tau)$ with $s=s_0=(1,1)$)"), xlab = "Time lag",
+    ylab = "Variogram")
+plot(gamma[2,1, ], main = TeX(r"($s=(2,1)$)"), xlab = "Time lag",
+    ylab = "Variogram")
+plot(gamma[5,2, ], main = TeX(r"($s=(5,2)$)"), xlab = "Time lag",
+    ylab = "Variogram")
+plot(gamma[5,5, ], main = TeX(r"($s=(5,5)$)"), xlab = "Time lag",
+    ylab = "Variogram")
+```
+
+
+```{r, echo=TRUE, message=FALSE}
+s0 <- c(1, 1)
+s0_x <- s0[1]
+s0_y <- s0[2]
+t0 <- 1
+print(gamma[s0_x, s0_y, t0] == 0)
+
+s_x <- 1
+s_y <- 1
+time <- 2
+semivario_s_t <- beta1 * abs(s0_x - s_x)^alpha1 + # no advection
+                 beta1 * abs(s0_y - s_y)^alpha1 +
+                 beta2 * abs(t0 - time)^alpha2
+print(gamma[s_x, s_y, time] != 2*semivario_s_t) # as to be different
+
+tau <- t0 - time
+semivario_s_t_adv <- beta1 * abs(s0_x - s_x - adv[1] * tau)^alpha1 +
+                 beta1 * abs(s0_y - s_y - adv[2]*tau)^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+
+semivario_s_t_adv <- beta1 * abs(s0_x - s_x - adv[1] * abs(tau))^alpha1 +
+                 beta1 * abs(s0_y - s_y - adv[2]*abs(tau))^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+
+
+s_x <- 2
+s_y <- 1
+time <- 2
+tau <- t0 - time
+semivario_s_t_adv <- beta1 * abs(s0_x - s_x - adv[1] * tau)^alpha1 +
+                 beta1 * abs(s0_y - s_y - adv[2]*tau)^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+
+semivario_s_t_adv <- beta1 * abs(s0_x - s_x - adv[1] * abs(tau))^alpha1 +
+                 beta1 * abs(s0_y - s_y - adv[2]*abs(tau))^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+
+
+s_x <- 2
+s_y <- 1
+time <- 10
+tau <- time - t0
+semivario_s_t_adv <- beta1 * abs(s_x  - s0_x - adv[1] * tau)^alpha1 +
+                 beta1 * abs(s_y - s0_y - adv[2]*tau)^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+
+semivario_s_t_adv <- beta1 * abs(s_x - s0_x - adv[1] * abs(tau))^alpha1 +
+                 beta1 * abs(s_y - s0_y - adv[2] * abs(tau))^alpha1 +
+                 beta2 * abs(tau)^alpha2
+print(gamma[s_x, s_y, time] == 2 * semivario_s_t_adv)
+```
+
+Problem: J'ai consideré seulement des tau positifs tels que tau=t-t0 avec $t\geq t0$.
+Or il faut faire correspondre dans le bon sens les s-s0 et t-t0. Il faut donc que
+mette s-s0 et non s0-s quand je calcule les lags spatio-temporels. FAIT.
+
+Donc dans le cas des simulations de Brown-Resnick, sans site conditionel, je dois avoir le meme style de probleme avec 
+des taus positifs ne correspondant pas à comment je prends les lags spatiales. Comment faire ?
+On a $\tau = t_1 - t_2$ et $h=s_1 - s_2$ mais $\tau$ n'est pas toujours positifs... alors que je considère des $\tau \in \{1, 2, \ldots, 10\}$.
+Idées: valeurs absolues des lags temporels dans le vaiogramme de la simu?
+Considerer des tau négatifs dans l'optim dans le calcul des lags spatio-temporels?
+
+
