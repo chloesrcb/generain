@@ -13,15 +13,12 @@ neg_ll_par(
   adv2,
   data,
   df_lags,
-  locations,
   quantile,
   excesses,
-  latlon = FALSE,
   hmax = NA,
   s0 = NA,
   t0 = NA,
-  threshold = FALSE,
-  norm = "euclidean"
+  threshold = FALSE
 )
 }
 \arguments{
@@ -41,15 +38,10 @@ neg_ll_par(
 
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
 
-\item{locations}{The locations dataframe.}
-
 \item{quantile}{The quantile value.}
 
 \item{excesses}{The excesses dataframe with the number of excesses kij and
 the number of possible excesses Tobs.}
-
-\item{latlon}{A boolean value to indicate if the locations are in latitude
-and longitude. Default is FALSE.}
 
 \item{hmax}{The maximum spatial lag value. Default is NA.}
 
@@ -59,6 +51,11 @@ and longitude. Default is FALSE.}
 
 \item{threshold}{A boolean value to indicate if the quantile variable is a
 threshold value and not a uniform quantile. Default is FALSE.}
+
+\item{locations}{The locations dataframe.}
+
+\item{latlon}{A boolean value to indicate if the locations are in latitude
+and longitude. Default is FALSE.}
 
 \item{pmarg}{The probability of marginal excesses. Default is NA.}
 }
