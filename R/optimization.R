@@ -219,11 +219,14 @@ theorical_chi <- function(params, df_lags) {
   # Get vario and chi for each lagtemp
   chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
   chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-  # chi_df$hnorm <- sqrt(chi_df$hx^2 + chi_df$hy^2)
-  chi_df$hnorm <- norm_Lp(chi_df$hx, chi_df$hy, p = alpha1)
+  chi_df$hnorm <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
 
   chi_df$vario <- (2 * beta1) * chi_df$hnorm^alpha1 +
                   (2 * beta2) * abs(chi_df$tau)^alpha2
+  # chi_df$vario <- 2*beta1 * abs(chi_df$hx)^alpha1 +
+  #                 2*beta1 * abs(chi_df$hy)^alpha1 +
+  #                 2*beta2 * abs(chi_df$tau)^alpha2
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
   # chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
   return(chi_df)
@@ -277,25 +280,20 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2).
 #' @param data The data dataframe.
 #' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param quantile The quantile value.
 #' @param excesses The excesses dataframe with the number of excesses kij and
 #'                 the number of possible excesses Tobs.
-#' @param locations The locations dataframe.
-#' @param quantile The quantile value.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'               and longitude. Default is FALSE.
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param s0 The conditioning location. Default is NA.
 #' @param t0 The conditioning time. Default is NA.
-#' @param pmarg The probability of marginal excesses. Default is NA.
 #' @param threshold A boolean value to indicate if the quantile variable is a
 #'                threshold value and not a uniform quantile. Default is FALSE.
 #'
 #' @return The negative log-likelihood value.
 #'
 #' @export
-neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
-                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA,
-                   threshold = FALSE, norm = "euclidean") {
+neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
+                  s0 = NA, t0 = NA, threshold = FALSE) {
   Tmax <- nrow(data) # number of total observations
   # print(params)
   if (all(!is.na(s0))) { # if we have a conditioning location
@@ -372,14 +370,13 @@ neg_ll <- function(params, data, df_lags, locations, quantile, excesses,
 #' @return The negative log-likelihood value.
 #'
 #' @export
-neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags, 
-                   locations, quantile, excesses,
-                   latlon = FALSE, hmax = NA, s0 = NA, t0 = NA,
-                   threshold = FALSE, norm = "euclidean") {
+neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags,
+                   quantile, excesses, hmax = NA, s0 = NA, t0 = NA,
+                   threshold = FALSE) {
   params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
-  nll <- neg_ll(params, data, df_lags, locations, quantile, excesses,
-                latlon = latlon, hmax = hmax, s0 = s0, t0 = t0,
-                threshold = threshold, norm = norm)
+  nll <- neg_ll(params, data, df_lags, quantile, excesses,
+                hmax = hmax, s0 = s0, t0 = t0,
+                threshold = threshold)
   return(nll)
 }
 
@@ -391,11 +388,8 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags,
 #' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2).
 #' @param list_simu A list of simulated data.
 #' @param df_lags The dataframe with spatial and temporal lag values.
-#' @param locations The locations dataframe.
 #' @param quantile The quantile value.
 #' @param list_excesses A list of excesses dataframes.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'              and longitude. Default is FALSE.
 #' @param s0 The starting location.
 #' @param t0 The starting time.
 #' @param hmax The maximum spatial lag value.
@@ -405,8 +399,8 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags,
 #' @import stats
 #'
 #' @export
-neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
-                    list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
+neg_ll_composite <- function(params, list_simu, df_lags, quantile,
+                    list_excesses, hmax = NA, s0 = NA,
                     t0 = NA, threshold = FALSE) {
   print(params)
   # Bounds for the parameters
@@ -428,8 +422,7 @@ neg_ll_composite <- function(params, list_simu, df_lags, locations, quantile,
     # extract simulation data from i-th simulation
     simu <- list_simu[[i]]
     excesses <- list_excesses[[i]]
-    nll_i <- neg_ll(params, simu, df_lags, locations, quantile,
-                    latlon = latlon, hmax = hmax,
+    nll_i <- neg_ll(params, simu, df_lags, quantile, hmax = hmax,
                     excesses = excesses, s0 = s0, t0 = t0,
                     threshold = threshold)
     nll_composite <- nll_composite + nll_i
@@ -470,8 +463,8 @@ neg_ll_composite_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
                     list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
                     t0 = NA, threshold = FALSE) {
   params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
-  nll_composite <- neg_ll_composite(params, list_simu, df_lags, locations,
-                                    quantile, list_excesses, latlon = latlon,
+  nll_composite <- neg_ll_composite(params, list_simu, df_lags,
+                                    quantile, list_excesses,
                                     hmax = hmax, s0 = s0, t0 = t0,
                                     threshold = threshold)
   return(nll_composite)

@@ -202,3 +202,107 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
   ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
 
 }
+
+#' Generate data for a specific tau value for the variogram plot
+#' This function generates data for a specific tau value for the variogram plot.
+#' @param tau The value of tau to generate data for.
+#' @param empirical_df The dataframe of empirical variogram values.
+#' @param theorical_df The dataframe of theoretical variogram values.
+#' @return A dataframe containing the variogram values for the specified tau.
+#' @export
+generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
+  empirical_data <- data.frame(
+    h_lag = empirical_df$hnorm[empirical_df$tau == tau],
+    variogram = empirical_df$vario[empirical_df$tau == tau],
+    chi = empirical_df$chi[empirical_df$tau == tau],
+    type = 'Empirical',
+    tau = tau
+  )
+
+  theorical_data <- data.frame(
+    h_lag = theorical_df$hnorm[theorical_df$tau == tau],
+    variogram = theorical_df$vario[theorical_df$tau == tau],
+    chi = theorical_df$chi[theorical_df$tau == tau],
+    type = 'Theoretical',
+    tau = tau
+  )
+
+  # Combiner les deux dataframes
+  return(rbind(empirical_data, theorical_data))
+}
+
+
+
+#' Generate variogram plots
+#' This function generates variogram plots for multiple tau values.
+#' @param result The result of the variogram estimation.
+#' @param df_lags The dataframe of lags.
+#' @param true_param The true parameters used to generate the data.
+#' @param tau_values The values of tau to generate plots for.
+#' @param chi A logical value indicating whether to plot the chi values.
+#' @return None, but generates plots.
+#'
+#' @import ggplot2
+#'
+#' @export
+generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
+                                     chi = FALSE) {
+  # Get the estimated variogram
+  if(typeof(result) == "list" && "beta1" %in% colnames(result)){
+    beta1_hat <- result$beta1
+    beta2_hat <- result$beta2
+    alpha1_hat <- result$alpha1
+    alpha2_hat <- result$alpha2
+    adv1_hat <- result$adv1
+    adv2_hat <- result$adv2
+  } else {
+    beta1_hat <- result$par[1]
+    beta2_hat <- result$par[2]
+    alpha1_hat <- result$par[3]
+    alpha2_hat <- result$par[4]
+    adv1_hat <- result$par[5]
+    adv2_hat <- result$par[6]
+  }
+
+  empirical_df <- theorical_chi(c(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat,
+                                  adv1_hat, adv2_hat), df_lags)
+  theorical_df <- theorical_chi(true_param, df_lags)
+
+  combined_data <- do.call(rbind, lapply(tau_values, generate_data_for_tau,
+                            empirical_df, theorical_df))
+
+  if (chi) {
+    ggplot(combined_data, aes(x = h_lag, y = chi, color = type,
+                              linetype = type)) +
+      geom_point() +
+      geom_line() +
+      facet_wrap(~ tau, scales = "free_x",
+                  labeller = labeller(tau = label_both)) +
+      labs(
+        title = "Extremogram for Multiple Tau Values",
+        x = "Spatial Lag",
+        y = "Extremogram"
+      ) +
+      theme_minimal() +
+      scale_color_manual(values = c("Empirical" = "#a1a1ba", 
+                                    "Theoretical" = "#dc7c7c")) +
+      theme(legend.position = "bottom")
+    }
+  else {
+    ggplot(combined_data, aes(x = h_lag, y = variogram, color = type,
+                                  linetype = type)) +
+      geom_point() +
+      geom_line() +
+      facet_wrap(~ tau, scales = "free_x",
+                labeller = labeller(tau = label_both)) +
+      labs(
+        title = "Variogram for Multiple Tau Values",
+        x = "Spatial Lag",
+        y = "Variogram"
+      ) +
+      theme_minimal() +
+      scale_color_manual(values = c("Empirical" = "#a1a1ba",
+                                    "Theoretical" = "#dc7c7c")) +
+      theme(legend.position = "bottom")
+  }
+}
