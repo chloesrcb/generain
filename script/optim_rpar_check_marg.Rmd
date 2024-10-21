@@ -168,7 +168,322 @@ plot(simu_all$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
 plot(simu_all$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
 ```
 
+## Probability of exceedances for the $r$-Pareto process without advection
+
+### For $(s_0, t_0)$
+
+Verification that $P(X_{s_0, t_0} > u) = 1$ because of the $r$-Pareto process construction.
+
+```{r}
+# Get the conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Get the value of the process at the conditional point
+simu_df <- list_simu[[1]]
+val_s0_t0 <- simu_df[s0[1] + (s0[2] - 1) * ngrid, t0] # superior to 1
+print(paste0("X_s0_t0 = ",  round(val_s0_t0, 3), " > u = 1"))
+
+# get proba in X_s0 for all time
+proba_s0 <- simu_df[s0[1] + (s0[2] - 1) * ngrid, ] > 1
+print(paste0("P(X_s0,t > u) = ", round(mean(proba_s0), 3)))
+```
+
+For all replicates we can see that the value of the process at the conditional point:
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Value and probability at conditional point for all replicates"}
+# Get the conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Get the value of the process at the conditional point for all replicates
+val_s0_t0 <- sapply(list_simu, function(x) x[s0[1] + (s0[2] - 1) * ngrid, t0])
+
+print(paste0("Minimum value of the process at the conditional point: ",
+                      round(min(val_s0_t0), 3), " > u = 1"))
+
+print(paste0("Maximum value of the process at the conditional point: ",
+        round(max(val_s0_t0), 3)))
+
+# get proba in X_s0 for all time
+proba_s0 <- sapply(list_simu, function(x) x[s0[1] + (s0[2] - 1) * ngrid, ] > 1)
+
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+
+plot(val_s0_t0, main = "Value X_s0,t0",
+     xlab = "Realization", ylab = "Rainfall")
+plot(colMeans(proba_s0), main = "Probability P(X_s0,t > u)",
+      xlab = "Realization", ylab = "Probability")
+boxplot(val_s0_t0, main = "Boxplot of X_s0,t0",
+        xlab = "", ylab = "Rainfall")
+boxplot(colMeans(proba_s0), main = "Boxplot of P(X_s0,t > u)",
+        xlab = "", ylab = "Probability")
+```
+
+
+### Marginal exceedance probability
+
+We have different probability of exceedances for each site as we can see in the
+following plot.
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+simu_df <- list_simu[[1]]
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+# Create the grid
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 1",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+simu_df <- list_simu[[10]]
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 2",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+simu_df <- list_simu[[7]]
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 3",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+### Multiple replicates
+
+We have $m=$`r nres` replicates of the $r$-Pareto process.
+We concate the $m$ replicates to have a single simulation of the $r$-Pareto process.
+Here we can see that the higher probability of exceedances are around the conditional point $(1, 1)$.
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for $m$ replicates in a single dataframe"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_all > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = " ",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+```
+
 ## Estimation of the variogram parameters
+
+### Fixing advection at $(0, 0)$
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
+                                        tau_max = 10)
+u <- 1
+list_excesses <- list()
+# par(mfrow=c(5, 2))
+for (i in 1:nres) {
+  list_excesses[[i]] <- empirical_excesses_rpar(list_simu[[i]], u, df_lags,
+                                           threshold = TRUE, t0=t0)
+}
+
+# result <- optim(par = true_param[1:4], fn = neg_ll_composite,
+#                   list_simu = list_simu,
+#                   quantile = u,
+#                   df_lags = df_lags,
+#                   list_excesses = list_excesses,
+#                   locations = sites_coords,
+#                   hmax = sqrt(17),
+#                   s0 = s0,
+#                   t0 = t0,
+#                   threshold = TRUE,
+#                   method = "L-BFGS-B",
+#                   lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+#                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#                   control = list(parscale = c(1, 1, 1, 1),
+#                                  maxit = 10000,
+#                                  ndeps = c(1e-3, 1e-3, 1e-3, 1e-3)))
+
+
+# df_result <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
+
+# df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
+#                 beta2 = sqrt((result$par[2] - true_param[2])^2),
+#                 alpha1 = sqrt((result$par[3] - true_param[3])^2),
+#                 alpha2 = sqrt((result$par[4] - true_param[4])^2),
+#                 adv1 = sqrt((result$par[5] - true_param[5])^2),
+#                 adv2 = sqrt((result$par[6] - true_param[6])^2))
+
+# df_result <- rbind(df_result, df_rmse)
+# rownames(df_result) <- c("estim", "rmse")
+# kable(df_result, "latex", booktabs = TRUE,
+#         caption = "RMSE for all simulations together")  %>%
+#     kable_styling(latex_options = "H",
+#         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+# save the result
+foldername <- "../data/optim/rpar_noadv/"
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
+
+name_file <- paste0("result_optim_", nres, "simu_", ngrid^2,
+                      "s_", length(temp), "t_fixadv_", adv_str, ".csv")
+
+# write.csv(df_result, paste0(foldername, name_file))
+
+# get csv
+df_result <- read.csv(paste0(foldername, name_file))
+# get rib of advection
+df_result <- df_result[, -c(6, 7)]
+colnames(df_result) <- c("", "beta1", "beta2", "alpha1", "alpha2")
+kable(df_result, "latex", booktabs = TRUE,
+        caption = "Result and RMSE for all replicates together with advection=(0.5,0.3)")  %>%
+    kable_styling(latex_options = "H",
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+### Without fixing advection
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE}
 # df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
@@ -241,18 +556,6 @@ kable(df_result, "latex", booktabs = TRUE,
 
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram of the estimated parameters"}
-# Plot the variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result[1, ]
-
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Boxplot of the estimated parameters"}
-# Plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
 
 ### For multiple sets of replicates
 
@@ -281,8 +584,8 @@ m <- 100
 nres <- M * m
 
 # Simulate the process
-# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
-#                     t0, nres)
+simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+                    t0, nres)
 
 if (any(adv < 1)) {
   adv_int <- adv * 10
@@ -443,16 +746,26 @@ kable(df_result, "latex", booktabs = TRUE,
         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
-# plot variogram
-result <- data.frame(par = df_result$Mean)
-generate_variogram_plots(result, df_lags, true_param, tau_values)
+
+```{r}
+# tr <- trace$get()
+# tr$current_best <- cummin(tr$result)
+
+# library(ggplot2)
+# ggplot(tr, aes(x = iter_id,  y = result)) +
+#   geom_point() +
+#   geom_step(aes(y = current_best), alpha  =0.3) +
+#   theme_minimal()
+
+# ggplot(tr, aes(x = min_separation,  y = max_align_turn)) +
+#   geom_path(alpha = 0.1)+
+#   geom_point(shape = 4, size = 5, alpha = 0.3) +
+#   scale_x_continuous(limits = c(0, 4)) +
+#   scale_y_continuous(limits = c(0, 20)) +
+#   theme_minimal()
+
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
 
 # The $r$-Pareto process with advection
 
@@ -538,6 +851,265 @@ plot(simu_df$S10, main = "S13=(3,3)", xlab = "Time", ylab = "Rainfall")
 plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
 ```
 
+## Probability of exceedances for the $r$-Pareto process
+
+### For $(s_0, t_0)$
+
+Verification that $P(X_{s_0, t_0} > u) = 1$ because of the $r$-Pareto process construction.
+
+```{r}
+# Get the conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Get the value of the process at the conditional point
+simu_df <- list_simu[[10]]
+val_s0_t0 <- simu_df[s0[1] + (s0[2] - 1) * ngrid, t0] # superior to 1
+print(paste0("X_s0_t0 = ",  round(val_s0_t0, 3), " > u = 1"))
+
+# get proba in X_s0 for all time
+proba_s0 <- simu_df[s0[1] + (s0[2] - 1) * ngrid, ] > 1
+print(paste0("P(X_s0,t > u) = ", round(mean(proba_s0), 3)))
+```
+
+
+For all replicates we can see that the value of the process at the conditional point:
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Value and probability at conditional point for all replicates"}
+# Get the conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Get the value of the process at the conditional point for all replicates
+val_s0_t0 <- sapply(list_simu, function(x) x[s0[1] + (s0[2] - 1) * ngrid, t0])
+
+print(paste0("Minimum value of the process at the conditional point: ",
+              round(min(val_s0_t0), 3), " > u = 1"))
+
+print(paste0("Maximum value of the process at the conditional point: ",
+        round(max(val_s0_t0), 3)))
+
+# get proba in X_s0 for all time
+proba_s0 <- sapply(list_simu, function(x) x[s0[1] + (s0[2] - 1) * ngrid, ] > 1)
+
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+
+plot(val_s0_t0, main = "Value X_s0,t0",
+     xlab = "Realization", ylab = "Rainfall")
+plot(colMeans(proba_s0), main = "Probability P(X_s0,t > u)",
+      xlab = "Realization", ylab = "Probability")
+boxplot(val_s0_t0, main = "Boxplot of X_s0,t0",
+        xlab = "", ylab = "Rainfall")
+boxplot(colMeans(proba_s0), main = "Boxplot of P(X_s0,t > u)",
+        xlab = "", ylab = "Probability")
+```
+
+
+
+### Marginal exceedance probability
+
+We have different probability of exceedances for each site as we can see in the
+following plot.
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+# Create the grid
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 1",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+simu_df <- list_simu[[1]]
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 2",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for each site for one simulation"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+simu_df <- list_simu[[7]]
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_df > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+# Create the grid
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = "Simulation 3",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+
+```
+
+TODO : verifier la forme de ma grille dans mes gifs, j'ai un doute
+
+
+### For multiple replicates of the $r$-Pareto process
+
+We have $m=`r nres`$ replicates.
+We concate the $m$ replicates to have a single simulation of the $r$-Pareto process.
+
+```{r together1, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the replicates together"}
+simu_all <- do.call(rbind, list_simu)
+
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+plot(simu_all$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
+plot(simu_all$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
+plot(simu_all$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
+plot(simu_all$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
+```
+
+The probability of exceedances for each site is computed for all replicates.
+
+```{r, fig.height = 3, fig.width = 3, echo=FALSE, fig.cap="Marginal probability of exceedances for $m$ replicates in a single dataframe"}
+u <- 1 # threshold determined by the r-Pareto construction
+
+# Get marginal P(X_s,t > u)
+exceedance_prob <- colMeans(simu_all > u)
+# same as:
+# nmarg <- colSums(simu_df > u)
+# exceedance_prob <- nmarg/length(simu_df$S1)
+
+exceedance_df <- data.frame(
+  location = names(exceedance_prob),
+  exceedance_prob = exceedance_prob
+)
+
+sites_coords$site <- paste0("S", 1:nrow(sites_coords))
+colnames(exceedance_df) <- c("site", "exceedance_prob")
+spatial_data <- merge(exceedance_df, sites_coords, by = "site")
+
+n_sites <- ngrid^2
+n_cols <- ngrid
+n_rows <- ngrid
+
+
+# Create the grid
+grid_df <- expand.grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+)
+
+grid_df$site <- paste0("S", 1:n_sites)
+
+grid_df <- merge(grid_df, spatial_data, by = "site")
+
+ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#acbdb4", high = "#aa5656") +
+  labs(title = " ",
+       x = "Longitude", y = "Latitude", fill = "P(X > u)") +
+  btf_theme +
+  coord_fixed() # keep square aspect ratio
+```
+
 ## Optimisation
 
 We want to estimate the parameters $\beta_1$, $\beta_2$, $\alpha_1$ and $\alpha_2$
@@ -603,7 +1175,7 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("result_optim_", m, "simu_", ngrid^2,
+name_file <- paste0("result_optim_", nres, "simu_", ngrid^2,
                                 "s_", length(temp), "t_", adv_str, ".csv")
 
 
@@ -618,13 +1190,12 @@ kable(df_result, "latex", booktabs = TRUE,
 
 ```
 
+
 Plot the estimated variogram vs the true theorical variogram.
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters"}
 # Plot the variogram
 tau_values <- c(0, 1, 5, 10)
-result <- data.frame(df_result[1, c("beta1", "beta2", "alpha1", "alpha2", 
-                                      "adv1", "adv2")])
 generate_variogram_plots(result, df_lags, true_param, tau_values)
 ```
 
@@ -639,101 +1210,69 @@ For $M = 50$ simulations with $m = 100$ replicates each, we have the following r
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
                                       tau_max = 10)
 
-# df_result_all <- data.frame(beta1 = numeric(M),
-#                         beta2 = numeric(M),
-#                         alpha1 = numeric(M),
-#                         alpha2 = numeric(M),
-#                         adv1 = numeric(M),
-#                         adv2 = numeric(M))
-# u <- 1
+df_result_all <- data.frame(beta1 = numeric(M),
+                        beta2 = numeric(M),
+                        alpha1 = numeric(M),
+                        alpha2 = numeric(M),
+                        adv1 = numeric(M),
+                        adv2 = numeric(M))
+u <- 1
 
-# for (i in 1:M){
-#   # get the m corresponding simulations from list_simu inside a list
-#   mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
+for (i in 1:M){
+  # get the m corresponding simulations from list_simu inside a list
+  mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
 
-#   list_excesses <- list()
-#   for (j in 1:m) {
-#     replicate <- mreplicates[[j]]
-#     list_excesses[[j]] <- empirical_excesses_rpar(replicate, u, df_lags,
-#                                             threshold = TRUE, t0=t0)
-#   }
+  list_excesses <- list()
+  for (j in 1:m) {
+    replicate <- mreplicates[[j]]
+    list_excesses[[j]] <- empirical_excesses_rpar(replicate, u, df_lags,
+                                            threshold = TRUE, t0=t0)
+  }
 
-#   result <- optim(par = true_param, fn = neg_ll_composite,
-#                   list_simu = mreplicates,
-#                   quantile = u,
-#                   df_lags = df_lags,
-#                   list_excesses = list_excesses,
-#                   locations = sites_coords,
-#                   hmax = sqrt(17),
-#                   s0 = s0,
-#                   t0 = t0,
-#                   threshold = TRUE,
-#                   method = "L-BFGS-B",
-#                   lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-#                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-#                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
-#                                  maxit = 10000,
-#                                  ndeps = c(1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3)))
+  result <- optim(par = true_param, fn = neg_ll_composite,
+                  list_simu = mreplicates,
+                  quantile = u,
+                  df_lags = df_lags,
+                  list_excesses = list_excesses,
+                  locations = sites_coords,
+                  hmax = sqrt(17),
+                  s0 = s0,
+                  t0 = t0,
+                  threshold = TRUE,
+                  method = "L-BFGS-B",
+                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
+                                 maxit = 10000,
+                                 ndeps = c(1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3)))
 
-#   df_result_all[i, ] <- result$par
+  df_result_all[i, ] <- result$par
 
-# }
-
-# save the result
-foldername <- "../data/optim/rpar_adv/"
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("result_optim_all_", M, "simu_", m, "rep_", ngrid^2,
-                                "s_", length(temp), "t_", adv_str, ".csv")
-
-# write.csv(df_result_all, paste0(foldername, name_file))
-
-# get csv
-df_result_all <- read.csv(paste0(foldername, name_file))
-df_result_all <- df_result_all[c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")]
-kable(df_result_all, "latex", booktabs = TRUE,
-        caption = "Result for all simulations together with advection=(0.5,0.3)")  %>%
-    kable_styling(latex_options = "H",
-        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
-
-# df_valid <- get_criterion(df_result_all, true_param)
-# name_file <- paste0("valid_optim_", M, "simu_", m, "rep_", ngrid^2,
-#                                 "s_", length(temp), "t_" , adv_str, ".csv")
-
-# write.csv(df_valid, paste0(foldername, name_file))
-
-# get csv
-df_valid <- read.csv(paste0(foldername, name_file))
-kable(df_valid, "latex", booktabs = TRUE,
-        caption = "Criterion for all simulations together with advection=(0.5,0.3)")  %>%
-    kable_styling(latex_options = "H",
-        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
-
 # Boxplot of the results with ggplot for each column
-# df_bplot <- df_result_all
-# df_bplot <- stack(df_bplot)
+df_bplot <- df_result_all
+df_bplot <- stack(df_bplot)
 
 
-# ggplot(df_bplot, aes(x = ind, y = values)) +
-#   geom_boxplot() +
-#   labs(title = "",
-#     x = "Parameters", y = "Estimated values") +
-#   theme_minimal() +
-#   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
+ggplot(df_bplot, aes(x = ind, y = values)) +
+  geom_boxplot() +
+  labs(title = "",
+    x = "Parameters", y = "Estimated values") +
+  theme_minimal() +
+  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
 
 
 # save plot
-# foldername <- "../images/optim/rpar_adv/"
-# if (!dir.exists(foldername)) {
-#   dir.create(foldername, recursive = TRUE)
-# }
-# # setwd("./script")
-# name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
-#                                 "s_", length(temp), "t_", adv_str, ".png")
+foldername <- "../images/optim/rpar_adv/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+# setwd("./script")
+name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
+                                "s_", length(temp), "t_", adv_str, ".png")
 
-# ggsave(paste0(foldername, name_file), width = 5, height = 5)
+ggsave(paste0(foldername, name_file), width = 5, height = 5)
 ```
 
 
@@ -745,57 +1284,6 @@ name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
                                 "s_", length(temp), "t_", adv_str, ".png")
 
 knitr::include_graphics(paste0(foldername, name_file))
-```
-
-For one simulation:
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters for the 30th simulation of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result_all[30, ]
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters for the 30th simulation of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters for the 50th simulation of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result_all[50, ]
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters for the 50th simulation of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters for the third simulation of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result_all[3, ]
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters for the third simulation of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
-
-With mean estimation for the $M=50$ simulations with $m=100$ replicates each.
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- data.frame(par = df_valid$mean)
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 ```
 
 
@@ -905,8 +1393,8 @@ m <- 100
 nres <- M * m
 
 # Simulate the process
-# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
-#                     t0, nres)
+simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+                    t0, nres)
 
 if (any(adv < 1)) {
   adv_int <- adv * 10
@@ -924,8 +1412,8 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-# save_simulations(simu, ngrid, nres, folder = foldername,
-#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+save_simulations(simu, ngrid, nres, folder = foldername,
+        file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
 
 # nres <- length(list.files(foldername))
 list_simu <- list() # first simulation of m replicates
@@ -957,7 +1445,7 @@ plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
 ```
 
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
+```{r optimMsimuadv100, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
                                       tau_max = 10)
 
@@ -1052,8 +1540,8 @@ m <- 100
 nres <- M * m
 
 # Simulate the process
-# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
-#                     t0, nres)
+simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+                    t0, nres)
 
 if (any(adv < 1)) {
   adv_int <- adv * 10
@@ -1071,8 +1559,8 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-# save_simulations(simu, ngrid, nres, folder = foldername,
-#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+save_simulations(simu, ngrid, nres, folder = foldername,
+        file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
 
 # nres <- length(list.files(foldername))
 list_simu <- list() # first simulation of m replicates
@@ -1104,7 +1592,7 @@ plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
 ```
 
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
+```{r optimMsimuadv100, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
                                       tau_max = 10)
 
@@ -1182,3 +1670,53 @@ ggsave(paste0(foldername, name_file), width = 5, height = 5)
 
 # knitr::include_graphics(paste0(foldername, name_file))
 ```
+
+```{r, eval=FALSE, echo=FALSE}
+# library(graphics)
+
+# fixed_params <- true_param
+
+# param1_values <- seq(0.1, 1.9, length.out = 20)
+# param2_values <- seq(0.1, 1.9, length.out = 20)
+
+# nll_matrix <- matrix(NA, nrow = length(param1_values), ncol = length(param2_values))
+
+# u <- 1
+
+# for (i in 1:length(param1_values)) {
+#   for (j in 1:length(param2_values)) {
+#     params <- c(fixed_params[1:2], param1_values[i], param2_values[j], fixed_params[4:6])
+#     nll_matrix[i, j] <- neg_ll_composite(params, list_simu, df_lags,
+#                               sites_coords, quantile = u,
+#                               list_excesses = list_excesses, hmax = sqrt(17),
+#                               s0 = s0, t0 = t0, threshold = TRUE)
+#   }
+# }
+
+
+# par(mfrow=c(1,1))
+
+# png("../images/optim/contour_25s_300t_alpha_rpar.png") # plutot 3000
+# contour(param1_values, param2_values, nll_matrix, nlevels = 20,
+#         xlab = "alpha1", ylab = "alpha2",
+#         main = "Contour plot of Negative Log-Likelihood")
+
+# # Save plot as PNG file
+# dev.off()
+# # get images
+
+```
+
+
+```{r test, fig.width = 2, fig.height = 2, fig.cap="Contour plot of Negative Log-Likelihood", echo=FALSE}
+# knitr::include_graphics("../images/optim/contour_25s_300t_betas_rpar.png")
+```
+
+```{r, fig.width = 2, fig.height = 2, fig.cap="Contour plot of Negative Log-Likelihood", echo=FALSE}
+# knitr::include_graphics("../images/optim/contour_25s_300t_alpha_rpar.png")
+```
+
+```{r, fig.width = 2, fig.height = 2, fig.cap="Contour plot of Negative Log-Likelihood", echo=FALSE}
+# knitr::include_graphics("../images/optim/contour_25s_300t_adv_rpar.png")
+```
+
