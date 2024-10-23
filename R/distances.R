@@ -121,22 +121,16 @@ get_euclidean_distance <- function(point1, point2) {
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
-#' @param params A vector of parameters.
-#' @param tau_vect A vector of temporal lags. Default is 0:10.
 #' @param hmax The maximum distance threshold. Default is NA.
-#' @param norm The norm to use. Can be "euclidean" or "Lp". Default
-#'             is "euclidean".
+#' @param tau_max The maximum temporal lag. Default is 10.
 #'
 #' @import utils
 #'
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
-get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
-                            norm = "euclidean", index_s0 = 0) {
-  # Advection vector
-  adv <- if (length(params) == 6) params[5:6] else c(0, 0)
-
+get_lag_vectors <- function(df_coords, hmax = NA, tau_max = 10) {
+  tau_vect <- 0:tau_max
   # Dimensions
   n <- nrow(df_coords)
   tau_len <- length(tau_vect)
@@ -147,10 +141,6 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
   # Add n,n pairs
   diag_pairs <- matrix(rep(1:n, each = 2), nrow = 2)
   indices <- cbind(pairs_comb, diag_pairs)
-
-  # Remove s0
-  indices <- indices[, !indices[1, ] %in% index_s0 &
-                        !indices[2, ] %in% index_s0]
 
   # Get indices
   i_vals <- indices[1, ]
@@ -165,7 +155,7 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
                      s1x = integer(num_st_lags), s1y = integer(num_st_lags),
                      s2x = integer(num_st_lags), s2y = integer(num_st_lags),
                      hx = numeric(num_st_lags), hy = numeric(num_st_lags),
-                     tau = integer(num_st_lags), hnorm = numeric(num_st_lags))
+                     tau = integer(num_st_lags))
   lags$s1 <- rep(i_vals, each = tau_len)
   lags$s2 <- rep(j_vals, each = tau_len)
   lags$tau <- rep(tau_vect, times = num_pairs)
@@ -177,24 +167,8 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
   lags$s2y <- df_coords$Latitude[lags$s2]
 
   # Vector coordinates between two sites
-  lags$hx <- lags$s1x - lags$s2x
-  lags$hy <- lags$s1y - lags$s2y
-
-  # # Add advection
-  # lags$hx <- lags$hx - adv[1] * lags$tau
-  # lags$hy <- lags$hy - adv[2] * lags$tau
-
-  # # Calculate the norm
-  # if (norm == "euclidean") {
-  #   lags$hnorm <- sqrt(lags$hx^2 +  lags$hy^2)
-  # } else if (norm == "Lp") {
-  #   lags$hnorm <- norm_Lp(lags$hx, lags$hy, params[3])
-  # }
-
-  # # Filter based on hmax
-  # if (!is.na(hmax)) {
-  #   lags <- lags[lags$hnorm <= hmax, ]
-  # }
+  lags$hx <- lags$s2x - lags$s1x
+  lags$hy <- lags$s2y - lags$s1y
 
   return(lags)
 }
@@ -204,8 +178,6 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
-#' @param params A vector of parameters.
-#' @param temp The temporal sequence.
 #' @param s0 Conditional spatial point coordinates.
 #' @param t0 Conditional temporal point.
 #' @param tau_max The maximum temporal lag. Default is 10.
@@ -215,7 +187,7 @@ get_lag_vectors <- function(df_coords, params, tau_vect = 0:10, hmax = NA,
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
-get_conditional_lag_vectors <- function(df_coords, params, temp, s0 = c(1, 1),
+get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
                                         t0 = 1, tau_max = 10) {
   # Conditional point index in df_coords
   ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])

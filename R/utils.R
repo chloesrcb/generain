@@ -204,11 +204,15 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
 }
 
 #' Generate data for a specific tau value for the variogram plot
+#'
 #' This function generates data for a specific tau value for the variogram plot.
+#'
 #' @param tau The value of tau to generate data for.
 #' @param empirical_df The dataframe of empirical variogram values.
 #' @param theorical_df The dataframe of theoretical variogram values.
+#'
 #' @return A dataframe containing the variogram values for the specified tau.
+#'
 #' @export
 generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
   empirical_data <- data.frame(
@@ -234,12 +238,16 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 
 
 #' Generate variogram plots
+#'
 #' This function generates variogram plots for multiple tau values.
+#'
 #' @param result The result of the variogram estimation.
 #' @param df_lags The dataframe of lags.
 #' @param true_param The true parameters used to generate the data.
 #' @param tau_values The values of tau to generate plots for.
 #' @param chi A logical value indicating whether to plot the chi values.
+#'            Default is FALSE.
+#'
 #' @return None, but generates plots.
 #'
 #' @import ggplot2
@@ -287,8 +295,7 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
       scale_color_manual(values = c("Empirical" = "#a1a1ba", 
                                     "Theoretical" = "#dc7c7c")) +
       theme(legend.position = "bottom")
-    }
-  else {
+  } else {
     ggplot(combined_data, aes(x = h_lag, y = variogram, color = type,
                                   linetype = type)) +
       geom_point() +

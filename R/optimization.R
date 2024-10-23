@@ -7,24 +7,22 @@
 #'
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
+#' @param threshold A boolean value to indicate if the quantile variable is a
+#'                threshold value and not a uniform quantile. Default is FALSE.
+#' @param index The index of the site. Default is 1.
+#' @param time The starting time index. Default is 1.
 #'
 #' @return The number of marginal excesses.
 #'
 #' @import stats
 #'
 #' @export
-get_marginal_excess <- function(data_rain, quantile, ind_s0 = NA, t0 = NA,
-                                threshold = FALSE) {
-  if (is.na(ind_s0) || is.na(t0)) {
-    index <- 1
-    time <- 1
-  } else {
-    index <- ind_s0 + 1 # not s0 but s0 + 1
-    time <- t0
-  }
+get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
+                                index = 1, time = 1) {
   # shifted data
   Tmax <- nrow(data_rain)
   data <- data_rain[time:Tmax, ]
+
   Tobs <- nrow(data)
   if(!threshold) {
     rain_unif <- rank(data[, index]) / (Tobs + 1)
@@ -71,7 +69,6 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       colnames(rain_cp) <- c("s1", "s2")
 
       # shifted data
-      # Tmax <- nrow(rain_cp) # number of total observations
       X_s_t <- rain_cp$s2[(t0 + abs(t))] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
       # store the number of excesses and T - tau
@@ -108,12 +105,12 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 #' @import tidyr
 #'
 #' @export
-empirical_excesses <- function(data_rain, quantile, df_lags, threshold=FALSE,
+empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
                                type = "rpareto", t0 = 1) {
   if (type == "rpareto") {
     excesses <- empirical_excesses_rpar(data_rain, quantile, df_lags, threshold,
                 t0)
-  } else {
+  } else if (type == "brownresnick")  {
     excesses <- df_lags # copy the dataframe
     unique_tau <- unique(df_lags$tau) # unique temporal lags
 
@@ -158,6 +155,9 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold=FALSE,
                       & excesses$tau == t] <- joint_excesses
       }
     }
+  } else {
+    print("The variable 'type' is not valid. It has to be 'rpareto' 
+          or 'brownresnick'.")
   }
   return(excesses)
 }
@@ -224,11 +224,8 @@ theorical_chi <- function(params, df_lags) {
 
   chi_df$vario <- (2 * beta1) * chi_df$hnorm^alpha1 +
                   (2 * beta2) * abs(chi_df$tau)^alpha2
-  # chi_df$vario <- 2*beta1 * abs(chi_df$hx)^alpha1 +
-  #                 2*beta1 * abs(chi_df$hy)^alpha1 +
-  #                 2*beta2 * abs(chi_df$tau)^alpha2
+
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-  # chi_df$chi <- theorical_chi_ind(params, df_lags$hnorm, df_lags$tau)
   return(chi_df)
 }
 
@@ -300,7 +297,7 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
     # number of marginal excesses
-    nmarg <- get_marginal_excess(data, quantile, 1, 1, threshold)
+    nmarg <- get_marginal_excess(data, quantile, threshold)
     p <- nmarg / Tmax # probability of marginal excesses
   }
 
@@ -321,6 +318,7 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
+  ll_df$hnorm <- chi$hnorm
   ll_df$chi <- chi$chi
   ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi
@@ -356,14 +354,10 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
 #' @param df_lags The dataframe with spatial and temporal lag values.
 #' @param excesses The excesses dataframe with the number of excesses kij and
 #'                 the number of possible excesses Tobs.
-#' @param locations The locations dataframe.
 #' @param quantile The quantile value.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'               and longitude. Default is FALSE.
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param s0 The conditioning location. Default is NA.
 #' @param t0 The conditioning time. Default is NA.
-#' @param pmarg The probability of marginal excesses. Default is NA.
 #' @param threshold A boolean value to indicate if the quantile variable is a
 #'                threshold value and not a uniform quantile. Default is FALSE.
 #'
@@ -444,11 +438,8 @@ neg_ll_composite <- function(params, list_simu, df_lags, quantile,
 #' @param adv2 The advection parameter 2.
 #' @param list_simu A list of simulated data.
 #' @param df_lags The dataframe with spatial and temporal lag values.
-#' @param locations The locations dataframe.
 #' @param quantile The quantile value.
 #' @param list_excesses A list of excesses dataframes.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'              and longitude. Default is FALSE.
 #' @param s0 The starting location.
 #' @param t0 The starting time.
 #' @param hmax The maximum spatial lag value.
