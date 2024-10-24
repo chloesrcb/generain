@@ -44,10 +44,10 @@ jobs:
         run: Rscript -e 'install.packages("remotes")'
 
       - name: Install RandomFields
-        run:  Rscript -e 'install.packages("RandomFields", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
+        run:  Rscript -e 'install.packages("inst/archives/RandomFields_3.3.14.tar.gz", repos = NULL, type = "source")'
 
       - name: Install RandomFieldsUtils from GitHub
-        run:  Rscript -e 'install.packages("RandomFieldsUtils", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
+        run:  Rscript -e 'install.packages("inst/archives/RandomFieldsUtils_1.2.5.tar.gz", repos = NULL, type = "source")'
 
       - name: Install sessioninfo and rcmdcheck
         run: Rscript -e 'install.packages(c("sessioninfo", "rcmdcheck"))'
