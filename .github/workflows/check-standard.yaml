@@ -43,6 +43,13 @@ jobs:
       - name: Install remotes
         run: Rscript -e 'install.packages("remotes")'
 
+      - name: Install dependencies for RandomFields
+        run: Rscript -e 'install.packages(c("sp", "Rcpp"), repos = "https://cran.r-project.org")'
+      
+      - name: Install pak
+        run: Rscript -e 'install.packages("pak", repos = "https://r-lib.github.io/p/pak/stable")'
+
+
       - name: Install RandomFields
         run:  Rscript -e 'install.packages("inst/archives/RandomFields_3.3.14.tar.gz", repos = NULL, type = "source")'
 
