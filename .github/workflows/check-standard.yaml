@@ -46,18 +46,23 @@ jobs:
       - name: Install dependencies for RandomFields
         run: Rscript -e 'install.packages(c("sp", "Rcpp"), repos = "https://cran.r-project.org")'
       
-      - name: Install pak
-        run: Rscript -e 'install.packages("pak", repos = "https://r-lib.github.io/p/pak/stable")'
+      # - name: Install RandomFields from local archive
+      #   run:  Rscript -e 'install.packages("inst/archives/RandomFields_3.3.14.tar.gz", repos = NULL, type = "source")'
 
+      # - name: Install RandomFieldsUtils from local archive
+      #   run:  Rscript -e 'install.packages("inst/archives/RandomFieldsUtils_1.2.5.tar.gz", repos = NULL, type = "source")'
 
-      - name: Install RandomFields
-        run:  Rscript -e 'install.packages("inst/archives/RandomFields_3.3.14.tar.gz", repos = NULL, type = "source")'
+      - name: Install RandomFields from MRAN snapshot
+        run: Rscript -e 'install.packages("RandomFields", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
 
-      - name: Install RandomFieldsUtils from GitHub
-        run:  Rscript -e 'install.packages("inst/archives/RandomFieldsUtils_1.2.5.tar.gz", repos = NULL, type = "source")'
+      - name: Install RandomFieldsUtils from MRAN snapshot
+        run: Rscript -e 'install.packages("RandomFieldsUtils", repos = "https://cran.microsoft.com/snapshot/2021-04-01/")'
 
       - name: Install sessioninfo and rcmdcheck
         run: Rscript -e 'install.packages(c("sessioninfo", "rcmdcheck"))'
+      
+      # - name: Install pak
+      #   run: Rscript -e 'install.packages("pak", repos = "https://r-lib.github.io/p/pak/stable")'
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
