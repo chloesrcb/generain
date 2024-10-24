@@ -49,7 +49,8 @@ test_that("empirical_excesses counts excesses correctly", {
     tau = c(0, 0, 0)
   )
 
-  result <- empirical_excesses(data_rain, quantile, df_lags, threshold)
+  result <- empirical_excesses(data_rain, quantile, df_lags, threshold,
+                               type = "brownresnick")
 
   expect_equal(result$Tobs[1], length(data_rain$s1))
   expect_equal(result$kij[2], 2)
@@ -62,7 +63,8 @@ test_that("empirical_excesses counts excesses correctly", {
   nb_excesses_s2 <- sum(data_rain$s2 > u)
   nb_joint <- sum(data_rain$s1 > u & data_rain$s2 > u)
 
-  result <- empirical_excesses(data_rain, quantile, df_lags, threshold)
+  result <- empirical_excesses(data_rain, quantile, df_lags, threshold,
+                               type = "brownresnick")
 
   expect_equal(result$Tobs[1], length(data_rain$s1))
   expect_equal(result$kij[2], nb_joint)
@@ -72,102 +74,14 @@ test_that("empirical_excesses counts excesses correctly", {
 })
 
 
-
-
-test_that("empirical_excesses works with sufficient data", {
-  # Create sample data
-  data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
-  data_rain <- as.data.frame(data_rain)
-  sites_coords <- generate_grid_coords(5) # Example sites_coords
-
-  # Calculate the h vector
-  q <- 0.7
-  true_param <- c(0.4, 0.2, 1.5, 1)
-  df_lags <- get_lag_vectors(sites_coords, true_param,
-                          hmax = sqrt(17), tau_vect = 0:10)
-  excesses <- empirical_excesses(data_rain, quantile = q, df_lags = df_lags)
-
-  # Check the number of columns
-  expect_equal(ncol(excesses), ncol(df_lags) + 2)
-  # Check the number of rows
-  expect_equal(nrow(excesses), nrow(df_lags))
-
-  # for the hnorm == 0  and tau == 0 ie same site (si, si)
-  k_h_tau <- excesses[excesses$hnorm == 0 & excesses$tau == 0, ]
-  n_marg <- get_marginal_excess(data_rain, q)
-  # check if it is the same
-  expect_equal(unique(k_h_tau$kij), n_marg)
-
-  # On simulation data
-  ngrid <- 5
-  sites_coords <- generate_grid_coords(ngrid)
-  temp <- 1:300
-
-  # Number of realizations
-  nres <- 10
-
-  # Folder
-  foldername <- paste0("./data/simulations_BR/sim_25s_300t/")
-
-  list_simu <- list()
-  for (i in 1:nres) {
-    file_name <- paste0(foldername, "br_", ngrid^2, "s_",
-                          length(temp), "t_", i, ".csv")
-    list_simu[[i]] <- read.csv(file_name)
-  }
-
-  simu_df <- list_simu[[1]]
-
-  true_param <- c(0.4, 0.2, 1.5, 1)
-  hmax <- NA
-
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = 0:10, 
-                            hmax = hmax)
-
-  adv <- c(0.5, 0.8)
-  df_lags_adv <- get_lag_vectors(sites_coords, c(true_param, adv),
-                                  tau_vect = 0:10, hmax = hmax)
-
-  q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-  excesses_adv <- empirical_excesses(simu_df, quantile = q,
-                                      df_lags = df_lags_adv)
-
-  # Check the number of columns
-  expect_equal(ncol(excesses), ncol(excesses_adv))
-  # Check the number of rows
-  expect_equal(nrow(excesses), nrow(excesses_adv))
-
-  # with hmax
-  hmax <- sqrt(17)
-
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = 0:10)
-
-  adv <- c(0.5, 0.8)
-  df_lags_adv <- get_lag_vectors(sites_coords, c(true_param, adv),
-                                  tau_vect = 0:10)
-
-
-  q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
-  excesses_adv <- empirical_excesses(simu_df, quantile = q,
-                                      df_lags = df_lags_adv)
-  excesses_adv <- excesses_adv[excesses_adv$hnorm <= hmax, ]
-
-  # Check the number of columns
-  expect_equal(ncol(excesses), ncol(excesses_adv))
-  # Check the number of rows
-  expect_false(nrow(excesses) == nrow(excesses_adv))
-})
-
 test_that("theorical_chi", {
   tau_vect <- 0:10
   data_rain <- matrix(runif(100 * 25, 0, 100), nrow = 100, ncol = 25)
   data_rain <- as.data.frame(data_rain)
   sites_coords <- generate_grid_coords(5) # Example sites_coords
   true_param <- c(0.4, 0.2, 1.5, 1)
-  df_lags <- get_lag_vectors(sites_coords, true_param,
-                            hmax = sqrt(17), tau_vect = tau_vect)
+  df_lags <- get_lag_vectors(sites_coords, 
+                            hmax = sqrt(17), tau_max = 10)
 
   chi_theorical <- theorical_chi(true_param, df_lags)
 
@@ -188,8 +102,7 @@ test_that("theorical_chi", {
   adv <- c(0.5, 0.3)
   true_param <- c(true_param, adv)
 
-  df_lags <- get_conditional_lag_vectors(sites_coords, true_param,
-                                         hmax = sqrt(17), tau_vect = tau_vect,
+  df_lags <- get_conditional_lag_vectors(sites_coords, tau_max = 10,
                                          s0 = s0, t0 = t0)
 
   chi_theorical <- theorical_chi(true_param, df_lags)
@@ -233,17 +146,15 @@ test_that("neg_ll without advection", {
   hmax <- sqrt(17)
   tau_vect <- 0:10
 
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect)
+  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
 
   q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
+                                  type = "brownresnick")
 
-  nll <- neg_ll(true_param, simu_df, df_lags,
-                    locations = sites_coords,
-                    quantile = q, excesses = excesses)
+  nll <- neg_ll(true_param, simu_df, df_lags, quantile = q, excesses = excesses)
 
-  nll_hmax <- neg_ll(true_param, simu_df, df_lags,
-                    locations = sites_coords, hmax = sqrt(17),
+  nll_hmax <- neg_ll(true_param, simu_df, df_lags, hmax = sqrt(17),
                     quantile = q, excesses = excesses)
 
   expect_false(nll == nll_hmax)
@@ -302,14 +213,13 @@ test_that("neg_ll with advection", {
   hmax <- sqrt(17)
   tau_vect <- 0:10
 
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect)
+  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
 
   q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q,
-                                 df_lags = df_lags)
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
+                                type = "brownresnick")
 
-  nll <- neg_ll(params = true_param, data = simu_df,
-                   df_lags = df_lags, locations = sites_coords,
+  nll <- neg_ll(params = true_param, data = simu_df, df_lags = df_lags,
                    quantile = q, excesses = excesses, hmax = hmax)
 
   # theorical likelihood
@@ -338,15 +248,14 @@ test_that("neg_ll with advection", {
   # hmax == NA
   hmax <- NA
 
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect,
+  df_lags <- get_lag_vectors(sites_coords, tau_max = 10,
                               hmax = hmax)
 
   q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q,
-                                 df_lags = df_lags)
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
+                                type = "brownresnick")
 
-  nll <- neg_ll(params = true_param, data = simu_df,
-                   df_lags = df_lags, locations = sites_coords,
+  nll <- neg_ll(params = true_param, data = simu_df, df_lags = df_lags,
                    quantile = q, excesses = excesses, hmax = hmax)
 
   # theorical likelihood
@@ -400,42 +309,29 @@ test_that("neg_ll with different advections", {
   hmax <- NA
   tau_vect <- 0:10
 
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect)
+  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
 
   q <- 0.8
-  excesses <- empirical_excesses(simu_df, quantile = q,
-                                 df_lags = df_lags)
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
+                                    type = "brownresnick")
 
   nll <- neg_ll(params = true_param, data = simu_df,
-                   df_lags = df_lags, locations = sites_coords,
+                   df_lags = df_lags,
                    quantile = q, excesses = excesses, hmax = hmax)
 
   # with adv
   adv <- c(0., 0.)
-  df_lags_adv <- get_lag_vectors(sites_coords, c(true_param, adv),
-                              tau_vect = tau_vect)
-
-  q <- 0.8
-  excesses_adv <- empirical_excesses(simu_df, quantile = q,
-                                 df_lags = df_lags_adv)
 
   nll_adv0 <- neg_ll(params = c(true_param, adv), data = simu_df,
-                   df_lags = df_lags_adv, locations = sites_coords,
-                   quantile = q, excesses = excesses_adv, hmax = hmax)
+                   df_lags = df_lags,
+                   quantile = q, excesses = excesses, hmax = hmax)
 
   expect_equal(nll, nll_adv0)
 
   adv <- c(0.8, 10)
-  df_lags_adv <- get_lag_vectors(sites_coords, c(true_param, adv),
-                              tau_vect = tau_vect)
-
-  q <- 0.8
-  excesses_adv <- empirical_excesses(simu_df, quantile = q,
-                                 df_lags = df_lags_adv)
-
   nll_adv <- neg_ll(params = c(true_param, adv), data = simu_df,
-                   df_lags = df_lags_adv, locations = sites_coords,
-                   quantile = q, excesses = excesses_adv, hmax = hmax)
+                   df_lags = df_lags,
+                   quantile = q, excesses = excesses, hmax = hmax)
 
   expect_true(nll_adv > nll)
 
@@ -467,17 +363,17 @@ test_that("optim BR without advection", {
   hmax <- NA
   tau_vect <- 0:10
 
-  df_lags <- get_lag_vectors(sites_coords, true_param, tau_vect = tau_vect)
+  df_lags <- get_lag_vectors(sites_coords, tau_max = max(tau_vect))
 
-  q <- 0.92
-  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags)
+  q <- 0.95
+  excesses <- empirical_excesses(simu_df, quantile = q, df_lags = df_lags,
+                                      type = "brownresnick")
 
   result <- optim(par = true_param, fn = neg_ll,
                 data = simu_df,
                 quantile = q,
                 df_lags = df_lags,
                 excesses = excesses,
-                locations = sites_coords,
                 hmax = hmax,
                 method = "BFGS",
                 control = list(parscale = c(1, 1, 1, 1),
