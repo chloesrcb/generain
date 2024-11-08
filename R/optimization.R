@@ -290,15 +290,19 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #'
 #' @export
 neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
-                  s0 = NA, t0 = NA, threshold = FALSE) {
+                  s0 = NA, t0 = NA, threshold = FALSE, pmarg = NA) {
   Tmax <- nrow(data) # number of total observations
   # print(params)
   if (all(!is.na(s0))) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
-    # number of marginal excesses
-    nmarg <- get_marginal_excess(data, quantile, threshold)
-    p <- nmarg / Tmax # probability of marginal excesses
+    if (all(!is.na(pmarg))) {
+      p <- pmarg
+    } else {
+      # number of marginal excesses
+      nmarg <- get_marginal_excess(data, quantile, threshold)
+      p <- nmarg / Tmax # probability of marginal excesses;
+    }
   }
 
   # Bounds for the parameters
@@ -450,9 +454,8 @@ neg_ll_composite <- function(params, list_simu, df_lags, quantile,
 #'
 #' @export
 neg_ll_composite_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
-                    list_simu, df_lags, locations, quantile,
-                    list_excesses, latlon = FALSE, hmax = NA, s0 = NA,
-                    t0 = NA, threshold = FALSE) {
+                    list_simu, df_lags, quantile, list_excesses, hmax = NA, 
+                    s0 = NA, t0 = NA, threshold = FALSE) {
   params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
   nll_composite <- neg_ll_composite(params, list_simu, df_lags,
                                     quantile, list_excesses,
