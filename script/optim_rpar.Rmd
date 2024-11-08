@@ -107,7 +107,7 @@ s0 <- c(1, 1)
 t0 <- 1
 
 # Number of realizations
-nres <- 100
+nres <- 10000
 
 # Simulate the process
 # simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
@@ -143,36 +143,36 @@ for (i in 1:nres) {
 # Plot the first realization
 simu_df <- list_simu[[1]]
 sites_coords <- generate_grid_coords(ngrid)
-par(mfrow = c(2, 2),
-    cex = 0.7,
-    pin = c(2, 1),
-    lwd = 0.5,
-    col = btfgreen)
-plot(simu_df$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
-plot(simu_df$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
-plot(simu_df$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
-plot(simu_df$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
+# par(mfrow = c(2, 2),
+#     cex = 0.7,
+#     pin = c(2, 1),
+#     lwd = 0.5,
+#     col = btfgreen)
+# plot(simu_df$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
+# plot(simu_df$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
+# plot(simu_df$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
+# plot(simu_df$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
 ```
 
 ```{r together2, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the all replicates together"}
-simu_all <- do.call(rbind, list_simu)
+# simu_all <- do.call(rbind, list_simu)
 
-par(mfrow = c(2, 2),
-    cex = 0.7,
-    pin = c(2, 1),
-    lwd = 0.5,
-    col = btfgreen)
-plot(simu_all$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
-plot(simu_all$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
-plot(simu_all$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
-plot(simu_all$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
+# par(mfrow = c(2, 2),
+#     cex = 0.7,
+#     pin = c(2, 1),
+#     lwd = 0.5,
+#     col = btfgreen)
+# plot(simu_all$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
+# plot(simu_all$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
+# plot(simu_all$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
+# plot(simu_all$S20, main = "S20", xlab = "Time", ylab = "Rainfall")
 ```
 
 ## Estimation of the variogram parameters
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE}
-# df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-#                                         tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
+                                        tau_max = 10)
 # u <- 1
 # list_excesses <- list()
 # # par(mfrow=c(5, 2))
@@ -226,21 +226,25 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("result_optim_", nres, "simu_", ngrid^2, 
-                                "s_", length(temp), "t_" , adv_str, ".csv")
+name_file <- paste0("result_optim_", nres, "simu_", ngrid^2,
+                                "s_", length(temp), "t_", adv_str, ".csv")
 
 # write.csv(df_result, paste0(foldername, name_file))
 # get csv
+# setwd("./script")
 df_result <- read.csv(paste0(foldername, name_file))
+caption_tab <- paste0("Estimation and RMSE for 1 simulation of ", nres, 
+                     "replicates with advection = (0,0)")
+
 colnames(df_result) <- c("", "beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 kable(df_result, "latex", booktabs = TRUE,
-        caption = "Result and RMSE for all replicates together with advection=(0,0)")  %>%
+        caption = caption_tab)  %>%
     kable_styling(latex_options = "H",
         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram of the estimated parameters"}
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram of the estimated parameters for 1 simulation of 10000 replicates"}
 # Plot the variogram
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
                                       tau_max = 10)
@@ -250,7 +254,7 @@ result <- df_result[1, ]
 generate_variogram_plots(result, df_lags, true_param, tau_values)
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Boxplot of the estimated parameters"}
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Boxplot of the estimated parameters for 1 simulation of 10000 replicates"}
 # Plot chi
 generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 ```
@@ -277,8 +281,8 @@ s0 <- c(1, 1)
 t0 <- 1
 
 # Number of realizations
-M <- 50
-m <- 100
+M <- 10
+m <- 1000
 nres <- M * m
 
 # Simulate the process
@@ -377,10 +381,8 @@ Optimisation of the variogram parameters for the $M=100$ simulations with $m=100
 
 # }
 
-# # get only 50 first rows
-# df_result_all <- df_result_all[1:50, ]
 
-# # Boxplot of the results with ggplot for each column
+# Boxplot of the results with ggplot for each column
 # df_bplot <- df_result_all
 # df_bplot <- stack(df_bplot)
 
@@ -390,7 +392,7 @@ Optimisation of the variogram parameters for the $M=100$ simulations with $m=100
 
 # ggplot(df_bplot, aes(x = ind, y = values)) +
 #   geom_boxplot() +
-#   labs(title = title_str,
+#   labs(title = "",
 #     x = "Parameters", y = "Estimated values") +
 #   theme_minimal() +
 #   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
@@ -431,7 +433,7 @@ if (!dir.exists(foldername)) {
 }
 
 name_file <- paste0("result_optim_valid_", M, "simu_", m, "rep_", ngrid^2,
-                                "s_", length(temp), "t_" , adv_str, ".csv")
+                                "s_", length(temp), "t_", adv_str, ".csv")
 
 # write.csv(df_valid, paste0(foldername, name_file))
 # get csv
@@ -482,20 +484,24 @@ s0 <- c(1, 1)
 t0 <- 1
 
 # Number of realizations
-M <- 50
+M <- 10
 m <- 1000
 nres <- M * m
 
 # Simulate the process
-simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
-                    t0, nres)
+# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+#                     t0, nres)
 
-if (any(adv < 1)) {
+if (any(adv < 1 && adv > 0.1)) {
   adv_int <- adv * 10
+  adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+} else if (adv < 0.1 && adv > 0) {
+  adv_int <- adv * 100
+  adv_str <- sprintf("%03d_%03d", adv_int[1], adv_int[2])
 } else {
   adv_int <- adv
+  adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
 }
-adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
 
 # Save the data
 foldername <- paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
@@ -506,8 +512,8 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-save_simulations(simu, ngrid, nres, folder = foldername,
-        file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+# save_simulations(simu, ngrid, nres, folder = foldername,
+#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
 
 # nres <- length(list.files(foldername))
 list_simu <- list() # first simulation of m replicates
@@ -550,49 +556,48 @@ within a replicate (same for all replicates).
 
 
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE}
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 5)
 
-u <- 1
-list_excesses <- list()
-# par(mfrow=c(5, 2))
-for (i in 1:m) {
-  list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
-                                     threshold = TRUE, type="rpareto", t0=1)
-}
+# u <- 1
+# list_excesses <- list()
+# # par(mfrow=c(5, 2))
+# for (i in 1:m) {
+#   list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
+#                                      threshold = TRUE, type="rpareto", t0=1)
+# }
 
-result <- optim(par = true_param, fn = neg_ll_composite,
-                  list_simu = list_simu,
-                  quantile = u,
-                  df_lags = df_lags,
-                  list_excesses = list_excesses,
-                  hmax = sqrt(17),
-                  s0 = s0,
-                  t0 = t0,
-                  threshold = TRUE,
-                  method = "L-BFGS-B",
-                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
-                                 maxit = 10000,
-                                 ndeps = c(1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3)))
+# result <- optim(par = true_param, fn = neg_ll_composite,
+#                   list_simu = list_simu,
+#                   quantile = u,
+#                   df_lags = df_lags,
+#                   list_excesses = list_excesses,
+#                   hmax = sqrt(17),
+#                   s0 = s0,
+#                   t0 = t0,
+#                   threshold = TRUE,
+#                   method = "L-BFGS-B",
+#                   lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+#                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#                   control = list(parscale = c(1, 1, 1, 1, 1, 1),
+#                                  maxit = 10000))
 
 
-df_result <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+# df_result <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
 
-df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
-                beta2 = sqrt((result$par[2] - true_param[2])^2),
-                alpha1 = sqrt((result$par[3] - true_param[3])^2),
-                alpha2 = sqrt((result$par[4] - true_param[4])^2),
-                adv1 = sqrt((result$par[5] - true_param[5])^2),
-                adv2 = sqrt((result$par[6] - true_param[6])^2))
+# df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
+#                 beta2 = sqrt((result$par[2] - true_param[2])^2),
+#                 alpha1 = sqrt((result$par[3] - true_param[3])^2),
+#                 alpha2 = sqrt((result$par[4] - true_param[4])^2),
+#                 adv1 = sqrt((result$par[5] - true_param[5])^2),
+#                 adv2 = sqrt((result$par[6] - true_param[6])^2))
 
-df_result <- rbind(df_result, df_rmse)
-rownames(df_result) <- c("estim", "rmse")
+# df_result <- rbind(df_result, df_rmse)
+# rownames(df_result) <- c("estim", "rmse")
 
 # save the result
 foldername <- "../data/optim/rpar_adv/"
@@ -600,7 +605,8 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("result_optim_", m, "simu_", ngrid^2,
+
+name_file <- paste0("result_optim_", nres, "simu_", ngrid^2,
                                 "s_", length(temp), "t_", adv_str, ".csv")
 
 # write.csv(df_result, paste0(foldername, name_file))
@@ -608,7 +614,18 @@ name_file <- paste0("result_optim_", m, "simu_", ngrid^2,
 # get csv
 df_result <- read.csv(paste0(foldername, name_file))
 kable(df_result, "latex", booktabs = TRUE,
-        caption = "Result and RMSE for all replicates together with advection=(0.5,0.3)")  %>%
+        caption = "Result and RMSE for all replicates together with advection=(0.5,0.3) with tau=0:10")  %>%
+    kable_styling(latex_options = "H",
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+name_file_tau5 <- paste0("result_optim_tau5_", m, "simu_", ngrid^2,
+                                "s_", length(temp), "t_", adv_str, ".csv")
+
+# write.csv(df_result, paste0(foldername, name_file_tau5))
+
+df_result_tau5 <- read.csv(paste0(foldername, name_file_tau5))
+kable(df_result_tau5, "latex", booktabs = TRUE,
+        caption = "Result and RMSE for all replicates together with advection=(0.5,0.3) with tau=0:5")  %>%
     kable_styling(latex_options = "H",
         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
@@ -631,9 +648,237 @@ generate_variogram_plots(result, df_lags, true_param, tau_values)
 generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 ```
 
-For $M = 50$ simulations with $m = 100$ replicates each, we have the following results:
 
-```{r optimMsimuadv, fig.width = 5, fig.height = 5, echo=FALSE}
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters"}
+# Plot the variogram
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
+                                      tau_max = 5)
+tau_values <- c(0, 1, 3, 5)
+result <- data.frame(df_result_tau5[1, c("beta1", "beta2", "alpha1", "alpha2",
+                                      "adv1", "adv2")])
+generate_variogram_plots(result, df_lags, true_param, tau_values)
+```
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters"}
+# Plot the chi
+generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
+```
+
+## Plot by fixing advection parameters
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
+run_optim_mle2 <- function(list_simuM, M, m, true_param, df_lags, s0, t0, u,
+                      fixed_params) {
+
+  # get the starting values
+  start_values <- list(beta1 = true_param[1], beta2 = true_param[2],
+                         alpha1 = true_param[3], alpha2 = true_param[4],
+                         adv1 = true_param[5], adv2 = true_param[6])
+
+  # update the starting values with the fixed parameters
+  for (param in names(fixed_params)) {
+      if (param %in% names(start_values)) {
+        start_values[[param]] <- fixed_params[[param]]
+      }
+    }
+
+  # get the fixed parameters
+  fixed_list <- fixed_params[names(fixed_params) %in% names(start_values)]
+  fixed_list <- unlist(fixed_list)
+  # get the names of the parameters not fixed
+  names_params_not_fix <- names(start_values)[!names(start_values) %in%
+                                            names(fixed_params)]
+  n_params_not_fix <- length(names_params_not_fix)
+
+  # init dataframe to store the results
+  df_result <- data.frame(matrix(nrow = M, ncol = n_params_not_fix))
+  colnames(df_result) <- names_params_not_fix
+
+  for (i in 1:M) {
+    mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
+
+    # get the excesses for each replicate
+    # list_excesses <- lapply(mreplicates, function(replicate) {
+    #   empirical_excesses(replicate, u, df_lags, threshold = TRUE, t0 = t0)
+    # })
+    list_excesses <- list()
+    for (j in 1:m) {
+      replicate <- mreplicates[[j]]
+      list_excesses[[j]] <- empirical_excesses(replicate, u, df_lags,
+                                              threshold = TRUE, t0=t0)
+    }
+
+    # run the optimization
+    result <- mle2(neg_ll_composite_par,
+                   start = start_values,
+                   data = list(list_simu = mreplicates,
+                               quantile = u,
+                               df_lags = df_lags,
+                               list_excesses = list_excesses,
+                               hmax = sqrt(17),
+                               s0 = s0,
+                               t0 = t0,
+                               threshold = TRUE,
+                               method = "L-BFGS-B",
+                               lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+                               upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
+                   control = list(maxit = 10000), fixed = fixed_list)
+
+    # store the results
+    df_result_all[i, ] <- result@coef
+  }
+  return(df_result_all)
+}
+
+u <- 1
+# fixing advection parameters
+fixed_params <- list(adv1 = true_param[5], adv2 = true_param[6])
+res_adv_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, t0, u,
+               fixed_params)
+
+# fixing beta1 and beta2
+fixed_params <- list(beta1 = true_param[1], beta2 = true_param[2])
+res_beta_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, t0, u,
+               fixed_params)
+
+# fixing alpha1 and alpha2
+fixed_params <- list(alpha1 = true_param[3], alpha2 = true_param[4])
+res_alpha_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, t0, u,
+               fixed_params)
+
+# fixing beta1, beta2, alpha1 and alpha2
+fixed_params <- list(beta1 = true_param[1], beta2 = true_param[2],
+                      alpha1 = true_param[3], alpha2 = true_param[4])
+res_beta_alpha_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, 
+                                    t0, u, fixed_params)
+
+# fixing temporal parameters
+fixed_params <- list(beta2 = true_param[2], alpha2 = true_param[4])
+res_temp_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, t0, u,
+               fixed_params)
+
+# fixing spatial parameters
+fixed_params <- list(beta1 = true_param[1], alpha1 = true_param[3])
+res_spatial_fix <- run_optim_mle2(list_simuM, M, m, true_param, df_lags, s0, t0,
+                                  u, fixed_params)
+
+
+# Boxplot of the results with ggplot for each column
+df_result <- res_adv_fix
+df_bplot <- df_result
+df_bplot <- stack(df_bplot)
+
+
+ggplot(df_bplot, aes(x = ind, y = values)) +
+  geom_boxplot() +
+  labs(title = "",
+    x = "Parameters", y = "Estimated values") +
+  theme_minimal() +
+  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
+
+
+# save plot
+foldername <- "../images/optim/rpar_adv/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+# setwd("./script")
+name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
+                                "s_", length(temp), "t_advfixed_", adv_str, ".png")
+
+ggsave(paste0(foldername, name_file), width = 5, height = 5)
+
+```
+
+```{r, fig.width = 7, fig.height = 3, echo=FALSE, fig.cap="Boxplot of the estimated parameters for the 50 simulations of 100 replicates each with advection parameters fixed"}
+# # save plot
+# foldername <- "../images/optim/rpar_adv/"
+
+# name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
+#                                 "s_", length(temp), "t_fixed_", adv_str, ".png")
+
+# knitr::include_graphics(paste0(foldername, name_file))
+```
+
+
+## With another advection with $V_x=0$
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
+adv <- c(0, 0.5) # advection
+params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+true_param <- c(params, adv)
+beta1 <- params[1]
+beta2 <- params[2]
+alpha1 <- params[3]
+alpha2 <- params[4]
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 1:30
+
+# Conditional point
+s0 <- c(1, 1)
+t0 <- 1
+
+# Number of realizations
+M <- 50
+m <- 100
+nres <- M * m
+
+# Simulate the process
+# simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
+#                     t0, nres)
+
+if (any(adv < 1)) {
+  adv_int <- adv * 10
+} else {
+  adv_int <- adv
+}
+adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+
+# Save the data
+foldername <- paste0("../data/simulations_rpar/sim_", ngrid^2, "s_",
+                                length(temp), "t_", adv_str, "/")
+
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+# save_simulations(simu, ngrid, nres, folder = foldername,
+#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
+
+# nres <- length(list.files(foldername))
+list_simu <- list() # first simulation of m replicates
+for (i in 1:m) {
+  file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                        length(temp), "t_", i, ".csv")
+  list_simu[[i]] <- read.csv(file_name)
+}
+
+list_simuM <- list()
+for (i in 1:nres) {
+  file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                        length(temp), "t_", i, ".csv")
+  list_simuM[[i]] <- read.csv(file_name)
+}
+
+# Plot the first realization
+simu_df <- list_simu[[2]]
+sites_coords <- generate_grid_coords(ngrid)
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+plot(simu_df$S1, main = "S1=S0=(1,1)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S7, main = "S7=(2,2)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S10, main = "S13=(3,3)", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
+```
+
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
                                       tau_max = 10)
 
@@ -676,11 +921,8 @@ df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
 
 # }
 
-# save the result
+# save result
 foldername <- "../data/optim/rpar_adv/"
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
 
 name_file <- paste0("result_optim_all_", M, "simu_", m, "rep_", ngrid^2,
                                 "s_", length(temp), "t_", adv_str, ".csv")
@@ -691,37 +933,38 @@ name_file <- paste0("result_optim_all_", M, "simu_", m, "rep_", ngrid^2,
 df_result_all <- read.csv(paste0(foldername, name_file))
 df_result_all <- df_result_all[c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")]
 # kable(df_result_all, "latex", booktabs = TRUE,
-#         caption = "Result for all simulations together with advection=(0.5,0.3)")  %>%
+#         caption = "Result for all simulations together with advection=(0,0.5)")  %>%
 #     kable_styling(latex_options = "H",
 #         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
-# df_valid <- get_criterion(df_result_all, true_param)
-# name_file <- paste0("valid_optim_", M, "simu_", m, "rep_", ngrid^2,
-#                                 "s_", length(temp), "t_" , adv_str, ".csv")
-
-# write.csv(df_valid, paste0(foldername, name_file))
-
-# get csv
-df_valid <- read.csv(paste0(foldername, name_file))
+df_valid <- get_criterion(df_result_all, true_param)
 kable(df_valid, "latex", booktabs = TRUE,
-        caption = "Criterion for all simulations together with advection=(0.5,0.3)")  %>%
+        caption = "Criterion for all simulations together with advection=(0,0.5)")  %>%
     kable_styling(latex_options = "H",
         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
-# Boxplot of the results with ggplot for each column
-# df_bplot <- df_result_all
-# df_bplot <- stack(df_bplot)
+```
 
-
-# ggplot(df_bplot, aes(x = ind, y = values)) +
-#   geom_boxplot() +
-#   labs(title = "",
-#     x = "Parameters", y = "Estimated values") +
-#   theme_minimal() +
-#   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
-
-
+```{r, fig.width = 7, fig.height = 3, echo=FALSE, fig.cap="Boxplot of the estimated parameters for the 50 simulations of 100 replicates each"}
 # save plot
+# foldername <- "../images/optim/rpar_adv/"
+
+# name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
+#                                 "s_", length(temp), "t_", adv_str, ".png")
+
+# Boxplot of the results with ggplot for each column
+df_bplot <- df_result_all
+df_bplot <- stack(df_bplot)
+
+
+ggplot(df_bplot, aes(x = ind, y = values)) +
+  geom_boxplot() +
+  labs(title = "",
+    x = "Parameters", y = "Estimated values") +
+  theme_minimal() +
+  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
+
+# # save plot
 # foldername <- "../images/optim/rpar_adv/"
 # if (!dir.exists(foldername)) {
 #   dir.create(foldername, recursive = TRUE)
@@ -731,17 +974,9 @@ kable(df_valid, "latex", booktabs = TRUE,
 #                                 "s_", length(temp), "t_", adv_str, ".png")
 
 # ggsave(paste0(foldername, name_file), width = 5, height = 5)
-```
 
+# knitr::include_graphics(paste0(foldername, name_file))
 
-```{r, fig.width = 7, fig.height = 3, echo=FALSE, fig.cap="Boxplot of the estimated parameters for the 50 simulations of 100 replicates each"}
-# save plot
-foldername <- "../images/optim/rpar_adv/"
-
-name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
-                                "s_", length(temp), "t_", adv_str, ".png")
-
-knitr::include_graphics(paste0(foldername, name_file))
 ```
 
 For one simulation:
@@ -760,37 +995,12 @@ generate_variogram_plots(result, df_lags, true_param, tau_values)
 generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 ```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters for the 50th simulation of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result_all[50, ]
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters for the 50th simulation of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the estimated parameters for the third simulation of 100 replicates each"}
-# plot variogram
-tau_values <- c(0, 1, 5, 10)
-result <- df_result_all[3, ]
-generate_variogram_plots(result, df_lags, true_param, tau_values)
-```
-
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the estimated parameters for the third simulation of 100 replicates each"}
-# plot chi
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
-```
-
-With mean estimation for the $M=50$ simulations with $m=100$ replicates each.
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Variogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
 # plot variogram
-# tau_values <- c(0, 1, 5, 10)
-# df_valid <- df_valid[c("mean", "RMSE", "MAE")]
-# result <- data.frame(par = df_valid$mean)
-# generate_variogram_plots(result, df_lags, true_param, tau_values)
+tau_values <- c(0, 1, 5, 10)
+result <- data.frame(par = df_valid$mean)
+generate_variogram_plots(result, df_lags, true_param, tau_values)
 ```
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Extremogram for the mean estimated parameters for the 50 simulations of 100 replicates each"}
@@ -799,91 +1009,14 @@ generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 ```
 
 
-## Plot by fixing advection parameters
+## Changing conditional point
 
-```{r, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
-df_result_all <- data.frame(beta1 = numeric(M),
-                        beta2 = numeric(M),
-                        alpha1 = numeric(M),
-                        alpha2 = numeric(M))
-u <- 1
-
-for (i in 1:M){
-  # get the m corresponding simulations from list_simu inside a list
-  mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
-
-  list_excesses <- list()
-  for (j in 1:m) {
-    replicate <- mreplicates[[j]]
-    list_excesses[[j]] <- empirical_excesses_rpar(replicate, u, df_lags,
-                                            threshold = TRUE, t0=t0)
-  }
-
-  result <- mle2(neg_ll_composite_par,
-              start = list(beta1 = true_param[1],
-                           beta2 = true_param[2],
-                           alpha1 = true_param[3],
-                           alpha2 = true_param[4],
-                           adv1 = true_param[5],
-                           adv2 = true_param[6]),
-              data = list(list_simu = list_simu,
-                          quantile = u,
-                          df_lags = df_lags,
-                          list_excesses = list_excesses,
-                          hmax = sqrt(17),
-                          s0 = s0,
-                          t0 = t0,
-                          threshold = TRUE,
-                          method = "CG"),
-              control = list(maxit = 10000),
-              fixed = list(adv1=true_param[5], adv2=true_param[6]))
-
-  df_result_all[i, ] <- result@coef
-
-}
-
-
-# Boxplot of the results with ggplot for each column
-# df_bplot <- df_result_all
-# df_bplot <- stack(df_bplot)
-
-
-# ggplot(df_bplot, aes(x = ind, y = values)) +
-#   geom_boxplot() +
-#   labs(title = "",
-#     x = "Parameters", y = "Estimated values") +
-#   theme_minimal() +
-#   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
-
-
-# # save plot
-# foldername <- "../images/optim/rpar_adv/"
-# if (!dir.exists(foldername)) {
-#   dir.create(foldername, recursive = TRUE)
-# }
-# # setwd("./script")
-# name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
-#                                 "s_", length(temp), "t_fixed_", adv_str, ".png")
-
-# ggsave(paste0(foldername, name_file), width = 5, height = 5)
-
-```
-
-```{r, fig.width = 7, fig.height = 3, echo=FALSE, fig.cap="Boxplot of the estimated parameters for the 50 simulations of 100 replicates each with advection parameters fixed"}
-# # save plot
-# foldername <- "../images/optim/rpar_adv/"
-
-# name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
-#                                 "s_", length(temp), "t_fixed_", adv_str, ".png")
-
-# knitr::include_graphics(paste0(foldername, name_file))
-```
-
-
-## With another advection with $V_x=0$
+I took the conditional point at $s_0 = (2, 3)$ and $t_0=1$.
+The advective parameters are $(0.5, 0.3)$ and the other parameters are $(0.4, 0.2, 1.5, 1)$.
+I took $M=50$ simulations with $m=100$ replicates each.
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
-adv <- c(0, 0.5) # advection
+adv <- c(0.5, 0.3) # advection
 params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 true_param <- c(params, adv)
 beta1 <- params[1]
@@ -896,7 +1029,7 @@ nsites <- ngrid^2 # if the grid is squared
 temp <- 1:30
 
 # Conditional point
-s0 <- c(1, 1)
+s0 <- c(2, 3)
 t0 <- 1
 
 # Number of realizations
