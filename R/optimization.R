@@ -33,8 +33,6 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
   return(marginal_excesses)
 }
 
-
-
 #' empirical_excesses_rpar function
 #'
 #' This function calculates the empirical excesses based on indicators above a
@@ -218,11 +216,11 @@ theorical_chi <- function(params, df_lags) {
   chi_df <- df_lags[c("s1", "s2", "tau")]
   # Get vario and chi for each lagtemp
   chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-  chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-  chi_df$hnorm <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  chi_df$hy <- df_lags$hy - adv[2] * df_lags$taus
+  chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
 
-  chi_df$vario <- (2 * beta1) * chi_df$hnorm^alpha1 +
+  chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
                   (2 * beta2) * abs(chi_df$tau)^alpha2
 
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
@@ -290,19 +288,15 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #'
 #' @export
 neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
-                  s0 = NA, t0 = NA, threshold = FALSE, pmarg = NA) {
+                  s0 = NA, t0 = NA, threshold = FALSE) {
   Tmax <- nrow(data) # number of total observations
   # print(params)
   if (all(!is.na(s0))) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
-    if (all(!is.na(pmarg))) {
-      p <- pmarg
-    } else {
-      # number of marginal excesses
-      nmarg <- get_marginal_excess(data, quantile, threshold)
-      p <- nmarg / Tmax # probability of marginal excesses;
-    }
+    # number of marginal excesses
+    nmarg <- get_marginal_excess(data, quantile, threshold)
+    p <- nmarg / Tmax # probability of marginal excesses
   }
 
   # Bounds for the parameters
@@ -322,7 +316,7 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
-  ll_df$hnorm <- chi$hnorm
+  ll_df$hnormV <- chi$hnormV
   ll_df$chi <- chi$chi
   ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi

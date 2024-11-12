@@ -169,6 +169,7 @@ get_lag_vectors <- function(df_coords, hmax = NA, tau_max = 10) {
   # Vector coordinates between two sites
   lags$hx <- lags$s2x - lags$s1x
   lags$hy <- lags$s2y - lags$s1y
+  lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
 }
@@ -228,6 +229,7 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   # Vector coordinates between two sites
   lags$hx <- lags$s2x - lags$s1x # s - s0
   lags$hy <- lags$s2y - lags$s1y
+  lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
 }
