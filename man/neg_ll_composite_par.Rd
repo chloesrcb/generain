@@ -13,10 +13,8 @@ neg_ll_composite_par(
   adv2,
   list_simu,
   df_lags,
-  locations,
   quantile,
   list_excesses,
-  latlon = FALSE,
   hmax = NA,
   s0 = NA,
   t0 = NA,
@@ -40,14 +38,9 @@ neg_ll_composite_par(
 
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
 
-\item{locations}{The locations dataframe.}
-
 \item{quantile}{The quantile value.}
 
 \item{list_excesses}{A list of excesses dataframes.}
-
-\item{latlon}{A boolean value to indicate if the locations are in latitude
-and longitude. Default is FALSE.}
 
 \item{hmax}{The maximum spatial lag value.}
 

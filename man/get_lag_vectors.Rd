@@ -4,26 +4,14 @@
 \alias{get_lag_vectors}
 \title{get_lag_vectors function}
 \usage{
-get_lag_vectors(
-  df_coords,
-  params,
-  tau_vect = 0:10,
-  hmax = NA,
-  norm = "euclidean",
-  index_s0 = 0
-)
+get_lag_vectors(df_coords, hmax = NA, tau_max = 10)
 }
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
 
-\item{params}{A vector of parameters.}
-
-\item{tau_vect}{A vector of temporal lags. Default is 0:10.}
-
 \item{hmax}{The maximum distance threshold. Default is NA.}
 
-\item{norm}{The norm to use. Can be "euclidean" or "Lp". Default
-is "euclidean".}
+\item{tau_max}{The maximum temporal lag. Default is 10.}
 }
 \value{
 A dataframe containing the lag vectors.

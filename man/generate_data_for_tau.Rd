@@ -2,8 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{generate_data_for_tau}
 \alias{generate_data_for_tau}
-\title{Generate data for a specific tau value for the variogram plot
-This function generates data for a specific tau value for the variogram plot.}
+\title{Generate data for a specific tau value for the variogram plot}
 \usage{
 generate_data_for_tau(tau, empirical_df, theorical_df)
 }
@@ -18,6 +17,5 @@ generate_data_for_tau(tau, empirical_df, theorical_df)
 A dataframe containing the variogram values for the specified tau.
 }
 \description{
-Generate data for a specific tau value for the variogram plot
 This function generates data for a specific tau value for the variogram plot.
 }

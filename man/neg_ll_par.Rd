@@ -51,13 +51,6 @@ the number of possible excesses Tobs.}
 
 \item{threshold}{A boolean value to indicate if the quantile variable is a
 threshold value and not a uniform quantile. Default is FALSE.}
-
-\item{locations}{The locations dataframe.}
-
-\item{latlon}{A boolean value to indicate if the locations are in latitude
-and longitude. Default is FALSE.}
-
-\item{pmarg}{The probability of marginal excesses. Default is NA.}
 }
 \value{
 The negative log-likelihood value.

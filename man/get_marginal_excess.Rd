@@ -7,15 +7,22 @@
 get_marginal_excess(
   data_rain,
   quantile,
-  ind_s0 = NA,
-  t0 = NA,
-  threshold = FALSE
+  threshold = FALSE,
+  index = 1,
+  time = 1
 )
 }
 \arguments{
 \item{data_rain}{The rainfall data.}
 
 \item{quantile}{The quantile value.}
+
+\item{threshold}{A boolean value to indicate if the quantile variable is a
+threshold value and not a uniform quantile. Default is FALSE.}
+
+\item{index}{The index of the site. Default is 1.}
+
+\item{time}{The starting time index. Default is 1.}
 }
 \value{
 The number of marginal excesses.

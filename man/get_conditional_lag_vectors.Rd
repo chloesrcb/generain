@@ -4,21 +4,10 @@
 \alias{get_conditional_lag_vectors}
 \title{get_conditional_lag_vectors function}
 \usage{
-get_conditional_lag_vectors(
-  df_coords,
-  params,
-  temp,
-  s0 = c(1, 1),
-  t0 = 1,
-  tau_max = 10
-)
+get_conditional_lag_vectors(df_coords, s0 = c(1, 1), t0 = 1, tau_max = 10)
 }
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
-
-\item{params}{A vector of parameters.}
-
-\item{temp}{The temporal sequence.}
 
 \item{s0}{Conditional spatial point coordinates.}
 

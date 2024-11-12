@@ -2,8 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{generate_variogram_plots}
 \alias{generate_variogram_plots}
-\title{Generate variogram plots
-This function generates variogram plots for multiple tau values.}
+\title{Generate variogram plots}
 \usage{
 generate_variogram_plots(result, df_lags, true_param, tau_values, chi = FALSE)
 }
@@ -16,12 +15,12 @@ generate_variogram_plots(result, df_lags, true_param, tau_values, chi = FALSE)
 
 \item{tau_values}{The values of tau to generate plots for.}
 
-\item{chi}{A logical value indicating whether to plot the chi values.}
+\item{chi}{A logical value indicating whether to plot the chi values.
+Default is FALSE.}
 }
 \value{
 None, but generates plots.
 }
 \description{
-Generate variogram plots
 This function generates variogram plots for multiple tau values.
 }
