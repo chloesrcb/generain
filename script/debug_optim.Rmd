@@ -1134,7 +1134,7 @@ print(df_rmse)
 ### Advection nulle
 
 ```{r}
-adv <- c(0, 0.2) # pixel by time?
+adv <- c(0, 0) # pixel by time?
 true_param <- c(0.4, 0.2, 1.5, 1, adv)
 ngrid <- 5
 spa <- 1:ngrid

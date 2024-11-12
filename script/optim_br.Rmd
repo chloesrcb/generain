@@ -73,7 +73,7 @@ adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
 
 # Save the data
 foldername <- paste0("../data/simulations_BR/sim_", ngrid^2, "s_",
-                                length(temp), "t_", adv_str, "/")
+                                length(temp), "t", "/")
 
 
 if (!dir.exists(foldername)) {
@@ -81,7 +81,7 @@ if (!dir.exists(foldername)) {
 }
 
 
-nres <- 10
+nres <- 100
 BR <- sim_BR(true_param[1], true_param[2], true_param[3],
             true_param[4], spa, spa, temp, adv = adv, nres = nres)
 
@@ -101,7 +101,7 @@ for (i in 1:nfiles) {
     simu_list[[i]] <- simu_temp
 }
 
-simu_df <- simu_list[[1]]
+simu_df <- simu_list[[8]]
 nsites <- ncol(simu_df)
 sites_coords <- generate_grid_coords(sqrt(nsites))
 ```
@@ -116,10 +116,6 @@ plot(simu_df[, 4], main = "Site 4")
 ```
 
 # Compute joint exceedances
-
-```{r}
-
-```
 
 
 ```{r plotdenskijnewsim2, fig.height=7, fig.width=7, echo=FALSE, eval=FALSE}
@@ -181,10 +177,10 @@ ggplot(plot_data, aes(x = x, y = y, color = type, linetype = type)) +
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE}
 df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
-q <- 0.92
+q <- 0.9
 excesses <- empirical_excesses(simu_df, q, df_lags, type = "brownresnick")
-
-result <- optim(par = c(0.4, 0.2, 1.5, 1, 0.001, 0.001), fn = neg_ll,
+true_param <- c(params, adv)
+result <- optim(par = params, fn = neg_ll,
                   data = simu_df,
                   quantile = q,
                   df_lags = df_lags,
@@ -220,7 +216,7 @@ result$par
 
 
 # save the result
-foldername <- "../data/optim/rpar_noadv/"
+foldername <- "../data/optim/br_noadv/"
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
