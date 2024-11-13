@@ -9,7 +9,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 5,
                       fig.align = 'center', message = FALSE, warning = FALSE,
-                      fig.pos='H', echo=FALSE)
+                      fig.pos = 'H', echo = FALSE)
 
 ```
 
@@ -52,6 +52,16 @@ btfgreen <- "#69b3a2"
 # setwd("./script")
 ```
 
+# TO DO et notes 
+
+- Regarder la tête des simulations quand je change de site de référence
+
+- `W[s0[2], s0[1], t0]` ou `W[s0[1], s0[2], t0]` dans simulations
+
+- `s0_x <- s0[2]` ou `s0_x <- s0[1]` dans le vario de la simu
+
+- Maintenant retenter les BR avec ces nouvelles modifs pour voir
+
 
 # The $r$-Pareto process without advection and new params
 
@@ -64,8 +74,8 @@ $30$ time steps and $100$ realizations. We use a conditonal point $s_0 = (1, 1)$
 time $t_0 = 1$.
 
 ```{r rparetosim1, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
-adv <- c(0., 0.) # advection
-params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+adv <- c(0.1, 0.2) # advection
+params <- c(0.8, 0.2, 1, 1) # ok verif sur simu
 true_param <- c(params, adv)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -77,11 +87,11 @@ nsites <- ngrid^2 # if the grid is squared
 temp <- 1:30
 
 # Conditional point
-s0 <- c(1, 1)
+s0 <- c(2, 2) # y, x ???
 t0 <- 1
 
 # Number of realizations
-M <- 100
+M <- 10
 m <- 100
 nres <- M * m
 
@@ -103,9 +113,12 @@ if (any(adv < 1 && adv > 0.1)) {
 param_str <- sprintf("%02d_%02d_%02d_%02d", true_param[1] * 10,
                     true_param[2] * 10, true_param[3] * 10, true_param[4] * 10)
 
+s0_str <- sprintf("%01d_%01d", s0[1], s0[2])
+# setwd("./script")
 # Save the data
-foldername <- paste0("../data/simulations_rpar_", param_str,"/sim_", ngrid^2, 
-                    "s_", length(temp), "t_", adv_str, "/")
+foldername <- paste0("../data/simulations_rpar/rpar_", param_str, "_", adv_str,
+                   "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
+                    s0_str, "/")
 
 
 if (!dir.exists(foldername)) {
@@ -129,10 +142,6 @@ for (i in 1:nres) {
                         length(temp), "t_", i, ".csv")
   list_simuM[[i]] <- read.csv(file_name)
 }
-
-# Plot the first realization
-simu_df <- list_simu[[2]]
-sites_coords <- generate_grid_coords(ngrid)
 ```
 
 ## Optimisation
@@ -158,7 +167,7 @@ for (i in 1:m) {
                                      threshold = TRUE, type="rpareto", t0=1)
 }
 
-true_param <- c(params)
+true_param <- c(params, adv)
 result <- optim(par = true_param, fn = neg_ll_composite,
                   list_simu = list_simu,
                   quantile = u,
@@ -168,9 +177,10 @@ result <- optim(par = true_param, fn = neg_ll_composite,
                   s0 = s0,
                   t0 = t0,
                   threshold = TRUE,
+                  # method = "CG",
                   method = "L-BFGS-B",
-                  lower = c(1e-6, 1e-6, 1e-6, 1e-6),
-                  upper = c(Inf, Inf, 1.999, 1.999),
+                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
                   control = list(maxit = 10000))
 
 
@@ -192,12 +202,53 @@ df_result <- rbind(df_result, df_rmse)
 rownames(df_result) <- c("estim", "rmse")
 
 # save the result
-foldername <- "../data/optim/rpar_adv/"
+foldername <- paste0("../data/optim/rpar_adv/rpar_", param_str, "_", adv_str,
+                   "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
+                    s0_str, "/")
+
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
+filename <- paste0("result_", ngrid^2, "s_", length(temp), "t")
+
+write.csv(df_result, paste0(foldername, filename))
+
+df_result <- read.csv(paste0(foldername, filename))
+caption_tab <- paste0("Estimation and RMSE for 1 simulation of ", m,
+                     "replicates with advection = (0,0)")
+
+colnames(df_result) <- c("", "beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+kable(df_result, "latex", booktabs = TRUE,
+        caption = caption_tab)  %>%
+    kable_styling(latex_options = "H",
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
 ```
+
+
+Quand $\alpha_1 = 1$ et $\alpha_2 = 1$ : pas ouf
+Quand $\alpha_1 < \alpha_2$ à tester.
+
+Pour $\Theta = (0.4, 0.2, 1.5, 1, 0.5, 0)$ et $temp = 1:30$
+Si $\tau_{max} = 5$ pas mal.
+Si $\tau_{max} = 10$ mauvais.
+Si $\tau_{max} = 30$ mauvais.
+
+Pour $\Theta = (0.4, 0.2, 1.5, 1, 0.5, 0)$ et $temp=1:100$
+Si $\tau_{max} = 10$ temporel mal estimé.
+Si $\tau_{max} = 30$ pas mieux.
+
+Changement de site $s_0$ ne fonctionnait pas:\\
+
+C'est bon pb réglé: il y avait encore des soucis d'indices dans les simus... (voir notes)
+
+Advection: 
+
+- pour 0.1, 0.1 c'est super 
+- pour 0.2, 0.2 c'est bien 
+- pour 0.5, 0.5 ça marche pas (trop fort?)
+- ppur 0.1, 0.2 c'est pas trop mal (alpha1 haut mais ca va)
 
 ```{r rparetosim2, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
 df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
@@ -252,7 +303,7 @@ ggplot(df_bplot, aes(x = ind, y = values)) +
     x = "Parameters", y = "Estimated values") +
   theme_minimal() +
   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
-
+                                                                              
 
 # save plot
 foldername <- "../images/optim/rpar_noadv/"
@@ -260,7 +311,7 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("boxplot_optim_adv10_", M, "simu_", m, "rep_", ngrid^2,
+name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
                                 "s_", length(temp), "t_", adv_str, ".png")
 
 ggsave(paste0(foldername, name_file), width = 5, height = 5)
@@ -271,8 +322,5 @@ ggsave(paste0(foldername, name_file), width = 5, height = 5)
 
 Quand tau max est plus grand (ie 30 pour un temp de 1 à 30) ça marche pas du tout .
 
-
-## Changing advection scale
-
-Si je multiplie par 10 l'advection en ajustant la distance?
+Si je multiplie par 10 l'advection en ajustant la distance? Pour avoir un rmse plus logique au moins ?
 

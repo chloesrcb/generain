@@ -440,7 +440,7 @@ name_file <- paste0("result_optim_valid_", M, "simu_", m, "rep_", ngrid^2,
 df_result <- read.csv(paste0(foldername, name_file))
 colnames(df_result) <- c("", "Mean", "RMSE", "MAE")
 kable(df_result, "latex", booktabs = TRUE,
-        caption = "Result and RMSE for all replicates together with advection=(0,0)")  %>%
+YUJK        caption = "Result and RMSE for all replicates together with advection=(0,0)")  %>%
     kable_styling(latex_options = "H",
         bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
