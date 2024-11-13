@@ -53,18 +53,19 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
                                     threshold = FALSE, t0 = 1) {
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
+  ind_s1 <- df_lags$s1[1] # s0
   for (t in unique_tau) { # loop over temporal lags
     df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
 
     for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
       # get the indices of the sites
       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      ind_s1 <- 1 # s0
-
+      # ind_s1 <- 1 # s0
+      
       # get the data for the pair of sites
-      rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+      rain_cp <- data_rain[, c(ind_s2), drop = FALSE]
       rain_cp <- as.data.frame(na.omit(rain_cp))
-      colnames(rain_cp) <- c("s1", "s2")
+      colnames(rain_cp) <- c("s2")
 
       # shifted data
       X_s_t <- rain_cp$s2[(t0 + abs(t))] # X_{s,t0 + tau}
@@ -216,7 +217,7 @@ theorical_chi <- function(params, df_lags) {
   chi_df <- df_lags[c("s1", "s2", "tau")]
   # Get vario and chi for each lagtemp
   chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-  chi_df$hy <- df_lags$hy - adv[2] * df_lags$taus
+  chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
   chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
 

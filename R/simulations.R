@@ -62,24 +62,24 @@ conditional_variogram <- function(x, y, t, s0, t0, grid, model, adv = c(0, 0)) {
   lt <- length(t)
 
   # Spatial conditioning point
-  s0_x <- s0[1]
-  s0_y <- s0[2]
+  s0_x <- s0[2]
+  s0_y <- s0[1]
 
   gamma_s0_t0 <- array(0, dim = c(lx, ly, lt))
   for (i in seq_len(lx)) {
       for (j in seq_len(ly)) {
           for (k in seq_len(lt)) {
-          print(paste0("x_i: ", x[i]))
-          print(paste0("y_j: ", y[j]))
-          print(paste0("t_k: ", t[k]))
-          gamma_s0_t0[j, i, k] <- RandomFields::RFvariogram(
-              model,
-              x = x[i] - s0_x - adv[1] * (t[k] - t0),
-              y = y[j] - s0_y - adv[2] * (t[k] - t0),
-              z = t[k] - t0
-          )
-          print(paste0("gamma_s0_t0[",i,", ",j,", ",k,"]: ", gamma_s0_t0[i, j, k]))
-          print("----------------")
+          # print(paste0("x_i: ", x[i]))
+          # print(paste0("y_j: ", y[j]))
+          # print(paste0("t_k: ", t[k]))
+            gamma_s0_t0[j, i, k] <- RandomFields::RFvariogram(
+                model,
+                x = x[i] - s0_x - adv[1] * (t[k] - t0),
+                y = y[j] - s0_y - adv[2] * (t[k] - t0),
+                z = t[k] - t0
+            )
+          # print(paste0("gamma_s0_t0[",i,", ",j,", ",k,"]: ", gamma_s0_t0[i, j, k]))
+          # print("----------------")
           }
       }
   }
@@ -87,30 +87,32 @@ conditional_variogram <- function(x, y, t, s0, t0, grid, model, adv = c(0, 0)) {
 }
 
 
-conditional_variogram_hand <- function(x, y, t, s0, t0, params) {
-  lx <- length(x)
-  ly <- length(y)
-  lt <- length(t)
+# conditional_variogram_hand <- function(x, y, t, s0, t0, params) {
+#   lx <- length(x)
+#   ly <- length(y)
+#   lt <- length(t)
 
-  # Spatial conditioning point
-  s0_x <- s0[1]
-  s0_y <- s0[2]
+#   # Spatial conditioning point
+#   s0_x <- s0[1]
+#   s0_y <- s0[2]
 
-  gamma_r <- array(0, dim = c(lx, ly, lt))
-  for (i in seq_len(lx)) {
-      for (j in seq_len(ly)) {
-          for (k in seq_len(lt)) {
-            hx <- x[i] - s0_x - adv[1] * (t[k] - t0)
-            hy <- y[j] - s0_y - adv[2] * (t[k] - t0)
-            tau <- t[k] - t0
-            hnorm <- sqrt(hx^2 + hy^2)
-            gamma_r[j, i, k] <- 2 * (0.4 * hnorm^1.5 +
-                                        0.2 * abs(tau)^1)
-          }
-      }
-  }
-  return(gamma_r)
-}
+#   adv <- params[5:6]
+
+#   gamma_r <- array(0, dim = c(lx, ly, lt))
+#   for (i in seq_len(lx)) {
+#       for (j in seq_len(ly)) {
+#           for (k in seq_len(lt)) {
+#             hx <- x[i] - s0_x - adv[1] * (t[k] - t0)
+#             hy <- y[j] - s0_y - adv[2] * (t[k] - t0)
+#             tau <- t[k] - t0
+#             hnorm <- sqrt(hx^2 + hy^2)
+#             gamma_r[j, i, k] <- 2 * (0.4 * hnorm^1.5 +
+#                                         0.2 * abs(tau)^1)
+#           }
+#       }
+#   }
+#   return(gamma_r)
+# }
 
 #' advected_variogram function
 #'
@@ -308,14 +310,15 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
       grid[j+Nxy*(i-1), 3] <- i
 
   # Construct shifted variogram for conditional spatio-temporal point
-  # gamma <-  conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu, adv)
-  params <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
-  gamma <- conditional_variogram_hand(x, y, t, s0, t0, params)
+  gamma <-  conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu, adv)
+  # params <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
+  # gamma <- conditional_variogram_hand(x, y, t, s0, t0, params)
+
   # Main
   Z <- array(, dim = c(lx, ly, lt, nres)) # 3d array
   for (i in seq_len(nres)) {
     W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
-    Y <- exp(W - W[s0[1], s0[2], t0] - gamma)
+    Y <- exp(W - W[s0[2], s0[1], t0] - gamma)
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1) # simple Pareto
     Z[,,, i] <- R * Y
   }
