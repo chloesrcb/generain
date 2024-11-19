@@ -110,98 +110,98 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 }
 
 
-#' Create a GIF from a simulation
-#'
-#' This function creates a GIF from a simulation.
-#'
-#' @param simulation_data The data from the simulation.
-#' @param sites_coords The coordinates of the sites.
-#' @param params The parameters used for the simulation.
-#' @param type The type of simulation.
-#' @param forcedtemp The number of time steps to include in the GIF.
-#'
-#' @return None, but saves the GIF to a file.
-#'
-#' @import ggplot2
-#' @import reshape2
-#' @import animation
-#'
-#' @export
-create_simu_gif <- function(simulation_data, sites_coords, params,
-                            type = "rpar", forcedtemp = NA) {
-  ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
-  Tmax <- nrow(simulation_data) # Number of time steps
-  if (is.na(forcedtemp)) {
-    temp <- 1:Tmax
-  } else {
-    temp <- 1:forcedtemp
-  }
+# #' Create a GIF from a simulation
+# #'
+# #' This function creates a GIF from a simulation.
+# #'
+# #' @param simulation_data The data from the simulation.
+# #' @param sites_coords The coordinates of the sites.
+# #' @param params The parameters used for the simulation.
+# #' @param type The type of simulation.
+# #' @param forcedtemp The number of time steps to include in the GIF.
+# #'
+# #' @return None, but saves the GIF to a file.
+# #'
+# #' @import ggplot2
+# #' @import reshape2
+# #' @import animation
+# #'
+# #' @export
+# create_simu_gif <- function(simulation_data, sites_coords, params,
+#                             type = "rpar", forcedtemp = NA) {
+#   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
+#   Tmax <- nrow(simulation_data) # Number of time steps
+#   if (is.na(forcedtemp)) {
+#     temp <- 1:Tmax
+#   } else {
+#     temp <- 1:forcedtemp
+#   }
 
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   if (length(params) == 6) {
+#     adv <- params[5:6]
+#   } else {
+#     adv <- c(0, 0)
+#   }
 
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
+#   if (length(params) == 6) {
+#     adv <- params[5:6]
+#   } else {
+#     adv <- c(0, 0)
+#   }
 
-  simulation_data$Time <- rownames(simulation_data) # Add a time column
-  simulation_data_long <- melt(simulation_data) # Convert to long format
-  simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
-  # Create a dataframe to represent grid points
-  grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+#   simulation_data$Time <- rownames(simulation_data) # Add a time column
+#   simulation_data_long <- melt(simulation_data) # Convert to long format
+#   simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
+#   # Create a dataframe to represent grid points
+#   grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
 
-  plots <- list()
-  cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
-  # for each time step
-  for (i in unique(cropped_data$Time)) {
-    # Add the simulated values to the grid dataframe
-    grid$value <- cropped_data$value[cropped_data$Time == i]
+#   plots <- list()
+#   cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
+#   # for each time step
+#   for (i in unique(cropped_data$Time)) {
+#     # Add the simulated values to the grid dataframe
+#     grid$value <- cropped_data$value[cropped_data$Time == i]
 
-    # Plot
-    p <-  ggplot(data = grid, aes(x = x, y = y, fill = value)) +
-      geom_tile() +
-      scale_fill_gradient(low = "#70a7ae", high = "#9d503d",
-                          name = "Rainfall in mm",
-                          limits = c(min(cropped_data$value),
-                                     max(cropped_data$value))) +
-      labs(title = paste0("t =", i, " | Betas: ", beta1, ", ", beta2,
-                          " | Alphas: ",
-                          alpha1, ", ", alpha2, " | Advection: ", adv[1],
-                          ", ", adv[2])) +
-      theme_minimal() +
-      theme(plot.background = element_rect(fill = "#F9F8F6",
-                                         color = "#F9F8F6"),
-            panel.border = element_blank(),
-            panel.grid = element_blank(),
-            axis.text.x = element_blank(),
-            axis.text.y = element_blank(),
-            axis.title.x = element_blank(),
-            axis.title.y = element_blank())
+#     # Plot
+#     p <-  ggplot(data = grid, aes(x = x, y = y, fill = value)) +
+#       geom_tile() +
+#       scale_fill_gradient(low = "#70a7ae", high = "#9d503d",
+#                           name = "Rainfall in mm",
+#                           limits = c(min(cropped_data$value),
+#                                      max(cropped_data$value))) +
+#       labs(title = paste0("t =", i, " | Betas: ", beta1, ", ", beta2,
+#                           " | Alphas: ",
+#                           alpha1, ", ", alpha2, " | Advection: ", adv[1],
+#                           ", ", adv[2])) +
+#       theme_minimal() +
+#       theme(plot.background = element_rect(fill = "#F9F8F6",
+#                                          color = "#F9F8F6"),
+#             panel.border = element_blank(),
+#             panel.grid = element_blank(),
+#             axis.text.x = element_blank(),
+#             axis.text.y = element_blank(),
+#             axis.title.x = element_blank(),
+#             axis.title.y = element_blank())
 
-    plots[[i]] <- p
-  }
+#     plots[[i]] <- p
+#   }
 
-  # Save the plots as a gif
-  ani.options(interval = 0.5) # time between frames
-  saveGIF({
-    for (i in temp) {
-      print(plots[[i]])
-    }
-  }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-                         "/simu_gif/simu_", type, "/", type, "_", ngrid^2, "s_",
-                         Tmax, "t.gif"),
-  ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
+#   # Save the plots as a gif
+#   ani.options(interval = 0.5) # time between frames
+#   saveGIF({
+#     for (i in temp) {
+#       print(plots[[i]])
+#     }
+#   }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
+#                          "/simu_gif/simu_", type, "/", type, "_", ngrid^2, "s_",
+#                          Tmax, "t.gif"),
+#   ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
 
-}
+# }
 
 #' Generate data for a specific tau value for the variogram plot
 #'
