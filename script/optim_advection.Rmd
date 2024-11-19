@@ -52,26 +52,11 @@ btfgreen <- "#69b3a2"
 # setwd("./script")
 ```
 
-# TO DO et notes 
-
-- Regarder la tête des simulations quand je change de site de référence
-
-- `W[s0[2], s0[1], t0]` ou `W[s0[1], s0[2], t0]` dans simulations
-
-- `s0_x <- s0[2]` ou `s0_x <- s0[1]` dans le vario de la simu
-
-- Maintenant retenter les BR avec ces nouvelles modifs pour voir
 
 
 # The $r$-Pareto process without advection and new params
 
 ## Simulation
-
-We simulate the $r$-Pareto process with the parameters $\beta_1 = 0.5$,
-$\beta_2 = 0.1$, $\alpha_1 = 1.2$, $\alpha_2 = 0.9$ and the advection vector
-$V = (0.5, 0.3)$. We simulate the process on a $5 \times 5$ grid with
-$30$ time steps and $100$ realizations. We use a conditonal point $s_0 = (1, 1)$ at
-time $t_0 = 1$.
 
 ```{r rparetosim1, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
 adv <- c(0.1, 0.2) # advection
@@ -158,168 +143,9 @@ plot(simu_df$S25)
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE}
 sites_coords <- generate_grid_coords(ngrid)
 df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
-
-u <- 1
-list_excesses <- list()
-# par(mfrow=c(5, 2))
-for (i in 1:m) {
-  list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
-                                     threshold = TRUE, type="rpareto", t0=1)
-}
-
-true_param <- c(params, adv)
-result <- optim(par = true_param, fn = neg_ll_composite,
-                  list_simu = list_simu,
-                  quantile = u,
-                  df_lags = df_lags,
-                  list_excesses = list_excesses,
-                  hmax = sqrt(17),
-                  s0 = s0,
-                  t0 = t0,
-                  threshold = TRUE,
-                  # method = "CG",
-                  method = "L-BFGS-B",
-                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                  control = list(maxit = 10000))
-
-
-df_result <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
-
-df_rmse <- data.frame(beta1 = sqrt((result$par[1] - true_param[1])^2),
-                beta2 = sqrt((result$par[2] - true_param[2])^2),
-                alpha1 = sqrt((result$par[3] - true_param[3])^2),
-                alpha2 = sqrt((result$par[4] - true_param[4])^2),
-                adv1 = sqrt((result$par[5] - true_param[5])^2),
-                adv2 = sqrt((result$par[6] - true_param[6])^2))
-
-df_result <- rbind(df_result, df_rmse)
-rownames(df_result) <- c("estim", "rmse")
-
-# save the result
-foldername <- paste0("../data/optim/rpar_adv/rpar_", param_str, "_", adv_str,
-                   "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
-                    s0_str, "/")
-
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
-
-filename <- paste0("result_", ngrid^2, "s_", length(temp), "t")
-
-write.csv(df_result, paste0(foldername, filename))
-
-df_result <- read.csv(paste0(foldername, filename))
-caption_tab <- paste0("Estimation and RMSE for 1 simulation of ", m,
-                     "replicates with advection = (0,0)")
-
-colnames(df_result) <- c("", "beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
-kable(df_result, "latex", booktabs = TRUE,
-        caption = caption_tab)  %>%
-    kable_styling(latex_options = "H",
-        bootstrap_options = c("striped", "hover", "condensed", "responsive"))
-
 ```
-
-
-Quand $\alpha_1 = 1$ et $\alpha_2 = 1$ : pas ouf
-Quand $\alpha_1 < \alpha_2$ à tester.
-
-Pour $\Theta = (0.4, 0.2, 1.5, 1, 0.5, 0)$ et $temp = 1:30$
-Si $\tau_{max} = 5$ pas mal.
-Si $\tau_{max} = 10$ mauvais.
-Si $\tau_{max} = 30$ mauvais.
-
-Pour $\Theta = (0.4, 0.2, 1.5, 1, 0.5, 0)$ et $temp=1:100$
-Si $\tau_{max} = 10$ temporel mal estimé.
-Si $\tau_{max} = 30$ pas mieux.
-
-Changement de site $s_0$ ne fonctionnait pas:\\
-
-C'est bon pb réglé: il y avait encore des soucis d'indices dans les simus... (voir notes)
-
-Advection: 
-
-- pour 0.1, 0.1 c'est super 
-- pour 0.2, 0.2 c'est bien 
-- pour 0.5, 0.5 ça marche pas (trop fort?)
-- ppur 0.1, 0.2 c'est pas trop mal (alpha1 haut mais ca va)
-
-```{r rparetosim2, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
-
-df_result_all <- data.frame(beta1 = numeric(M),
-                        beta2 = numeric(M),
-                        alpha1 = numeric(M),
-                        alpha2 = numeric(M),
-                        adv1 = numeric(M),
-                        adv2 = numeric(M))
-u <- 1
-
-for (i in 1:M){
-  # get the m corresponding simulations from list_simu inside a list
-  mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
-
-  list_excesses <- list()
-  for (j in 1:m) {
-    replicate <- mreplicates[[j]]
-    list_excesses[[j]] <- empirical_excesses_rpar(replicate, u, df_lags,
-                                            threshold = TRUE, t0=t0)
-  }
-
-  result <- optim(par = true_param, fn = neg_ll_composite,
-                  list_simu = mreplicates,
-                  quantile = u,
-                  df_lags = df_lags,
-                  list_excesses = list_excesses,
-                  hmax = sqrt(17),
-                  s0 = s0,
-                  t0 = t0,
-                  threshold = TRUE,
-                  method = "L-BFGS-B",
-                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
-                                 maxit = 10000,
-                                 ndeps = c(1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3)))
-  df_result_all[i, ] <- result$par
-}
-
-
-# Boxplot of the results with ggplot for each column
-df_bplot <- df_result_all
-df_bplot <- stack(df_bplot)
-
-ggplot(df_bplot, aes(x = ind, y = values)) +
-  geom_boxplot() +
-  labs(title = "",
-    x = "Parameters", y = "Estimated values") +
-  theme_minimal() +
-  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
-                                                                              
-
-# save plot
-foldername <- "../images/optim/rpar_adv/"
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
-
-name_file <- paste0("bp_optim_s0_", s0_str, "_", M, "simu_", m, "rep_", ngrid^2,
-                                "s_", length(temp), "t_", param_str, "_",
-                                adv_str, ".png")
-
-ggsave(paste0(foldername, name_file), width = 5, height = 5)
-```
-
 
 ```{r rparetosim3, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
-# library(foreach)
-# library(doParallel)
 library(parallel)
 num_cores <- detectCores() - 1  # Reserve 1 core for the OS
 
@@ -351,6 +177,7 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, s0, t0,
     upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
     control = list(maxit = 10000)
   )
+
   return(result$par)
 }
 
@@ -368,13 +195,32 @@ result_list <- mclapply(1:M, process_simulation, M = M, m = m,
 
 # Combine results into a data frame
 df_result_all <- do.call(rbind, result_list)
+colnames(df_result_all) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+df_bplot <- as.data.frame(df_result_all)
+df_bplot <- stack(df_bplot)
+
+ggplot(df_bplot, aes(x = ind, y = values)) +
+  geom_boxplot() +
+  labs(title = "",
+    x = "Parameters", y = "Estimated values") +
+  theme_minimal() +
+  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
+
+
+# save plot
+foldername <- "../images/optim/rpar_adv/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+# setwd("./script")
+name_file <- paste0("boxplot_optim_", M, "simu_", m, "rep_", ngrid^2,
+                                "s_", length(temp), "t_advfixed_", adv_str, ".png")
+
+ggsave(paste0(foldername, name_file), width = 5, height = 5)
+
 ```
 
-## Notes:
-
-Quand tau max est plus grand (ie 30 pour un temp de 1 à 30) ça marche pas du tout .
-
-Si je multiplie par 10 l'advection en ajustant la distance? Pour avoir un rmse plus logique au moins ?
 
 
 ## Validation framework
@@ -386,3 +232,14 @@ Si je multiplie par 10 l'advection en ajustant la distance? Pour avoir un rmse p
 
 ## Sur les données de Montpellier
 
+
+
+# TO DO et notes 
+
+- Regarder la tête des simulations quand je change de site de référence
+
+- `W[s0[2], s0[1], t0]` ou `W[s0[1], s0[2], t0]` dans simulations
+
+- `s0_x <- s0[2]` ou `s0_x <- s0[1]` dans le vario de la simu
+
+- Maintenant retenter les BR avec ces nouvelles modifs pour voir
