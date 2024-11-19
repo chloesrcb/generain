@@ -673,3 +673,52 @@ get_results_optim <- function(filename) {
                       ".csv"))
   return(df_rmse)
 }
+
+
+#' process_simulation function
+#'
+#' This function processes the simulation data and optimizes the parameters
+#' using the negative log-likelihood function.
+#'
+#' @param i The index of the simulation.
+#' @param M The number of simulations.
+#' @param m The number of simulations to process.
+#' @param list_simuM The list of simulations.
+#' @param u The quantile value.
+#' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param s0 The starting location.
+#' @param t0 The starting time.
+#' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
+#'
+#' @return The optimized parameters.
+#'
+#' @export
+process_simulation <- function(i, M, m, list_simuM, u, df_lags, s0, t0, 
+                              true_param) {
+  # Get the m corresponding simulations from list_simu inside a list
+  mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
+
+  # Compute excesses
+  list_excesses <- lapply(mreplicates, function(replicate) {
+    empirical_excesses_rpar(replicate, u, df_lags, threshold = TRUE, t0 = t0)
+  })
+
+  # Optimize
+  result <- optim(
+    par = true_param,
+    fn = neg_ll_composite,
+    list_simu = mreplicates,
+    quantile = u,
+    df_lags = df_lags,
+    list_excesses = list_excesses,
+    hmax = sqrt(17),
+    s0 = s0,
+    t0 = t0,
+    threshold = TRUE,
+    method = "L-BFGS-B",
+    lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+    control = list(maxit = 10000)
+  )
+  return(result$par)
+}
