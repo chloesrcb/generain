@@ -15,8 +15,8 @@ knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 5,
 
 
 ```{r lib, echo=FALSE}
-# setwd("./script")
-library(generain)
+setwd("./script")
+library(generain) 
 library(reshape2)
 library(ggplot2)
 source("load_libraries.R")
@@ -75,7 +75,7 @@ time $t_0 = 1$.
 
 ```{r rparetosim1, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
 adv <- c(0.1, 0.2) # advection
-params <- c(0.8, 0.2, 1, 1) # ok verif sur simu
+params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 true_param <- c(params, adv)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -87,19 +87,20 @@ nsites <- ngrid^2 # if the grid is squared
 temp <- 1:30
 
 # Conditional point
-s0 <- c(2, 2) # y, x ???
+s0 <- c(1, 1) # y, x ???
 t0 <- 1
 
 # Number of realizations
-M <- 10
-m <- 100
+M <- 100
+m <- 1000
 nres <- M * m
 
 # Simulate the process
+set.seed(123)
 simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
                     t0, nres)
 
-if (any(adv < 1 && adv > 0.1)) {
+if (any(adv < 1 && adv >= 0.1)) {
   adv_int <- adv * 10
   adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
 } else if (adv < 0.1 && adv > 0) {
@@ -142,18 +143,17 @@ for (i in 1:nres) {
                         length(temp), "t_", i, ".csv")
   list_simuM[[i]] <- read.csv(file_name)
 }
+
+# Plot the first realization
+simu_df <- list_simu[[2]]
+par(mfrow=c(2, 2))
+plot(simu_df$S1)
+plot(simu_df$S2)
+plot(simu_df$S15)
+plot(simu_df$S25)
 ```
 
 ## Optimisation
-
-We want to estimate the parameters $\beta_1$, $\beta_2$, $\alpha_1$ and $\alpha_2$
-of the $r$-Pareto process. We use the maximum likelihood estimation with the
-composite likelihood method. 
-
-We compute the number of joint excesses for each replicate $i$,  $k^{(i)}_{s, t} = \sum_{t=1}^T \mathbb{1}_{\{X_{s, t} > u, X_{s_0, t_0} > u\}}$
-and $k^{(i)}_{s-s_0, t-t_0} \sim Bin(T - t - t_0, \chi(s - s_0, t - t_0))$ with $T$ the number of observations
-within a replicate (same for all replicates).
-
 
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE}
 sites_coords <- generate_grid_coords(ngrid)
@@ -295,8 +295,6 @@ for (i in 1:M){
 df_bplot <- df_result_all
 df_bplot <- stack(df_bplot)
 
-
-
 ggplot(df_bplot, aes(x = ind, y = values)) +
   geom_boxplot() +
   labs(title = "",
@@ -306,21 +304,85 @@ ggplot(df_bplot, aes(x = ind, y = values)) +
                                                                               
 
 # save plot
-foldername <- "../images/optim/rpar_noadv/"
+foldername <- "../images/optim/rpar_adv/"
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
-                                "s_", length(temp), "t_", adv_str, ".png")
+name_file <- paste0("bp_optim_s0_", s0_str, "_", M, "simu_", m, "rep_", ngrid^2,
+                                "s_", length(temp), "t_", param_str, "_",
+                                adv_str, ".png")
 
 ggsave(paste0(foldername, name_file), width = 5, height = 5)
 ```
 
+
+```{r rparetosim3, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}
+# library(foreach)
+# library(doParallel)
+library(parallel)
+num_cores <- detectCores() - 1  # Reserve 1 core for the OS
+
+# Function to process a single simulation batch
+process_simulation <- function(i, M, m, list_simuM, u, df_lags, s0, t0, 
+                              true_param) {
+  # Get the m corresponding simulations from list_simu inside a list
+  mreplicates <- list_simuM[((i - 1) * m + 1):(i * m)]
+
+  # Compute excesses
+  list_excesses <- lapply(mreplicates, function(replicate) {
+    empirical_excesses_rpar(replicate, u, df_lags, threshold = TRUE, t0 = t0)
+  })
+
+  # Optimize
+  result <- optim(
+    par = true_param,
+    fn = neg_ll_composite,
+    list_simu = mreplicates,
+    quantile = u,
+    df_lags = df_lags,
+    list_excesses = list_excesses,
+    hmax = sqrt(17),
+    s0 = s0,
+    t0 = t0,
+    threshold = TRUE,
+    method = "L-BFGS-B",
+    lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+    control = list(maxit = 10000)
+  )
+  return(result$par)
+}
+
+# Parallel execution
+df_result_all <- data.frame(beta1 = numeric(M), beta2 = numeric(M),
+                            alpha1 = numeric(M), alpha2 = numeric(M),
+                            adv1 = numeric(M), adv2 = numeric(M))
+
+u <- 1
+
+result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+                        list_simuM = list_simuM, u = u, df_lags = df_lags,
+                        s0 = s0, t0 = t0, true_param = true_param,
+                        mc.cores = num_cores)
+
+# Combine results into a data frame
+df_result_all <- do.call(rbind, result_list)
+```
 
 ## Notes:
 
 Quand tau max est plus grand (ie 30 pour un temp de 1 à 30) ça marche pas du tout .
 
 Si je multiplie par 10 l'advection en ajustant la distance? Pour avoir un rmse plus logique au moins ?
+
+
+## Validation framework
+
+ - 100 simulations of 1000 replicates
+ - Avec et sans advection
+ - 25 sites, 100 sites, 225 sites et 400 sites
+ - 30 time steps suffisant?
+
+## Sur les données de Montpellier
 

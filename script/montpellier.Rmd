@@ -126,3 +126,51 @@ kable(df_result, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
   "responsive"), latex_options = "H")
 ```
+
+
+## Optimisation
+
+```{r}
+# Get coords
+sites_coords <- location_gauges[, c("X", "Y")]
+names(sites_coords) <- c("Lon", "Lat")
+
+# Choose a conditional spatio-temporal point
+s0 <- c(sites_coords[1, ]) # get coords
+t0 <- 1
+
+# get lags
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
+
+u <- 1
+list_excesses <- list()
+# par(mfrow=c(5, 2))
+for (i in 1:m) {
+  list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
+                                     threshold = TRUE, type="rpareto", t0=1)
+}
+
+true_param <- c(params, adv)
+result <- optim(par = true_param, fn = neg_ll_composite,
+                  list_simu = list_simu,
+                  quantile = u,
+                  df_lags = df_lags,
+                  list_excesses = list_excesses,
+                  hmax = sqrt(17),
+                  s0 = s0,
+                  t0 = t0,
+                  threshold = TRUE,
+                  # method = "CG",
+                  method = "L-BFGS-B",
+                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+                  control = list(maxit = 10000))
+
+
+df_result <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        adv1 = result$par[5],
+                        adv2 = result$par[6])
+```
