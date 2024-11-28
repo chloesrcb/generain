@@ -30,6 +30,28 @@ library(bbmle)
 library(ismev)
 library(extRemes)
 library(evd)
+library(latex2exp)
+library(geosphere)
+
+btf_theme <- theme_minimal() +
+  theme(axis.text.x = element_text(size =  6, angle = 0),
+        axis.text.y = element_text(size = 6),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 6),
+        title = element_text(size = 10),
+        axis.line = element_blank(),  # Remove axis lines
+        panel.border = element_blank(),  # Remove plot border
+        panel.background = element_rect(fill = "transparent", color = NA),
+        # Remove plot background
+        axis.text = element_blank(),  # Remove axis text
+        axis.ticks = element_blank(),  # Remove axis ticks
+        plot.background = element_rect(fill = "transparent", color = NA),
+        panel.grid = element_line(color = "#5c595943"))
+
+# my green color
+btfgreen <- "#69b3a2"
 ```
 
 ```{r}
@@ -107,7 +129,7 @@ rad_mat[lower.tri(rad_mat)] <- NA
 q <- 0.998
 rain_new <- rain[-1]
 chispa <- spatial_chi(rad_mat, rain_new, quantile = q)
-spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = TRUE)
+spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = FALSE)
 
 q <- 0.998
 tmax <- 10
@@ -127,45 +149,307 @@ kable(df_result, format = "latex") %>%
   "responsive"), latex_options = "H")
 ```
 
+## COMEPHORE
+
+```{r}
+setwd("./script")
+# load data
+df_comephore <- read.csv("../data/comephore/inside_mtp.csv", sep = ",")
+loc_px <- read.csv("../data/comephore/loc_pixels_mtp.csv", sep = ",")
+
+comephore <- df_comephore[-1] # remove dates column
+# Get distances matrix
+dist_mat <- get_dist_mat(loc_px)
+df_dist <- reshape_distances(dist_mat)
+```
+
+## WLSE
+
+```{r}
+tmax <- 10
+nsites <- length(loc_px$pixel_name)
+# Temporal chi with spatial lag fixed at 0
+# compute chiplot of every site with itself but lagged in time
+start_time <- Sys.time()
+chimat_dtlag <- temporal_chi(comephore, quantile = 0.99, tmax = tmax,
+                             mean = FALSE)
+end_time <- Sys.time()
+elapsed_time <- end_time - start_time
+print(elapsed_time)
+```
+
+```{r}
+par(mfrow = c(1, 1))
+chi_df_dt <- data.frame(chimat_dtlag)
+colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
+rownames(chi_df_dt) <- c(1:nsites) # stations
+
+rain_new <- comephore[rowSums(comephore) > 0, ]
+
+# remove 0
+q <- 0.95
+chimat_dt_mean <- temporal_chi(rain_new, tmax, quantile = q, mean = TRUE)
+# get h axis in minutes ie x5 minutes
+df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
+ggplot(df, aes(x = lag, y = chi)) +
+  geom_point(color = btfgreen) +
+  btf_theme +
+  xlab("Temporal lag") +
+  ylab(TeX(r"($\hat{\chi}$)"))
+
+wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
+                                    weights = "exp", summary = T)
+
+print(wlse_temp)
+alpha2 <- wlse_temp[[2]]
+beta2 <- wlse_temp[[1]]
+c2 <- log(beta2)
+
+dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+
+chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
+  geom_point(color = btfgreen, size = 4) +
+  btf_theme +
+  xlab(TeX(r"($\log(\tau)$)")) +
+  ylab(TeX(r"($\eta(\widehat{\chi}(0,\tau))$)")) +
+  geom_line(aes(x = lag, y = alpha2 * lag + c2),
+            alpha = 0.6, color = "darkred", linewidth = 1.5)
+
+chitemp_eta_estim
+```
+
+
+```{r}
+# Spatial chi ------------------------------------------------------------------
+df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
+df_dist_km <- df_dist
+df_dist_km$value <- df_dist$value / 1000
+
+q <- 0.9
+chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = rain_new,
+                                 quantile = q, hmax = 6)
+
+etachispa_df <- data.frame(chi = eta(chispa_df$chi),
+                           lagspa = log(chispa_df$lagspa))
+
+chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
+  btf_theme +
+  geom_point(col = btfgreen, size = 4) +
+  xlab(TeX(r"($h$)")) +
+  ylab(TeX(r"($\widehat{\chi}(h, 0)$)")) +
+  theme(axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        panel.border = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 15),
+        legend.position = "right",
+        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
+        panel.grid = element_line(color =  "#5c595943")) +
+  ylim(0, 1)
+
+chispa_plot
+
+# WLSE
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
+
+alpha1 <- wlse_spa[[2]]
+beta1 <- wlse_spa[[1]]
+c1 <- log(beta1)
+
+chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
+  btf_theme +
+  geom_point(col = btfgreen, size = 4) +
+  xlab(TeX(r"($\log(h)$)")) +
+  ylab(TeX(r"($\eta(\widehat{\chi}(h, 0))$)")) +
+  theme(axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        panel.border = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 15),
+        legend.position = "right",
+        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
+        panel.grid = element_line(color = "#5c595943")) +
+  geom_line(aes(x = lagspa, y = alpha1 * lagspa + c1), alpha = 0.6,
+            color = "darkred", size = 1.5)
+
+chispa_eta_estim
+```
 
 ## Optimisation
 
 ```{r}
 # Get coords
-sites_coords <- location_gauges[, c("X", "Y")]
-names(sites_coords) <- c("Lon", "Lat")
+sites_coords <- loc_px[, c("Longitude", "Latitude")]
 
 # Choose a conditional spatio-temporal point
-s0 <- c(sites_coords[1, ]) # get coords
-t0 <- 1
+choose_conditional_point <- function(sites_coords, data, quantile) {
+  # Ensure the quantile is within range
+    if (quantile < 0 || quantile > 1) {
+      stop("Quantile must be between 0 and 1.")
+    }
 
-# get lags
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
+  # Compute the threshold for each spatial site (col-wise quantiles)
+  thresholds <- apply(data, 2, quantile, probs = quantile)
 
-u <- 1
-list_excesses <- list()
-# par(mfrow=c(5, 2))
-for (i in 1:m) {
-  list_excesses[[i]] <- empirical_excesses(list_simu[[i]], u, df_lags,
-                                     threshold = TRUE, type="rpareto", t0=1)
+  # Identify valid (site, time) pairs where X_s,t > threshold for site s
+  valid_indices <- which(as.matrix(data) > thresholds[col(data)],
+                    arr.ind = TRUE)
+
+  if (nrow(valid_indices) == 0) {
+    stop("No points exceed the given quantile for any time step.")
+  }
+
+  # Randomly select one of the valid points
+  selected_index <- valid_indices[sample(1:nrow(valid_indices), 1), ]
+
+  # Extract the corresponding spatio-temporal point
+  s0 <- sites_coords[selected_index[2],]  # Spatial coordinates for site s
+  t0 <- as.numeric(selected_index[1]) # Temporal index
+
+  return(list(s0 = s0, t0 = t0))
 }
 
-true_param <- c(params, adv)
-result <- optim(par = true_param, fn = neg_ll_composite,
-                  list_simu = list_simu,
-                  quantile = u,
-                  df_lags = df_lags,
-                  list_excesses = list_excesses,
-                  hmax = sqrt(17),
-                  s0 = s0,
-                  t0 = t0,
-                  threshold = TRUE,
-                  # method = "CG",
-                  method = "L-BFGS-B",
-                  lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
-                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                  control = list(maxit = 10000))
 
+choose_conditional_points <- function(sites_coords, data, quantile, 
+                                      min_spatial_dist, min_time_dist) {
+  # Ensure the quantile is within range
+  if (quantile < 0 || quantile > 1) {
+    stop("Quantile must be between 0 and 1.")
+  }
+
+  # Compute the threshold for each spatial site (column-wise quantiles)
+  thresholds <- apply(data, 2, quantile, probs = quantile)
+
+  # Identify valid (site, time) pairs where X_s,t > threshold for site s
+  valid_indices <- which(as.matrix(data) > thresholds[col(data)],
+                         arr.ind = TRUE)
+
+  if (nrow(valid_indices) == 0) {
+    stop("No points exceed the given quantile for any time step.")
+  }
+
+  # Filter valid indices based on spatial and temporal constraints
+  filtered_indices <- valid_indices
+  selected_points <- list()
+
+  while (nrow(filtered_indices) > 0) {
+    # Randomly select one valid point
+    selected_index <- filtered_indices[sample(1:nrow(filtered_indices), 1), ]
+    s0 <- sites_coords[selected_index[2], ]  # Spatial coordinates for site s
+    t0 <- as.numeric(selected_index[1])     # Temporal index
+
+    # Add the selected point to the results
+    selected_points <- append(selected_points, list(list(s0 = s0, t0 = t0)))
+
+    # Remove points in the same spatial neighborhood or close in time
+    distances <- distHaversine(sites_coords, s0) # Spatial distances
+    distances <- ceiling(distances / 100) * 100 / 1000 # in km
+    time_distances <- abs(filtered_indices[, 1] - t0) # Temporal distances
+
+    filtered_indices <- filtered_indices[
+      distances[filtered_indices[, 2]] > min_spatial_dist &
+        time_distances > min_time_dist,
+    ]
+  }
+
+  return(selected_points)
+}
+
+# remove 0
+rain_new <- comephore[rowSums(comephore) > 0, ]
+quantile <- 0.98
+min_spatial_dist <- 2 # in km
+min_time_dist <- 10 # in hours
+
+selected_points <- choose_conditional_points(
+  sites_coords = sites_coords, 
+  data = rain_new, 
+  quantile = quantile, 
+  min_spatial_dist = min_spatial_dist, 
+  min_time_dist = min_time_dist
+)
+
+# Extract s0 and t0
+s0_list <- lapply(selected_points, `[[`, "s0")
+t0_list <- lapply(selected_points, `[[`, "t0")
+
+# # get 10 conditional point vectors
+# vector_s0_t0 <- lapply(1:100, function(i) {
+#   s0_t0 <- choose_conditional_point(sites_coords, comephore, q)
+#   list(s0 = s0_t0$s0, t0 = s0_t0$t0)
+# })
+
+# # Extract s0 and t0
+# s0_list <- lapply(vector_s0_t0, `[[`, "s0")
+# t0_list <- lapply(vector_s0_t0, `[[`, "t0")
+
+library(parallel)
+
+q <- 0.98
+# Get lags and excesses for each conditional point
+list_results <- mclapply(1:length(s0_list), function(i) {
+  s0 <- s0_list[[i]]
+  t0 <- t0_list[[i]]
+  lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10,
+                                      latlon = TRUE)
+  lags$hx <- ceiling(lags$hx / 100) * 100 / 1000  # in km
+  lags$hy <- ceiling(lags$hy / 100) * 100 / 1000  # in km
+  lags$hnorm <- ceiling(lags$hnorm / 100) * 100 / 1000  # in km
+  excesses <- empirical_excesses(rain_new, q, lags, type = "rpareto")
+  list(lags = lags, excesses = excesses)
+}, mc.cores = detectCores() - 1)
+
+# Extract list_lags from list_results
+list_lags <- lapply(list_results, `[[`, "lags")
+
+# Extract list_excesses from list_results
+list_excesses <- lapply(list_results, `[[`, "excesses")
+
+
+neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
+                    list_excesses, hmax = NA, s0_list = NA,
+                    t0_list = NA, threshold = FALSE) {
+  # print(params)
+  # Bounds for the parameters
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(1e50)
+  }
+
+  m <- length(list_excesses) # number of r-pareto processes
+  nll_composite <- 0 # composite negative log-likelihood
+  for (i in 1:m) {
+    # extract lags and excesses from i-th r-pareto process from data
+    df_lags <- list_lags[[i]]
+    excesses <- list_excesses[[i]]
+    s0 <- s0_list[[i]]
+    t0 <- t0_list[[i]]
+    nll_i <- neg_ll(params, data, df_lags, quantile, hmax = hmax,
+                    excesses = excesses, s0 = s0, t0 = t0,
+                    threshold = threshold)
+    nll_composite <- nll_composite + nll_i
+  }
+  return(nll_composite)
+}
+
+init_param <- c(beta1, beta2, alpha1, alpha2)
+
+result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+        data = rain_new, quantile = 0.9, list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 6, s0_list = s0_list,
+        t0_list = t0_list, threshold = FALSE,
+        method = "L-BFGS-B",
+        lower = c(1e-06, 1e-06, 1e-06, 1e-06, -Inf, -Inf),
+        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        control = list(maxit = 10000))
+print(result$par)
 
 df_result <- data.frame(beta1 =  result$par[1],
                         beta2 = result$par[2],
@@ -174,3 +458,6 @@ df_result <- data.frame(beta1 =  result$par[1],
                         adv1 = result$par[5],
                         adv2 = result$par[6])
 ```
+
+### Notes 
+

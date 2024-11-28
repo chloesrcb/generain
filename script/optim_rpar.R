@@ -1,3 +1,5 @@
+setwd("./script")
+
 library(generain)
 library(reshape2)
 library(ggplot2)
@@ -26,8 +28,8 @@ btfgreen <- "#69b3a2"
 
 # SIMULATION
 
-adv <- c(0.3, 0.2) # advection
-params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
+adv <- c(0.1, 0.2) # advection
+params <- c(0.8, 0.2, 1.5, 1) # ok verif sur simu
 true_param <- c(params, adv)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -44,7 +46,7 @@ t0 <- 1
 
 # Number of realizations
 M <- 100
-m <- 1000
+m <- 10
 nres <- M * m
 
 # Simulate the process
@@ -55,7 +57,7 @@ simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
 if (any(adv < 1 && adv >= 0.1)) {
   adv_int <- adv * 10
   adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
-} else if (adv < 0.1 && adv > 0) {
+} else if (any(adv < 0.1 && adv > 0)) {
   adv_int <- adv * 100
   adv_str <- sprintf("%03d_%03d", adv_int[1], adv_int[2])
 } else {
@@ -69,7 +71,7 @@ param_str <- sprintf("%02d_%02d_%02d_%02d", true_param[1] * 10,
 s0_str <- sprintf("%01d_%01d", s0[1], s0[2])
 # setwd("./script")
 # Save the data
-foldername <- paste0("./simulations_rpar/rpar_", param_str, "_", adv_str,
+foldername <- paste0("../data/simulations_rpar/rpar_", param_str, "_", adv_str,
                    "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
                     s0_str, "/")
 
@@ -107,6 +109,18 @@ colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                               "alpha2", "adv1", "adv2")
 
 df_bplot <- as.data.frame(df_result_all)
+
+# save data in csv
+foldername <- "../data/optim/rpar/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
+                "s_", length(temp), "t_", param_str, "_", 
+                adv_str, ".csv")
+write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
+
 df_bplot <- stack(df_bplot)
 
 ggplot(df_bplot, aes(x = ind, y = values)) +
@@ -118,13 +132,17 @@ ggplot(df_bplot, aes(x = ind, y = values)) +
 
 
 # save plot
-foldername <- "./optim/rpar/"
+foldername <- "../images/optim/rpar/"
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
-# setwd("./script")
+
 name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
                 "s_", length(temp), "t_", param_str, "_", 
                 adv_str, ".png")
 
 ggsave(paste0(foldername, name_file), width = 5, height = 5)
+
+
+library(remotes)
+remotes::install_github("chloesrcb/generain")
