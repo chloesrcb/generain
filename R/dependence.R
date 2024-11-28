@@ -4,7 +4,7 @@
 #' and a quantile value.
 #'
 #' @param data The data set.
-#' @param quantile The quantile value used in the calculation.
+#' @param quantile The quantile value.
 #'
 #' @return The chi value.
 #'
@@ -117,20 +117,30 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   chi_s_temp <- matrix(1, nrow = nsites, ncol = tmax)
   q <- quantile
   for (s in 1:nsites) {
-    rain_cp <- drop_na(data_rain[s]) # for one fixed station
-    rain_Xs_unif <- data.frame(rank(rain_cp) / (nrow(rain_cp) + 1))
+    rain_Xs <- drop_na(data_rain[s]) # for one fixed station
+    if (!zeros) {
+      Xs <- data.frame("site" = rain_Xs[rowSums(rain_Xs != 0, na.rm = TRUE) > 0, ])
+    } else {
+      Xs <- rain_Xs
+    }
+    Xs_unif <- data.frame(rank(Xs) / (nrow(Xs) + 1))
     if (is.matrix(quantile)) {
           q <- quantile[s, s]
     }
-    mean_excess_Xs <- mean(rain_Xs_unif > q)
+    mean_excess_Xs <- mean(Xs_unif > q)
     for (t in 1:tmax){
-      Tmax <- nrow(rain_cp)
-      rain_nolag <- rain_cp[1:(Tmax - t), ] # without lag (in t_k)
-      rain_lag <- rain_cp[(1 + t):Tmax, ] # with lag t (in t_k + t)
+      Tmax <- nrow(rain_Xs)
+      rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (in t_k)
+      rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get couple
-      n <- nrow(data_cp)
-      rain_unif <- cbind(rank(data_cp[, 1]) / (n + 1),
-                        rank(data_cp[, 2]) / (n + 1))
+      if (!zeros) {
+        Xs_cp <- data.frame("site" = data_cp[rowSums(data_cp != 0, na.rm = TRUE) > 0, ])
+      } else {
+        Xs_cp <- data_cp
+      }
+      n <- nrow(Xs_cp)
+      rain_unif <- cbind(rank(Xs_cp[, 1]) / (n + 1),
+                        rank(Xs_cp[, 2]) / (n + 1))
       # check excess above a threshold q
       excess_t <- mean(rain_unif[, 1] > q & rain_unif[, 2] > q)
       chival <- excess_t / mean_excess_Xs
@@ -143,8 +153,8 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   } else { # return all values
     chi_temp <- chi_s_temp
   }
-  chi_temp[chi_temp <= 0] <- 0.0000001 # to avoid log(0)
-  chi_temp[chi_temp == 1] <- 0.9999999
+  chi_temp[chi_temp <= 0] <- 1e-6
+  chi_temp[chi_temp == 1] <- 1 - 1e-6
   return(chi_temp)
 }
 
@@ -377,6 +387,9 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     for (i in seq_along(ind_s1)){
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
       colnames(rain_cp) <- c("s1", "s2")
+      if (!zeros) {
+        rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
+      }
       print(c(ind_s1[i], ind_s2[i]))
       if (length(quantile) > 1) {
         q <- quantile[ind_s1[i], ind_s2[i]]
@@ -403,20 +416,16 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
 #' @param hmax The maximum spatial lag value (optional).
-#' @param comephore Logical value indicating whether we work on the COMEPHORE
-#'                 dataset. Default is FALSE.
+#' @param zeros Logical value indicating whether to include zero values in the
+#'             calculation.
 #'
 #' @return The estimated spatial variogram parameters.
 #'
 #' @export
 spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
-                                comephore = FALSE) {
+                                zeros = FALSE) {
   chi_slag <- c()
   q <- quantile
-  # initialize values
-  if (comephore) {
-    df_dist$value <- ceiling(df_dist$value / 100) * 100 / 1000 # in km
-  }
   # get unique distances from rad_mat
   h_vect <- sort(df_dist$value)
   h_vect <- unique(h_vect[h_vect > 0])
@@ -434,14 +443,17 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     for (i in seq_along(ind_s1)){
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
       colnames(rain_cp) <- c("s1", "s2")
+      if (!zeros) {
+          rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
+      }
       # print(c(ind_s1[i], ind_s2[i]))
       if (length(quantile) > 1) {
         q <- quantile[ind_s1[i], ind_s2[i]]
       }
       chi_val <- c(chi_val, get_chiq(rain_cp, q))
     }
-    chi_val[chi_val <= 0] <- 0.0000001
-    chi_val[chi_val == 1] <- 0.9999999
+    chi_val[chi_val <= 0] <- 1e-6
+    chi_val[chi_val == 1] <- 1 - 1e-6
     chi_slag <- c(chi_slag, mean(na.omit(chi_val)))
   }
 

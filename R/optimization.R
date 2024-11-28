@@ -61,7 +61,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       # get the indices of the sites
       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
       # ind_s1 <- 1 # s0
-      
+
       # get the data for the pair of sites
       rain_cp <- data_rain[, c(ind_s2), drop = FALSE]
       rain_cp <- as.data.frame(na.omit(rain_cp))
@@ -70,6 +70,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       # shifted data
       X_s_t <- rain_cp$s2[(t0 + abs(t))] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
+      
       # store the number of excesses and T - tau
       excesses$Tobs[excesses$s1 == ind_s1
                       & excesses$s2 == ind_s2
@@ -374,7 +375,7 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags,
 }
 
 
-#' neg_ll_composite function
+#' neg_ll_composite_simu function
 #'
 #' Calculate the negative log-likelihood for a list of simulations.
 #'
@@ -392,10 +393,10 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2, data, df_lags,
 #' @import stats
 #'
 #' @export
-neg_ll_composite <- function(params, list_simu, df_lags, quantile,
+neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
                     list_excesses, hmax = NA, s0 = NA,
                     t0 = NA, threshold = FALSE) {
-  print(params)
+  # print(params)
   # Bounds for the parameters
   lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
@@ -424,7 +425,7 @@ neg_ll_composite <- function(params, list_simu, df_lags, quantile,
 }
 
 
-#' neg_ll_composite_par function
+#' neg_ll_composite_simu_par function
 #'
 #' Calculate the negative log-likelihood for a list of simulations.
 #' Used for fixing parameters in the optimization process.
@@ -448,7 +449,7 @@ neg_ll_composite <- function(params, list_simu, df_lags, quantile,
 #' @import stats
 #'
 #' @export
-neg_ll_composite_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
+neg_ll_composite_simu_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
                     list_simu, df_lags, quantile, list_excesses, hmax = NA, 
                     s0 = NA, t0 = NA, threshold = FALSE) {
   params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)

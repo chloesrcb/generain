@@ -121,15 +121,16 @@ get_euclidean_distance <- function(point1, point2) {
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
-#' @param hmax The maximum distance threshold. Default is NA.
 #' @param tau_max The maximum temporal lag. Default is 10.
+#' @param latlon Logical indicating whether the coordinates are in latitude and
+#'               longitude format. Default is FALSE.
 #'
 #' @import utils
 #'
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
-get_lag_vectors <- function(df_coords, hmax = NA, tau_max = 10) {
+get_lag_vectors <- function(df_coords, tau_max = 10, latlon = FALSE) {
   tau_vect <- 0:tau_max
   # Dimensions
   n <- nrow(df_coords)
@@ -166,9 +167,24 @@ get_lag_vectors <- function(df_coords, hmax = NA, tau_max = 10) {
   lags$s2x <- df_coords$Longitude[lags$s2]
   lags$s2y <- df_coords$Latitude[lags$s2]
 
-  # Vector coordinates between two sites
-  lags$hx <- lags$s2x - lags$s1x
-  lags$hy <- lags$s2y - lags$s1y
+  # Convert to meters using Haversine distance for hx, hy
+  if (latlon) {
+    for (i in 1:nrow(lags)) {
+      s1_coords <- c(lags$s1x[i], lags$s1y[i])
+      s2_coords <- c(lags$s2x[i], lags$s2y[i])
+
+      # Calculate hx and hy in meters
+      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s2_coords[1], s1_coords[2]))
+      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s1_coords[1], s2_coords[2]))
+    }
+  } else {
+    lags$hx <- lags$s2x - lags$s1x # s - s0
+    lags$hy <- lags$s2y - lags$s1y
+  }
+
+  # Calculate hnorm (Euclidean distance in meters)
   lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
@@ -182,16 +198,23 @@ get_lag_vectors <- function(df_coords, hmax = NA, tau_max = 10) {
 #' @param s0 Conditional spatial point coordinates.
 #' @param t0 Conditional temporal point.
 #' @param tau_max The maximum temporal lag. Default is 10.
+#' @param latlon Logical indicating whether the coordinates are in latitude and
 #'
 #' @import utils
+#' @import geosphere
 #'
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
 get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
-                                        t0 = 1, tau_max = 10) {
+                                        t0 = 1, tau_max = 10, latlon = FALSE) {
   # Conditional point index in df_coords
-  ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])
+  if (typeof(s0) == "list") {
+    ind_s0 <- which(df_coords$Latitude == s0$Latitude & 
+                    df_coords$Longitude == s0$Longitude)
+  } else {
+    ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])
+  }
 
   if (length(ind_s0) == 0) {
     stop("The conditional site (s0) is not found in df_coords")
@@ -227,8 +250,24 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   lags$s2y <- df_coords$Latitude[lags$s2]
 
   # Vector coordinates between two sites
-  lags$hx <- lags$s2x - lags$s1x # s - s0
-  lags$hy <- lags$s2y - lags$s1y
+  # Convert to meters using Haversine distance for hx, hy
+  if (latlon) {
+    for (i in 1:nrow(lags)) {
+      s1_coords <- c(lags$s1x[i], lags$s1y[i])
+      s2_coords <- c(lags$s2x[i], lags$s2y[i])
+
+      # Calculate hx and hy in meters
+      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s2_coords[1], s1_coords[2]))
+      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s1_coords[1], s2_coords[2]))
+    }
+  } else {
+    lags$hx <- lags$s2x - lags$s1x # s - s0
+    lags$hy <- lags$s2y - lags$s1y
+  }
+
+  # Calculate hnorm (Euclidean distance in meters)
   lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
