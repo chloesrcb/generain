@@ -9,6 +9,10 @@
 data
 .csv
 
+# Imags files
+images
+
+
 
 # User-specific files
 .Ruserdata
