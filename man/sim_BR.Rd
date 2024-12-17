@@ -4,7 +4,7 @@
 \alias{sim_BR}
 \title{sim_BR function}
 \usage{
-sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA, nres = 1)
+sim_BR(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0), nres = 1)
 }
 \arguments{
 \item{beta1}{The value of beta1.}
@@ -19,7 +19,7 @@ sim_BR(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA, nres = 1)
 
 \item{y}{Vector for the second dimension (spatial y in our case)}
 
-\item{z}{Vector for the third dimension (time in our case).}
+\item{t}{Vector for the third dimension (time in our case).}
 
 \item{adv}{The advection coordinates vector. Default is c(0, 0).}
 

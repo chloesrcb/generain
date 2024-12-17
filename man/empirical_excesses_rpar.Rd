@@ -9,7 +9,7 @@ empirical_excesses_rpar(
   quantile,
   df_lags,
   threshold = FALSE,
-  t0 = 1
+  t0 = 0
 )
 }
 \arguments{

@@ -4,7 +4,13 @@
 \alias{get_conditional_lag_vectors}
 \title{get_conditional_lag_vectors function}
 \usage{
-get_conditional_lag_vectors(df_coords, s0 = c(1, 1), t0 = 1, tau_max = 10)
+get_conditional_lag_vectors(
+  df_coords,
+  s0 = c(1, 1),
+  t0 = 0,
+  tau_max = 10,
+  latlon = FALSE
+)
 }
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
@@ -14,6 +20,8 @@ get_conditional_lag_vectors(df_coords, s0 = c(1, 1), t0 = 1, tau_max = 10)
 \item{t0}{Conditional temporal point.}
 
 \item{tau_max}{The maximum temporal lag. Default is 10.}
+
+\item{latlon}{Logical indicating whether the coordinates are in latitude and}
 }
 \value{
 A dataframe containing the lag vectors.

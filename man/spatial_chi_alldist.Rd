@@ -4,9 +4,9 @@
 \alias{spatial_chi_alldist}
 \title{Calculate spatial chi-squared distances}
 \usage{
-spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
+spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, zeros = FALSE)
 
-spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
+spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, zeros = FALSE)
 }
 \arguments{
 \item{df_dist}{The distance dataframe.}
@@ -17,7 +17,10 @@ spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, comephore = FALSE)
 
 \item{hmax}{The maximum spatial lag value (optional).}
 
-\item{comephore}{Logical value indicating whether we work on the COMEPHORE
+\item{zeros}{Logical value indicating whether to include zero values in the
+calculation.}
+
+\item{comephore}{Logical value indicating whether we work on the COMEPHORE 
 dataset. Default is FALSE.}
 }
 \value{

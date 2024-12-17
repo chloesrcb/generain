@@ -10,7 +10,7 @@ get_chiq(data, quantile)
 \arguments{
 \item{data}{The data set.}
 
-\item{quantile}{The quantile value used in the calculation.}
+\item{quantile}{The quantile value.}
 }
 \value{
 The chi value.
