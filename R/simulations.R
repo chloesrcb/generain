@@ -129,7 +129,7 @@ advected_variogram <- function(x, y, z, grid, model, adv) {
 #'
 #' @param grid The grid matrix.
 #' @param gamma_space The spatial variogram.
-#' @param gamma_time The temporal variogram.
+#' @param gamma_temp The temporal variogram.
 #' @param adv The advection coordinates vector.
 #' @param s The spatial coordinates vector. Default is NA.
 #' @param t The temporal time. Default is NA.
@@ -137,7 +137,7 @@ advected_variogram <- function(x, y, z, grid, model, adv) {
 #' @return The spatio-temporal variogram for the given point.
 #'
 #' @export
-compute_gamma_point <- function(grid, gamma_space, gamma_time, adv, s=NA, t=NA) {
+compute_gamma_point <- function(grid, gamma_space, gamma_temp, adv, s=NA, t=NA) {
   # Get length of unique values
   lx <- length(unique(grid$x))
   ly <- length(unique(grid$y))
