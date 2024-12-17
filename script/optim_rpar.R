@@ -29,7 +29,7 @@ btfgreen <- "#69b3a2"
 # SIMULATION
 
 adv <- c(0.1, 0.2) # advection
-params <- c(0.8, 0.2, 1.5, 1) # ok verif sur simu
+params <- c(0.4, 0.2, 1.5, 1) # ok verif sur simu
 true_param <- c(params, adv)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -38,15 +38,15 @@ alpha2 <- params[4]
 ngrid <- 5
 spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
-temp <- 1:30
+temp <- 0:29
 
 # Conditional point
 s0 <- c(1, 1) # y, x ???
-t0 <- 1
+t0 <- 0
 
 # Number of realizations
-M <- 100
-m <- 10
+M <- 10
+m <- 100
 nres <- M * m
 
 # Simulate the process

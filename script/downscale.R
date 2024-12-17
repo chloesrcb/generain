@@ -84,3 +84,7 @@ ggplot(grid, aes(x = x, y = y, fill = z)) +
   scale_fill_gradient(low = "white", high = "blue") +
   theme_minimal() +
   labs(title = "Downscaling de la pluie avec EGPD")
+
+
+# revoir gamlss
+# John Richards : 

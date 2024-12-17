@@ -5,7 +5,7 @@
 #' @param dmax The maximum distance threshold if specified.
 #' @param latlon Logical indicating whether the coordinates are in latitude and
 #' longitude format. Default is TRUE.
-#' 
+#'
 #' @return A distance matrix containing the reshaped distances.
 #'
 #' @import geodist
@@ -207,10 +207,10 @@ get_lag_vectors <- function(df_coords, tau_max = 10, latlon = FALSE) {
 #'
 #' @export
 get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
-                                        t0 = 1, tau_max = 10, latlon = FALSE) {
+                                        t0 = 0, tau_max = 10, latlon = FALSE) {
   # Conditional point index in df_coords
   if (typeof(s0) == "list") {
-    ind_s0 <- which(df_coords$Latitude == s0$Latitude & 
+    ind_s0 <- which(df_coords$Latitude == s0$Latitude &
                     df_coords$Longitude == s0$Longitude)
   } else {
     ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])
@@ -249,26 +249,24 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   lags$s2x <- df_coords$Longitude[lags$s2]
   lags$s2y <- df_coords$Latitude[lags$s2]
 
+  s1_coords <- df_coords[ind_s0, c("Longitude", "Latitude")]
+  s2_coords <- df_coords[lags$s2, c("Longitude", "Latitude")]
+
   # Vector coordinates between two sites
   # Convert to meters using Haversine distance for hx, hy
   if (latlon) {
-    for (i in 1:nrow(lags)) {
-      s1_coords <- c(lags$s1x[i], lags$s1y[i])
-      s2_coords <- c(lags$s2x[i], lags$s2y[i])
+    # Geodesic distance
+    lags$hnorm <- distHaversine(s1_coords, s2_coords)
 
-      # Calculate hx and hy in meters
-      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s2_coords[1], s1_coords[2]))
-      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s1_coords[1], s2_coords[2]))
-    }
+    # Projection hx, hy in m
+    lags$hx <- (s2_coords$Longitude - s1_coords$Longitude) *
+                          cos(mean(s1_coords$Latitude) * pi / 180) * 111320
+    lags$hy <- (s2_coords$Latitude - s1_coords$Latitude) * 111320
   } else {
-    lags$hx <- lags$s2x - lags$s1x # s - s0
-    lags$hy <- lags$s2y - lags$s1y
+    lags$hx <- s2_coords$Longitude - s1_coords$Longitude
+    lags$hy <- s2_coords$Latitude - s1_coords$Latitude
+    lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
   }
-
-  # Calculate hnorm (Euclidean distance in meters)
-  lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
 }
@@ -347,8 +345,8 @@ distances_regular_grid <- function(nsites, adv = c(0, 0), tau = 1:10) {
 generate_grid_coords <- function(grid_size) {
   # Generate x and y coordinates for the grid points
   sites_coords <- data.frame(
-    Latitude = rep(1:grid_size, each = grid_size),   # Y
-    Longitude = rep(1:grid_size, times = grid_size)  # X
+    Longitude = rep(1:grid_size, each = grid_size),   # X
+    Latitude = rep(1:grid_size, times = grid_size)  # Y
   )
   return(sites_coords)
 }

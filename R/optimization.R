@@ -50,7 +50,7 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 #'
 #' @export
 empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
-                                    threshold = FALSE, t0 = 1) {
+                                    threshold = FALSE, t0 = 0) {
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
   ind_s1 <- df_lags$s1[1] # s0
@@ -68,9 +68,9 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       colnames(rain_cp) <- c("s2")
 
       # shifted data
-      X_s_t <- rain_cp$s2[(t0 + abs(t))] # X_{s,t0 + tau}
+      X_s_t <- rain_cp$s2[((t0 + 1) + abs(t))] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
-      
+
       # store the number of excesses and T - tau
       excesses$Tobs[excesses$s1 == ind_s1
                       & excesses$s2 == ind_s2
@@ -217,9 +217,15 @@ theorical_chi <- function(params, df_lags) {
 
   chi_df <- df_lags[c("s1", "s2", "tau")]
   # Get vario and chi for each lagtemp
-  chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-  chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-  chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  chi_df$s1xv <- df_lags$s1x
+  chi_df$s1yv <- df_lags$s1y
+  chi_df$s2xv <- df_lags$s2x + adv[1] * df_lags$tau
+  chi_df$s2yv <- df_lags$s2y + adv[2] * df_lags$tau
+  chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                        (chi_df$s2yv - chi_df$s1yv)^2)
+  # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+  # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+  # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
 
   chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
@@ -707,7 +713,7 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, s0, t0,
   # Optimize
   result <- optim(
     par = true_param,
-    fn = neg_ll_composite,
+    fn = neg_ll_composite_simu,
     list_simu = mreplicates,
     quantile = u,
     df_lags = df_lags,
@@ -717,7 +723,7 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, s0, t0,
     t0 = t0,
     threshold = TRUE,
     method = "L-BFGS-B",
-    lower = c(1e-6, 1e-6, 1e-6, 1e-6, -Inf, -Inf),
+    lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
     upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
     control = list(maxit = 10000)
   )
