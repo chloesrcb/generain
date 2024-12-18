@@ -222,7 +222,7 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
       } else {
         ind_W_s <- i
       }
-      W_s_t[s[2], s[1], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
+      W_s_t[s[1], s[2], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
   }
   return(W_s_t)
 }
