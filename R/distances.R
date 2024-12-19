@@ -213,7 +213,7 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
     ind_s0 <- which(df_coords$Latitude == s0$Latitude &
                     df_coords$Longitude == s0$Longitude)
   } else {
-    ind_s0 <- which(df_coords$Latitude == s0[1] & df_coords$Longitude == s0[2])
+    ind_s0 <- which(df_coords$Latitude == s0[2] & df_coords$Longitude == s0[1])
   }
 
   if (length(ind_s0) == 0) {
@@ -250,7 +250,7 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   lags$s2y <- df_coords$Latitude[lags$s2]
 
   s1_coords <- df_coords[ind_s0, c("Longitude", "Latitude")]
-  s2_coords <- df_coords[lags$s2, c("Longitude", "Latitude")]
+  s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
 
   # Vector coordinates between two sites
   # Convert to meters using Haversine distance for hx, hy

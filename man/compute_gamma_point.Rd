@@ -4,14 +4,14 @@
 \alias{compute_gamma_point}
 \title{compute_gamma_point function}
 \usage{
-compute_gamma_point(grid, gamma_space, gamma_time, adv, s = NA, t = NA)
+compute_gamma_point(grid, gamma_space, gamma_temp, adv, s = NA, t = NA)
 }
 \arguments{
 \item{grid}{The grid matrix.}
 
 \item{gamma_space}{The spatial variogram.}
 
-\item{gamma_time}{The temporal variogram.}
+\item{gamma_temp}{The temporal variogram.}
 
 \item{adv}{The advection coordinates vector.}
 

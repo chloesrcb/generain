@@ -177,7 +177,7 @@ compute_gamma_point <- function(grid, gamma_space, gamma_temp, adv, s=NA, t=NA) 
       ind_g_s <- i # get index when advection
     }
     vario <- gamma_s[ind_g_s] + gamma_t[t_index[i]]
-    gamma[grid$y[i], grid$x[i], t_index[i]] <- vario
+    gamma[grid$x[i], grid$y[i], t_index[i]] <- vario
   }
 
   return(gamma)
@@ -253,7 +253,10 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
 sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0), 
                    nres = 1) {
   ## Setup
-  RandomFields::RFoptions(spConform = FALSE)
+  options(str = list())
+  # RandomFields::RFoptions(spConform = FALSE)
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
+
   lx <- length(sx <- seq_along(x))
   ly <- length(sy <- seq_along(y))
   lt <- length(st <- seq_along(t))
@@ -321,7 +324,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0),
                                           grid = FALSE)
         # Temporal gaussian random field
         W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-        # Spatio-temporal random field
+        # Spatio-temporal gaussian random field
         W <- compute_W_s_t(grid, W_s, W_t, adv)
         s <- c(grid$shifted_x[n], grid$shifted_y[n])
         time <- grid$t[n]
@@ -465,7 +468,9 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   # z is the third dimension (time in our case)
   # (adv1, adv2) advection coordinates vector
   ## Setups
-  RandomFields::RFoptions(spConform = FALSE, install = "no")
+  # RandomFields::RFoptions(spConform = FALSE, install = "no")
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
+
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal

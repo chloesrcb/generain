@@ -92,37 +92,38 @@ grid <- grid_with_advection
 ```{r}
 RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
 
-compute_W_s_t <- function(grid, W_s, W_t, adv) {
-  lx <- length(unique(grid$x))
-  ly <- length(unique(grid$y))
-  lt <- length(unique(grid$t))
-  coords <- cbind(grid$shifted_x, grid$shifted_y)
-  if (all(adv == 0)) {
-    duplicates <- duplicated(coords)
-    filtered_coords <- coords[!duplicates, ]
-    coords <- filtered_coords
-  }
-  nsites <- nrow(coords)
-  W_s_t <- array(NA, dim = c(lx, ly, lt))
-  t_index <- grid$t + 1 # index starts at 1
-  for (i in seq_len(nrow(grid))) {
-      s_x <- grid$x[i]
-      s_y <- grid$y[i]
-      s <- c(s_x, s_y)
-      if (all(adv == 0) & i > nsites) {
-        if (i %% nsites == 0) {
-          ind_W_s <- i - nsites * (i %/% nsites - 1)
-        } else {
-          ind_W_s <- i - nsites * (i %/% nsites)
-        }
-      } else {
-        ind_W_s <- i
-      }
-      W_s_t[s[2], s[1], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
-  }
-  return(W_s_t)
-}
-
+# compute_W_s_t <- function(grid, W_s, W_t, adv) {
+#   lx <- length(unique(grid$x))
+#   ly <- length(unique(grid$y))
+#   lt <- length(unique(grid$t))
+#   coords <- cbind(grid$shifted_x, grid$shifted_y)
+#   if (all(adv == 0)) {
+#     duplicates <- duplicated(coords)
+#     filtered_coords <- coords[!duplicates, ]
+#     coords <- filtered_coords
+#   }
+#   nsites <- nrow(coords)
+#   W_s_t <- array(NA, dim = c(lx, ly, lt))
+#   t_index <- grid$t + 1 # index starts at 1
+#   for (i in seq_len(nrow(grid))) {
+#       s_x <- grid$x[i]
+#       s_y <- grid$y[i]
+#       s <- c(s_x, s_y)
+#       if (all(adv == 0) & i > nsites) {
+#         if (i %% nsites == 0) {
+#           ind_W_s <- i - nsites * (i %/% nsites - 1)
+#         } else {
+#           ind_W_s <- i - nsites * (i %/% nsites)
+#         }
+#       } else {
+#         ind_W_s <- i
+#       }
+#       W_s_t[s[2], s[1], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
+#   }
+#   return(W_s_t)
+# }
+options(vsc.workspace = FALSE)
+options(str = list())
 alpha1 <- 1.5
 beta1 <- 0.4
 modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = beta1) # semivario
@@ -257,51 +258,51 @@ lines(variog_empirical$u, theoretical_variogram(variog_empirical$u, time,
 
 
 ```{r}
-compute_gamma_point <- function(grid, gamma_space, gamma_time, adv, s=NA, t=NA) {
-  # Get length of unique values
-  lx <- length(unique(grid$x))
-  ly <- length(unique(grid$y))
-  lt <- length(unique(grid$t))
+# compute_gamma_point <- function(grid, gamma_space, gamma_time, adv, s=NA, t=NA) {
+#   # Get length of unique values
+#   lx <- length(unique(grid$x))
+#   ly <- length(unique(grid$y))
+#   lt <- length(unique(grid$t))
 
-  # Get spatial variogram for s
-  if(all(!(is.na(s)) & !(is.na(t)))) {
-    index_grid <- which(grid$shifted_x == s[1] & grid$shifted_y == s[2] &
-                          grid$t == t)
-    gamma_s <- gamma_space[[index_grid]]
-    gamma_t <- gamma_temp[[t + 1]]
-  } else {
-    gamma_s <- gamma_space
-    gamma_t <- gamma_temp
-  }
+#   # Get spatial variogram for s
+#   if(all(!(is.na(s)) & !(is.na(t)))) {
+#     index_grid <- which(grid$shifted_x == s[1] & grid$shifted_y == s[2] &
+#                           grid$t == t)
+#     gamma_s <- gamma_space[[index_grid]]
+#     gamma_t <- gamma_temp[[t + 1]]
+#   } else {
+#     gamma_s <- gamma_space
+#     gamma_t <- gamma_temp
+#   }
 
-  coords <- cbind(grid$shifted_x, grid$shifted_y)
-  if (all(adv == 0)) {
-    duplicates <- duplicated(coords)
-    filtered_coords <- coords[!duplicates, ]
-    coords <- filtered_coords
-  }
-  nsites <- nrow(coords)
+#   coords <- cbind(grid$shifted_x, grid$shifted_y)
+#   if (all(adv == 0)) {
+#     duplicates <- duplicated(coords)
+#     filtered_coords <- coords[!duplicates, ]
+#     coords <- filtered_coords
+#   }
+#   nsites <- nrow(coords)
 
-  t_index <- grid$t + 1 # index starts at 1
+#   t_index <- grid$t + 1 # index starts at 1
 
-  # compute gamma space-time
-  gamma <- array(NA, dim = c(lx, ly, lt))
-  for (i in seq_along(t_index)) {
-    if (all(adv == 0) & i > nsites) {
-        if (i %% nsites == 0) { # get index when no advection
-          ind_g_s <- i - nsites * (i %/% nsites - 1)
-        } else {
-          ind_g_s <- i - nsites * (i %/% nsites)
-        }
-    } else {
-      ind_g_s <- i # get index when advection
-    }
-    vario <- gamma_s[ind_g_s] + gamma_t[t_index[i]]
-    gamma[grid$y[i], grid$x[i], t_index[i]] <- vario
-  }
+#   # compute gamma space-time
+#   gamma <- array(NA, dim = c(lx, ly, lt))
+#   for (i in seq_along(t_index)) {
+#     if (all(adv == 0) & i > nsites) {
+#         if (i %% nsites == 0) { # get index when no advection
+#           ind_g_s <- i - nsites * (i %/% nsites - 1)
+#         } else {
+#           ind_g_s <- i - nsites * (i %/% nsites)
+#         }
+#     } else {
+#       ind_g_s <- i # get index when advection
+#     }
+#     vario <- gamma_s[ind_g_s] + gamma_t[t_index[i]]
+#     gamma[grid$y[i], grid$x[i], t_index[i]] <- vario
+#   }
 
-  return(gamma)
-}
+#   return(gamma)
+# }
 
 coords <- cbind(x_shifted, y_shifted)
 if (all(adv == 0)) {
@@ -341,7 +342,7 @@ all(gamma_space[[1]] == gamma_space_0)
 # plot(gamma_temp_0, main = "Variogramme temporel")
 
 # verif space
-index_coords <- 10
+index_coords <- 7
 s_x <- coords[index_coords, 1]
 s_y <- coords[index_coords, 2]
 dist_matrix <- as.matrix(dist(coords))
@@ -349,10 +350,10 @@ dist_s0 <- dist_matrix[,1]
 h_vect <- sort(unique(as.vector(dist_s0)))
 s <- c(s_x, s_y)
 
-s0 <- grid[1, 1:2]
-index_grid <- 1
-s_x <- grid[index_grid, 4]
-s_y <- grid[index_grid, 5]
+# s0 <- grid[1, 1:2]
+# index_grid <- 1
+# s_x <- grid[index_grid, 4]
+# s_y <- grid[index_grid, 5]
 dist_matrix <- as.matrix(dist(coords))
 dist_s0 <- dist_matrix[,1]
 h_vect <- sort(unique(as.vector(dist_s0)))
@@ -360,15 +361,13 @@ s <- c(s_x, s_y)
 h <- c(s_x - s0[1], s_y - s0[2])
 # s_adv <- s + t * adv
 gamma_s <- 2 * beta1 * sqrt(h$x^2 + h$y^2)^alpha1
-gamma_s == gamma_space[[1]][index_grid]
-gamma_space_0[index_grid] == gamma_s
 
 
 # verif temp
 t0 <- 0
-t_i <- grid$t[100]
+t_i <- grid$t[index_coords]
 gamma_t <- 2 * beta2 * abs(t_i)^alpha2
-gamma_t == gamma_temp[[t_i + 1]]
+gamma_t == gamma_temp[[t_i + 1]][1]
 
 
 ind_grid <- which(grid$shifted_x == s_x && grid$shifted_y == s_y &&
@@ -376,98 +375,22 @@ ind_grid <- which(grid$shifted_x == s_x && grid$shifted_y == s_y &&
 gamma_h_t <- gamma_s + gamma_t
 gamma <- compute_gamma_point(grid, gamma_space_0, gamma_temp_0, adv)
 
-gamma[,,2]
+gamma[,,t_i + 1]
 
 gamma_st_0 <- gamma_space_0[5:8] + gamma_temp_0[2]
 gamma[1,2,2]
 
+s_noadv <- s - t_i * adv
 # print(gamma_h_t)
 # print(gamma[s[1], s[2], t_i + 1])
-gamma_h_t == gamma[s[1], s[2], t_i + 1]
-
+gamma_h_t == gamma[s_noadv[1], s_noadv[2], t_i + 1]
+gamma[,,t_i + 1]
 ```
 
 
 # Simulation r-Pareto
 
 ```{r}
-sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
-                        adv = c(0, 0), s0 = c(1, 1), t0 = 0, nres = 1) {
-  # beta1, beta2, alpha1, alpha2 are variogram parameters
-  # x is the first dimension (spatial x in our case)
-  # y is the second dimension (spatial y in our case)
-  # z is the third dimension (time in our case)
-  # (adv1, adv2) advection coordinates vector
-  ## Setups
-  RandomFields::RFoptions(spConform = FALSE, install = "no")
-  lx <- length(sx <- seq_along(x))  # spatial
-  ly <- length(sy <- seq_along(y))  # spatial
-  lt <- length(st <- seq_along(t))  # temporal
-
-  ## Model-Variogram BuhlCklu
-  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1)
-  modelTime <- RandomFields::RMfbm(alpha = alpha2, var = 2*beta2)
-
-  ## Construct grid
-  grid_with_advection <- expand.grid(
-    x = seq_len(lx),
-    y = seq_len(ly),
-    t = t
-  )
-
-  grid_with_advection$shifted_x <- grid_with_advection$x +
-                                    grid_with_advection$t * adv[1]
-  grid_with_advection$shifted_y <- grid_with_advection$y +
-                                    grid_with_advection$t * adv[2]
-
-  grid <- grid_with_advection
-
-  coords <- grid[, 4:5]
-
-  if (all(adv == 0)) {
-    duplicates <- duplicated(coords)
-    filtered_coords <- coords[!duplicates, ]
-    coords <- filtered_coords
-  }
-
-  ## Variogram for s0, t0
-  ind_s0_t0 <- which(grid$x == s0[1] & grid$y == s0[2] &
-                            grid$t == t0)
-
-  gamma_space <- RandomFields::RFvariogram( # for s0,t0
-      modelSpace,
-      x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
-      y = coords$shifted_y - grid$shifted_y[ind_s0_t0],
-    )
-
-  gamma_temp <- RandomFields::RFvariogram( # for t0
-      modelTime,
-      x = grid$t[ind_s0_t0] - t # Todo: verif t0-t or t-t0 for t0 != 0
-    )
-
-
-  # Get gamma spatio-temporal for s0, t0
-  gamma_0 <- compute_gamma_point(grid, gamma_space, gamma_temp, adv)
-
-
-  # Main
-  Z <- array(, dim = c(lx, ly, lt, nres)) # 4d array
-  for (i in seq_len(nres)) {
-    # Spatial gaussian random field on shifted coords
-    W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2],
-                                      grid = FALSE)
-    # Temporal gaussian random field
-    W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-    # Spatio-temporal random field
-    W <- compute_W_s_t(grid, W_s, W_t, adv)
-    Y <- exp(W - W[ind_s0_t0] - gamma_0)
-    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1) # simple Pareto
-    Z[,,, i] <- R * Y
-  }
-  # Return
-  Z
-}
-
 # Simulate
 beta1 <- 0.4
 beta2 <- 0.2
@@ -480,7 +403,7 @@ temp <- 0:30
 adv <- c(0.2, 0.1)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv)
 
-M <- 2
+M <- 10
 m <- 1000
 nres <- M * m
 
@@ -567,7 +490,8 @@ mreplicates <- list_simu[((i - 1) * m + 1):(i * m)]
 sites_coords <- generate_grid_coords(ngrid)
 df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
 th_chi <- theorical_chi(true_param, df_lags)
-
+par(mfrow=c(1, 1))
+plot(th_chi$chi[th_chi$hnormV > 1 & th_chi$hnormV < 2])
 # Compute excesses
 list_excesses <- lapply(mreplicates, function(replicate) {
   empirical_excesses_rpar(replicate, u, df_lags, threshold = TRUE, t0 = t0)
