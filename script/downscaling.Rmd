@@ -220,6 +220,101 @@ print(head(output_df))
 write.csv(output_df, "output_dataset.csv", row.names = FALSE)
 ```
 
+
+```{r}
+output_df <- data.frame()
+
+# Create the CSV if it doesn't exist
+if (!file.exists("output_dataset2.csv")) {
+    write.csv(data.frame(), "output_dataset2.csv", row.names = FALSE)
+}
+
+# Pre-calculate the filtered comephore dates once outside the loops
+filtered_comephore$date <- as.POSIXct(filtered_comephore$date, format = "%Y-%m-%d %H:%M:%S", tz = "GMT")
+
+# Loop over the rows in rain_hsm (time-based)
+for (t in 1:nrow(rain_hsm)) {
+    t_row <- rain_hsm[t, ]
+    t_date <- as.POSIXct(t_row$dates, format = "%Y-%m-%d %H:%M:%S %Z", tz = "GMT")
+    
+    # Loop over the rows in location_gauges (site-based)
+    for (i in 1:nrow(location_gauges)) {
+        site <- location_gauges[i, ]
+
+        # Y_obs: Observation at the site
+        Y_obs <- t_row[[site$codestation]]
+        if (is.na(Y_obs)) next  # Skip if Y_obs is NA
+
+        # Get closest pixel coordinates
+        X1 <- site$closest_pixel
+        coord_x_Xcenter <- site$coord_x_px
+        coord_y_Xcenter <- site$coord_y_px
+
+        # Distances between X1 and each Comephore pixel (Using distHaversine)
+        distances <- distHaversine(cbind(coord_x_Xcenter, coord_y_Xcenter),
+                                  cbind(loc_px$Longitude, loc_px$Latitude))
+
+        # 3 km around X1 i.e., 9 pixels
+        cube_bounds <- loc_px[distances <= 1500, ]
+
+        # Temporal bounds (3 hours around t_date) i.e., 3 observations by pixel
+        t_start <- t_date - 3600 * 1.5
+        t_end <- t_date + 3600 * 1.5
+
+        # Find the rows in filtered_comephore that match the temporal bounds using match
+        date_indices <- which(filtered_comephore$date >= t_start & filtered_comephore$date <= t_end)
+        
+        # Check if there are any relevant observations in the filtered_comephore data
+        if (length(date_indices) == 0) next  # Skip if no relevant observations
+
+        # Filter out the date-specific rows
+        cube_obs <- filtered_comephore[date_indices, ]
+
+        # Now filter the relevant pixel names
+        pixel_names <- cube_bounds$pixel_name
+        relevant_cols <- match(pixel_names, colnames(cube_obs))
+
+        # Exclude NA columns if any are returned by the match
+        relevant_cols <- relevant_cols[!is.na(relevant_cols)]
+        
+        # Extract the observations for these relevant pixels
+        X_obs <- as.vector(as.matrix(cube_obs[, relevant_cols]))  # Remove the date column
+
+        # Ensure we have exactly 27 values for X_obs
+        if (length(X_obs) < 27) {
+            X_obs <- c(X_obs, rep(NA, 27 - length(X_obs)))  # if less than 27 values
+        }
+
+        # Create a new row for the output dataframe
+        site_data <- data.frame(
+            t = t_date,
+            site = site$codestation,
+            Y_obs = Y_obs,  # Add actual observation if available
+            coord_x_px = coord_x_Xcenter,
+            coord_y_px = coord_y_Xcenter
+        )
+        
+        # Add X1 to X27 as columns
+        site_data <- cbind(site_data, matrix(X_obs, ncol = 27))
+
+        # Rename the new columns as X1, X2, ..., X27
+        colnames(site_data)[(ncol(site_data) - 26):ncol(site_data)] <- paste0("X", 1:27)
+
+        # Append the site_data row to the output_df
+        output_df <- rbind(output_df, site_data)
+
+        # Write the site_data to the CSV file
+        write.table(site_data, "output_dataset2.csv", row.names = FALSE,
+                    col.names = !file.exists("output_dataset2.csv"), sep = ",", append = TRUE)
+    }
+}
+
+# First rows
+print(head(output_df))
+
+# Write the final output_df to a new CSV file
+write.csv(output_df, "output_dataset.csv", row.names = FALSE)
+```
 ## Get data 
 
 ```{r}
