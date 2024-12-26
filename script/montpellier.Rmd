@@ -165,7 +165,7 @@ kable(df_result, format = "latex") %>%
 # COMEPHORE
 
 ```{r}
-setwd("./script")
+# setwd("./script")
 # load data
 df_comephore <- read.csv("../data/comephore/inside_mtp.csv", sep = ",")
 loc_px <- read.csv("../data/comephore/loc_pixels_mtp.csv", sep = ",")
@@ -179,8 +179,13 @@ df_dist <- reshape_distances(dist_mat)
 ## Quantile
 
 ```{r}
+library(collapse)
+library(dplyr)
+# rain_com_no_zero <- comephore %>% filter(across(everything(), ~ . > 0))
+comephore_nozeros <- comephore %>% filter(if_all(everything(), ~ . > 0))
+
 comephore_nozeros <- comephore[rowSums(comephore) > 0, ]
-df_no_zeros <- df[!apply(df == 0, 1, any), ]
+# df_no_zeros <- df[!apply(df == 0, 1, any), ]
 
 # choose two site
 comephore_pair <- comephore_nozeros[, c(1,10)]
@@ -248,8 +253,8 @@ colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
 
 # remove 0
-q <- 0.9
-chimat_dt_mean <- temporal_chi(comephore_nozeros, tmax, quantile = q,
+q <- 0.97
+chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q,
                                mean = TRUE)
 # get h axis in minutes ie x5 minutes
 df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
@@ -288,8 +293,8 @@ df_dist_km <- df_dist
 df_dist_km$value <- df_dist$value / 1000
 
 q <- 0.97
-chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore_nozeros,
-                                 quantile = q, hmax = 6)
+chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
+                                 quantile = q, hmax = 7)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
@@ -355,7 +360,7 @@ kable(df_result, format = "latex") %>%
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 
 # Function to choose conditional points
-choose_conditional_points <- function(sites_coords, data, quantile, 
+choose_conditional_points <- function(sites_coords, data, quantile,
                                       min_spatial_dist, min_time_dist) {
   # Ensure the quantile is within range
   if (quantile < 0 || quantile > 1) {
@@ -414,7 +419,7 @@ choose_conditional_points <- function(sites_coords, data, quantile,
 
 # remove 0
 rain_new <- comephore
-quantile <- 0.95
+quantile <- 0.97
 min_spatial_dist <- 2 # in km
 min_time_dist <- 5 # in hours
 
@@ -486,7 +491,7 @@ neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
   return(nll_composite) # multiply by 100 to avoid numerical issues?
 }
 
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.01, 0.1)
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.1, 0.1)
 
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
         data = rain_new, quantile = quantile, list_lags = list_lags,
@@ -543,7 +548,7 @@ if (any(eigenvalues <= 0)) {
 tau_values <- c(0, 3, 5, 10)
 result <- df_result
 df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, init_param, tau_values, chi=F)
+generate_variogram_plots(result, df_lags, init_param, tau_values, chi=T)
 ```
 
 ### Notes 

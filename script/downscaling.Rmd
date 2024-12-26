@@ -130,6 +130,8 @@ ggplot(rain_com, aes(x = date, y = p23, color = period)) +
   ) +
   theme_minimal()
 
+rain_com_non_zero <- rain_com %>% filter(p1 > 0)
+
 rain_com_non_zero %>%
   group_by(period) %>%
   summarise(
@@ -142,8 +144,6 @@ rain_com_non_zero %>%
 
 anova_result <- aov(p1 ~ period, data = rain_com)
 summary(anova_result)
-
-rain_com_non_zero <- rain_com %>% filter(p1 > 0)
 
 ggplot(rain_com_non_zero, aes(x = period, y = p1)) +
   geom_violin(trim = FALSE, alpha = 0.5) +

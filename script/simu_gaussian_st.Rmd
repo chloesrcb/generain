@@ -572,7 +572,7 @@ ggsave(paste0(foldername, filename), width = 10,
 ```{r}
 sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = NA, nres = 1) {
   ## Setup
-  RandomFields::RFoptions(spConform = FALSE)
+  RandomFields::RFoptions(spConform = FALSE, install="no")
   lx <- length(sx <- seq_along(x))
   ly <- length(sy <- seq_along(y))
   lt <- length(st <- seq_along(t))
@@ -607,8 +607,8 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = NA, nres = 1) {
   N <- nrow(grid) # number of points
   gamma_space <- lapply(seq_len(N), function(n) 
           RandomFields::RFvariogram(modelSpace,
-            x = x_shifted - grid$shifted_x[n],
-            y = y_shifted - grid$shifted_y[n])) # for all s,t
+            x = grid$shifted_x - grid$shifted_x[n],
+            y = grid$shifted_y - grid$shifted_y[n])) # for all s,t
 
   gamma_temp <- lapply(seq_len(lt), function(n) # for all t
           RandomFields::RFvariogram(modelTime,
@@ -628,7 +628,9 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = NA, nres = 1) {
     # Spatio-temporal random field
     W <- compute_W_s_t(grid, W_s, W_t, adv)
 
-    Y <- exp(W - W[1] - gamma[, , , 1])
+    gamma_0 <- compute_gamma_point(grid, gamma_space, gamma_temp, adv,
+                                 s = c(1, 1), t = 0)
+    Y <- exp(W - W[1] - gamma_0)
     Z[, , , i] <- V * Y
     ## n in {2,..,N}
     for (n in 2:N) {
@@ -646,7 +648,7 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = NA, nres = 1) {
         time <- grid$t[n]
         gamma <- compute_gamma_point(grid, gamma_space, gamma_temp, adv, s,
                                      time)
-        Y <- exp(W - W[n] - gamma[, , , n])
+        Y <- exp(W - W[n] - gamma)
         if(all(V * Y[seq_len(n-1)] < Z[(N*(i-1)+1):(N*(i-1)+(n-1))]))
           Z[, , , i] <- pmax(V * Y, Z[, , , i])
           Exp <- Exp + rexp(1)
@@ -657,4 +659,95 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = NA, nres = 1) {
   ## Return
   Z
 }
+
+
+beta1 <- 0.4
+beta2 <- 0.2
+alpha1 <- 1.5
+alpha2 <- 1
+ngrid <- 5
+spa <- 1:ngrid
+nsites <- ngrid^2 # if the grid is squared
+temp <- 0:99
+adv <- c(0.1, 0.1)
+true_param <- c(beta1, beta2, alpha1, alpha2, adv)
+
+nres <- 2
+
+simu <- sim_BR(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, nres)
+
+
+if (any(adv < 1 && adv >= 0.1)) {
+  adv_int <- adv * 10
+  adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+} else if (any(adv < 0.1 && adv > 0)) {
+  adv_int <- adv * 100
+  adv_str <- sprintf("%03d_%03d", adv_int[1], adv_int[2])
+} else {
+  adv_int <- adv
+  adv_str <- sprintf("%02d_%02d", adv_int[1], adv_int[2])
+}
+
+param_str <- sprintf("%02d_%02d_%02d_%02d", true_param[1] * 10,
+                    true_param[2] * 10, true_param[3] * 10, true_param[4] * 10)
+
+setwd("./script")
+# Save the data
+foldername <- paste0("../data/simulations_br/br_", param_str, "_", adv_str,
+                   "/sim_", ngrid^2, "s_", length(temp), "t", "/")
+
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+save_simulations(simu, ngrid, nres, folder = foldername,
+        file = paste0("br_", ngrid^2, "s_", length(temp), "t"))
+
+list_simu <- list()
+for (i in 1:nres) {
+  file_name <- paste0(foldername, "br_", ngrid^2, "s_",
+                        length(temp), "t_", i, ".csv")
+  list_simu[[i]] <- read.csv(file_name)
+}
+
+simu_df <- list_simu[[1]]
+
+par(mfrow = c(2, 2),
+    cex = 0.7,
+    pin = c(2, 1),
+    lwd = 0.5,
+    col = btfgreen)
+plot(simu_df$S1, main = "S1=S0", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S2, main = "S2", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S10, main = "S10", xlab = "Time", ylab = "Rainfall")
+plot(simu_df$S25, main = "S20", xlab = "Time", ylab = "Rainfall")
 ```
+
+
+
+```{r}
+sites_coords <- generate_grid_coords(ngrid)
+df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
+th_chi <- theorical_chi(true_param, df_lags)
+
+q <- 0.99
+excesses <- empirical_excesses(simu_df, q, df_lags, type = "brownresnick")
+
+# Optimize
+result <- optim(
+  par = true_param,
+  fn = neg_ll,
+  data = simu_df,
+  quantile = q,
+  df_lags = df_lags,
+  excesses = excesses,
+  hmax = sqrt(17),
+  threshold = FALSE,
+  method = "L-BFGS-B",
+  lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
+  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+  control = list(maxit = 10000)
+)
+
+result$par
+ ```
