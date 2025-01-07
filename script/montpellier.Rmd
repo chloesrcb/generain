@@ -5,11 +5,10 @@ date: "`r Sys.Date()`"
 output:
   pdf_document:
     extra_dependencies: ["float"]
-    encoding: "UTF-8"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.width = 7, fig.height = 7,
+knitr::opts_chunk$set(echo = TRUE, fig.width = 5, fig.height = 5,
                       fig.align = 'center', message = FALSE, warning = FALSE,
                       fig.pos='H')
 par(cex.main = 0.8,
@@ -19,6 +18,7 @@ par(cex.main = 0.8,
 
 
 ```{r lib, echo=FALSE}
+# Load libraries and set theme
 # setwd("./script")
 library(generain)
 library(reshape2)
@@ -54,147 +54,152 @@ btf_theme <- theme_minimal() +
 btfgreen <- "#69b3a2"
 ```
 
-```{r}
+
+```{r, echo=FALSE}
 ################################################################################
 # LOCATION ---------------------------------------------------------------------
 ################################################################################
 # get location of each rain gauge
-setwd("./script")
-location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
-location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                                 "crbm", "archiw", "archie", "um35", "chu1",
-                                 "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
+# # setwd("./script")
+# location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
+# location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
+#                                  "crbm", "archiw", "archie", "um35", "chu1",
+#                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
 
-# Get distances matrix
-dist_mat <- get_dist_mat(location_gauges)
-df_dist <- reshape_distances(dist_mat)
+# # Get distances matrix
+# dist_mat <- get_dist_mat(location_gauges)
+# df_dist <- reshape_distances(dist_mat)
 
-################################################################################
-# DATA -------------------------------------------------------------------------
-################################################################################
-# get rain measurements
-# load data
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
-rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+# ################################################################################
+# # DATA -------------------------------------------------------------------------
+# ################################################################################
+# # get rain measurements
+# # load data
+# load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+# rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 ```
 
 
-```{r}
-# spatial structure with an almost constant amount of pairs in each intervals
-df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 10
-quantiles_rad <- quantile(df_dist_order$value,
-                            probs = seq(0, 1, length.out = num_intervals + 1))
-radius_intervals <- unique(quantiles_rad)
-radius <- as.integer(radius_intervals)
-radius[length(radius)] <- 1550
-dist_counts <- table(cut(df_dist$value, breaks = radius))
+```{r, fig.width = 4, fig.height = 3, echo=FALSE, fig.cap="Histogram of distance classes"}
+# # spatial structure with an almost constant amount of pairs in each intervals
+# df_dist_order <- df_dist[order(df_dist$value), ]
+# num_intervals <- 10
+# quantiles_rad <- quantile(df_dist_order$value,
+#                             probs = seq(0, 1, length.out = num_intervals + 1))
+# radius_intervals <- unique(quantiles_rad)
+# radius <- as.integer(radius_intervals)
+# radius[length(radius)] <- 1550
+# dist_counts <- table(cut(df_dist$value, breaks = radius))
 
-# Get dataframe for the histogram plot
-df_hist <- data.frame(dist_counts)
+# # Get dataframe for the histogram plot
+# df_hist <- data.frame(dist_counts)
 
-colnames(df_hist) <- c("Interval", "Count")
+# colnames(df_hist) <- c("Interval", "Count")
 
-df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
-df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
+# df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
+# df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
 
-# # Histogram
-histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
-  btf_theme +
-  geom_bar(stat = "identity", fill = btfgreen, alpha = 0.8) +
-  xlab("Spatial lag") +
-  ylab("Pair count") +
-  theme(axis.text.x = element_text(angle = 45)) +
-  scale_x_discrete(labels = df_hist$Breaks) +
-  scale_y_continuous(breaks = c(0, 4, 6, 8, 10, 12))
+# # # Histogram
+# histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
+#   btf_theme +
+#   geom_bar(stat = "identity", fill = btfgreen, alpha = 0.8) +
+#   xlab("Spatial lag") +
+#   ylab("Pair count") +
+#   theme(axis.text.x = element_text(angle = 45)) +
+#   scale_x_discrete(labels = df_hist$Breaks) +
+#   scale_y_continuous(breaks = c(0, 4, 6, 8, 10, 12))
 
-histradius
+# histradius
 
-# Create matrix of radius
-rad_mat <- dist_mat
-# Loop through radius and set distances in matrix
-for (i in 2:length(radius)) {
-  curr_radius <- radius[i]
-  prev_radius <- radius[i - 1]
-  rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
-  rad_mat[dist_mat > curr_radius] <- Inf
-}
+# # Create matrix of radius
+# rad_mat <- dist_mat
+# # Loop through radius and set distances in matrix
+# for (i in 2:length(radius)) {
+#   curr_radius <- radius[i]
+#   prev_radius <- radius[i - 1]
+#   rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
+#   rad_mat[dist_mat > curr_radius] <- Inf
+# }
 
-rad_mat[dist_mat == 0] <- 0
-# Make a triangle
-rad_mat[lower.tri(rad_mat)] <- NA
-# in km
-rad_mat <- rad_mat / 1000 # change les resultats...
+# rad_mat[dist_mat == 0] <- 0
+# # Make a triangle
+# rad_mat[lower.tri(rad_mat)] <- NA
+# # in km
+# rad_mat <- rad_mat / 1000 # change les resultats...
 ```
 
-```{r}
+<!-- 
+We choose a quantile $q = 0.96$ without zeros for the spatial and temporal chi 
+estimation. We get an estimate of the spatial and temporal variogram parameters using the
+WLSE method from Buhl et al. (2019). -->
+
+```{r, echo=FALSE, show=FALSE}
 # get the empirical chi
-q <- 0.998
-rain_new <- rain[-1]
-rain_nozeros <- rain_new[rowSums(rain_new) > 0, ] #TODO verif ca 
-rain_no_zeros <- df[!apply(df == 0, 1, any), ]
+# q <- 0.998
+# rain_new <- rain[-1]
+# rain_nozeros <- rain_new[rowSums(rain_new) > 0, ] #TODO verif ca 
+# # rain_no_zeros <- df[!apply(df == 0, 1, any), ]
 
-threshold <- quantile(rain_new$cnrs, probs = q, na.rm = T)
+# threshold <- quantile(rain_new$cnrs, probs = q, na.rm = T)
 
-# get the quantile from threshold in the data without 0
-empirical_cdf <- ecdf(rain_nozeros$cnrs)
-quantile_in_nozeros <- empirical_cdf(threshold)
+# # get the quantile from threshold in the data without 0
+# empirical_cdf <- ecdf(rain_nozeros$cnrs)
+# quantile_in_nozeros <- empirical_cdf(threshold)
 
-q <- 0.96
-chispa <- spatial_chi(rad_mat, rain_nozeros, quantile = q)
-spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = T)
+# q <- 0.96
+# chispa <- spatial_chi(rad_mat, rain_nozeros, quantile = q)
+# spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
 
-tmax <- 10
-q <- 0.96
-chitemp <- temporal_chi(rain_new, tmax = tmax, quantile = q)
-temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(rain),
-                                      weights = "exp", summary = F)
+# tmax <- 10
+# q <- 0.96
+# chitemp <- temporal_chi(rain_new, tmax = tmax, quantile = q)
+# temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(rain),
+#                                       weights = "exp", summary = F)
 
-df_result <- data.frame(beta1 =  spa_estim[1],
-                        beta2 = temp_estim[1],
-                        alpha1 = spa_estim[2],
-                        alpha2 = temp_estim[2])
+# df_result <- data.frame(beta1 =  spa_estim[1],
+#                         beta2 = temp_estim[1],
+#                         alpha1 = spa_estim[2],
+#                         alpha2 = temp_estim[2])
 
-colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+# colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
 
-kable(df_result, format = "latex") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-  "responsive"), latex_options = "H")
+# kable(df_result, format = "latex") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+#   "responsive"), latex_options = "H")
 ```
 
-# COMEPHORE
+# COMEPHORE data
 
-```{r}
+An other dataset is considered, the COMEPHORE radar renalysis data from Météo France.
+We consider 59 pixels in the Montpellier area.
+
+```{r, echo=FALSE}
 # setwd("./script")
 # load data
 df_comephore <- read.csv("../data/comephore/inside_mtp.csv", sep = ",")
 loc_px <- read.csv("../data/comephore/loc_pixels_mtp.csv", sep = ",")
-ncol(df_comephore)
+# ncol(df_comephore) # nb of pixels + dates
 comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix
 dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 ```
 
-## Quantile
+# Quantile choice
 
 ```{r}
-library(collapse)
-library(dplyr)
-# rain_com_no_zero <- comephore %>% filter(across(everything(), ~ . > 0))
-comephore_nozeros <- comephore %>% filter(if_all(everything(), ~ . > 0))
-
+# Remove lines with just zeros
 comephore_nozeros <- comephore[rowSums(comephore) > 0, ]
-# df_no_zeros <- df[!apply(df == 0, 1, any), ]
 
-# choose two site
-comephore_pair <- comephore_nozeros[, c(1,10)]
-chiplot(comephore_pair, xlim = c(0.85, 1), ylim1 = c(0.5, 1), which = 1,
-        qlim = c(0.85, 0.999))
-abline(v = 0.97, col = "red", lty = 2)
+# Choose two site and remove zeros
+comephore_pair <- comephore_nozeros[, c(1,15)]
+comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
+chiplot(comephore_pair, xlim = c(0.8, 1), ylim1 = c(0.5, 1), which = 1,
+        qlim = c(0.8, 0.999))
+abline(v = 0.95, col = "red", lty = 2)
 
 # count conjoint excesses
-q <- 0.97
+q <- 0.95
 # uniformize the data
 n <- nrow(comephore_pair)
 data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
@@ -203,37 +208,41 @@ data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
 count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
 print(count_excesses)
 
-comephore_pair <- comephore[, c(1,2)]
+# With all zeros
+comephore_pair <- comephore[, c(1,10)]
 chiplot(comephore_pair, xlim = c(0.98, 1), ylim1 = c(0.5, 1), which = 1,
         qlim = c(0.98, 0.9995))
 
-# threshold <- quantile(comephore$p102, probs = q, na.rm = T)
+threshold <- quantile(comephore$p102, probs = 0.998, na.rm = T)
+# get the quantile from threshold in the data without 0 when the quantile is
+# 0.998 with zeros inside data
+empirical_cdf <- ecdf(comephore_pair$p102)
+quantile_in_nozeros <- empirical_cdf(threshold)
+print(quantile_in_nozeros)
 
-# get the quantile from threshold in the data without 0
-# empirical_cdf <- ecdf(comephore_nozeros$p102)
-# quantile_in_nozeros <- empirical_cdf(threshold)
-
+# Temporal chi
 rain_nolag <- comephore_nozeros$p142[1:(length(comephore_nozeros$p142) - 5)]
 rain_lag <- comephore_nozeros$p142[6:length(comephore_nozeros$p142)]
 comephore_pair <- cbind(rain_nolag, rain_lag)
+comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
 chiplot(comephore_pair, xlim = c(0.9, 1), ylim1 = c(0, 1), which = 1,
         qlim = c(0.9, 0.995))
-abline(v = 0.97, col = "red", lty = 2)
+abline(v = 0.95, col = "red", lty = 2)
 
 n <- nrow(comephore_pair)
 data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
                           rank(comephore_pair[, 2]) / (n + 1))
-q <- 0.97
+q <- 0.95
 count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
 print(count_excesses)
 
-
-q <- 0.97
+# We choose q = 0.95
+q <- 0.95
 ```
 
-## WLSE
+# Empirical chi and WLSE
 
-```{r}
+```{r, echo=FALSE}
 tmax <- 10
 nsites <- length(loc_px$pixel_name)
 # Temporal chi with spatial lag fixed at 0
@@ -243,31 +252,33 @@ chimat_dtlag <- temporal_chi(comephore_nozeros, quantile = q, tmax = tmax,
                              mean = FALSE)
 end_time <- Sys.time()
 elapsed_time <- end_time - start_time
-print(elapsed_time)
+# print(elapsed_time)
 ```
 
-```{r}
+## Temporal chi
+
+```{r, echo=FALSE}
 par(mfrow = c(1, 1))
 chi_df_dt <- data.frame(chimat_dtlag)
 colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
 
 # remove 0
-q <- 0.97
+q <- 0.95
 chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q,
                                mean = TRUE)
 # get h axis in minutes ie x5 minutes
 df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-ggplot(df, aes(x = lag, y = chi)) +
+chitemp_plot <- ggplot(df, aes(x = lag, y = chi)) +
   geom_point(color = btfgreen) +
   btf_theme +
   xlab("Temporal lag") +
   ylab(TeX(r"($\hat{\chi}$)"))
 
 wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
-                                    weights = "exp", summary = T)
+                                    weights = "exp", summary = F)
 
-print(wlse_temp)
+# print(wlse_temp)
 alpha2 <- wlse_temp[[2]]
 beta2 <- wlse_temp[[1]]
 c2 <- log(beta2)
@@ -275,25 +286,32 @@ c2 <- log(beta2)
 dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
 
 chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
-  geom_point(color = btfgreen, size = 4) +
+  geom_point(color = btfgreen) +
   btf_theme +
   xlab(TeX(r"($\log(\tau)$)")) +
   ylab(TeX(r"($\eta(\widehat{\chi}(0,\tau))$)")) +
   geom_line(aes(x = lag, y = alpha2 * lag + c2),
-            alpha = 0.6, color = "darkred", linewidth = 1.5)
+            alpha = 0.5, color = "darkred", linewidth = 0.5)
+```
 
+```{r, echo=FALSE, fig.height = 3, fig.width = 5, fig.cap="Empirical temporal extremogram"}
+chitemp_plot
+```
+
+```{r, echo=FALSE, fig.height = 3, fig.width = 5, fig.cap="Empirical temporal extremogram with eta transformation and WLSE"}
 chitemp_eta_estim
 ```
 
+## Spatial chi
 
-```{r}
+```{r, echo=FALSE}
 # Spatial chi ------------------------------------------------------------------
 df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
 df_dist_km <- df_dist
 df_dist_km$value <- df_dist$value / 1000
 
-q <- 0.97
-chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
+q <- 0.95
+chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore_nozeros,
                                  quantile = q, hmax = 7)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
@@ -304,17 +322,7 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   geom_point(col = btfgreen, size = 4) +
   xlab(TeX(r"($h$)")) +
   ylab(TeX(r"($\widehat{\chi}(h, 0)$)")) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color =  "#5c595943")) +
   ylim(0, 1)
-
-chispa_plot
 
 # WLSE
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
@@ -325,40 +333,41 @@ c1 <- log(beta1)
 
 chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
-  geom_point(col = btfgreen, size = 4) +
+  geom_point(col = btfgreen) +
   xlab(TeX(r"($\log(h)$)")) +
   ylab(TeX(r"($\eta(\widehat{\chi}(h, 0))$)")) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color = "#5c595943")) +
   geom_line(aes(x = lagspa, y = alpha1 * lagspa + c1), alpha = 0.6,
-            color = "darkred", linewidth = 1.5)
+            color = "darkred", linewidth = 0.5)
+```
 
+```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Empirical spatial extremogram"}
+chispa_plot
+```
+
+```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Empirical spatial extremogram with eta transformation and WLSE"}
 chispa_eta_estim
+```
 
+Results of the WLSE method on the COMEPHORE data are:
+
+```{r, echo=FALSE}
 df_result <- data.frame(beta1 =  beta1,
                         beta2 = beta2,
                         alpha1 = alpha1,
                         alpha2 = alpha2)
 
-colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
+colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2")
 
 kable(df_result, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
   "responsive"), latex_options = "H")
 ```
 
-## Optimisation
+# Optimization of the composite likelihood
 
-```{r}
-# Get coords
-sites_coords <- loc_px[, c("Longitude", "Latitude")]
+## Choose conditional points
 
+```{r, echo=FALSE}
 # Function to choose conditional points
 choose_conditional_points <- function(sites_coords, data, quantile,
                                       min_spatial_dist, min_time_dist) {
@@ -416,10 +425,15 @@ choose_conditional_points <- function(sites_coords, data, quantile,
 
   return(selected_points)
 }
+```
+
+```{r, echo=TRUE}
+# Get coords
+sites_coords <- loc_px[, c("Longitude", "Latitude")]
 
 # remove 0
 rain_new <- comephore
-quantile <- 0.97
+quantile <- 0.998
 min_spatial_dist <- 2 # in km
 min_time_dist <- 5 # in hours
 
@@ -434,10 +448,16 @@ selected_points <- choose_conditional_points(
 # Extract s0 and t0
 s0_list <- lapply(selected_points, `[[`, "s0")
 t0_list <- lapply(selected_points, `[[`, "t0")
+```
 
+We have 23 conditional points.
 
+## Get corresponding lags and excesses
+
+```{r, echo=FALSE}
 library(parallel)
 
+rain_new <- comephore_nozeros
 # Get lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[[i]]
@@ -456,12 +476,16 @@ list_lags <- lapply(list_results, `[[`, "lags")
 
 # Extract list_excesses from list_results
 list_excesses <- lapply(list_results, `[[`, "excesses")
+```
 
 
+## Optimization results
+
+```{r, echo=FALSE}
 neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
                     list_excesses, hmax = NA, s0_list = NA,
                     t0_list = NA, threshold = FALSE) {
-  print(params)
+  # print(params)
   # Bounds for the parameters
   lower.bound <- c(1e-8, 1e-8, 1e-8, 1e-8)
   upper.bound <- c(Inf, Inf, 1.999, 1.999)
@@ -488,9 +512,15 @@ neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
                     threshold = threshold)
     nll_composite <- nll_composite + nll_i
   }
-  return(nll_composite) # multiply by 100 to avoid numerical issues?
+  return(nll_composite)
 }
+```
 
+We initialize the parameters with the values obtained from the WLSE method and we 
+consider an advection of 0.1 for both directions. It converges and the results of 
+the optimization on the COMEPHORE data are:
+
+```{r, echo=FALSE}
 init_param <- c(beta1, beta2, alpha1, alpha2, 0.1, 0.1)
 
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
@@ -502,7 +532,7 @@ result <- optim(par = init_param, fn = neg_ll_composite_rpar,
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
         control = list(maxit = 10000),
         hessian = TRUE)
-result$par
+estimated_params <- result$par
 # Check the convergence
 if (result$convergence != 0) {
   warning("The optimization did not converge.")
@@ -516,14 +546,23 @@ df_result <- data.frame(beta1 =  result$par[1],
                         adv1 = result$par[5],
                         adv2 = result$par[6])
 
-# Get the hessian
-hessian <- result$hessian
-cov_matrix <- solve(hessian)
+colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 
-eigenvalues <- eigen(hessian)$values
-if (any(eigenvalues <= 0)) {
-  stop("Hessian matrix is not positive definite.")
-}
+kable(df_result, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
+
+
+```{r, echo=FALSE}
+# # Get the hessian
+# hessian <- result$hessian
+# cov_matrix <- solve(hessian)
+
+# eigenvalues <- eigen(hessian)$values
+# if (any(eigenvalues <= 0)) {
+#   stop("Hessian matrix is not positive definite.")
+# }
 
 # eigen_decomp <- eigen(hessian)
 # eigenvalues <- eigen_decomp$values
@@ -537,19 +576,24 @@ if (any(eigenvalues <= 0)) {
 # cov_matrix <- solve(hessian_reg)
 # se <- sqrt(diag(cov_matrix))
 # conf_int <- cbind(result$par - 1.96 * se, result$par + 1.96 * se)
-
 ```
 
+## Variogram
 
-### Variogram
-
-```{r}
+```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate"}
 # compute variogram with parameters
-tau_values <- c(0, 3, 5, 10)
+tau_values <- c(0)
 result <- df_result
 df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, init_param, tau_values, chi=T)
+generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+
+tau_values <- c(5)
+result <- df_result
+df_lags <- list_lags[[5]]
+generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+
+tau_values <- c(10)
+result <- df_result
+df_lags <- list_lags[[5]]
+generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
 ```
-
-### Notes 
-
