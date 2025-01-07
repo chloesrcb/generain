@@ -119,7 +119,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   for (s in 1:nsites) {
     rain_Xs <- drop_na(data_rain[s]) # for one fixed station
     if (!zeros) {
-      Xs <- data.frame("site" = rain_Xs[rowSums(rain_Xs != 0, na.rm = TRUE) > 0, ])
+      Xs <- data.frame("site" = rain_Xs[rowSums(rain_Xs) > 0, ])
     } else {
       Xs <- rain_Xs
     }
@@ -133,6 +133,8 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
       rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (in t_k)
       rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get couple
+      # remove zeros
+      data_cp <- data_cp[rowSums(data_cp) > 0, ]
       if (!zeros) {
         Xs_cp <- data.frame("site" = data_cp[rowSums(data_cp != 0, na.rm = TRUE) > 0, ])
       } else {
@@ -314,7 +316,7 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
     ind_h <- which(h_vect == h)
     h_sup <- lags_sup[ind_h]
     indices <- data.frame(which(rad_mat == h_sup, arr.ind = TRUE))
-    print(paste0("h = ", h))
+    # print(paste0("h = ", h))
     nb_pairs <- dim(indices)[1]
     if (nb_pairs == 0) {
       chi_slag <- c(chi_slag, NA)
@@ -329,7 +331,7 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
         if (!zeros) {
           rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
         }
-        print(c(ind_s1[i], ind_s2[i]))
+        # print(c(ind_s1[i], ind_s2[i]))
         if (length(quantile) > 1) {
           q <- quantile[ind_s1[i], ind_s2[i]]
         }
@@ -337,7 +339,7 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
       }
       chi_slag <- c(chi_slag, mean(na.omit(chi_val)))
     }
-    print(chi_slag)
+    # print(chi_slag)
   }
   chispa_df <- data.frame(chi = chi_slag, lagspa = h_vect)
   return(chispa_df)
@@ -443,6 +445,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     for (i in seq_along(ind_s1)){
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
       colnames(rain_cp) <- c("s1", "s2")
+      rain_cp <- rain_cp[rowSums(rain_cp) > 0, ]
       if (!zeros) {
           rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
       }
