@@ -303,7 +303,7 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
       facet_wrap(~ tau, scales = "free_x",
                 labeller = labeller(tau = label_both)) +
       labs(
-        title = "Variogram for Multiple Tau Values",
+        title = " ",
         x = "Spatial Lag",
         y = "Variogram"
       ) +
