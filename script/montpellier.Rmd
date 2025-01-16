@@ -319,7 +319,7 @@ etachispa_df <- data.frame(chi = eta(chispa_df$chi),
 
 chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   btf_theme +
-  geom_point(col = btfgreen, size = 4) +
+  geom_point(col = btfgreen) +
   xlab(TeX(r"($h$)")) +
   ylab(TeX(r"($\widehat{\chi}(h, 0)$)")) +
   ylim(0, 1)
@@ -411,7 +411,7 @@ choose_conditional_points <- function(sites_coords, data, quantile,
       # and the minimum spatial and time distances
       dist_spa <- distHaversine(current_point$s0, last_selected$s0) / 1000
       dist_time <- abs(current_point$t0 - last_selected$t0)
-      if (dist_spa >= min_spatial_dist && dist_time >= min_time_dist) {
+      if (dist_spa >= min_spatial_dist || dist_time >= min_time_dist) {
         selected_points <- append(selected_points, list(current_point))
         last_selected <- current_point  # Update last selected point
       }
@@ -420,7 +420,7 @@ choose_conditional_points <- function(sites_coords, data, quantile,
 
   if (length(selected_points) == 0) {
     stop("No spatio-temporal points satisfy the quantile, the minimum spatial 
-          and time distances.")
+          and/or time distances.")
   }
 
   return(selected_points)
@@ -432,10 +432,10 @@ choose_conditional_points <- function(sites_coords, data, quantile,
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 
 # remove 0
-rain_new <- comephore
-quantile <- 0.998
-min_spatial_dist <- 2 # in km
-min_time_dist <- 5 # in hours
+rain_new <- comephore_nozeros
+quantile <- 0.96
+min_spatial_dist <- 4 # in km
+min_time_dist <- 24*30 # in hours
 
 selected_points <- choose_conditional_points(
   sites_coords = sites_coords,
@@ -447,10 +447,14 @@ selected_points <- choose_conditional_points(
 
 # Extract s0 and t0
 s0_list <- lapply(selected_points, `[[`, "s0")
+s_unique <- unique(s0_list)
 t0_list <- lapply(selected_points, `[[`, "t0")
+
+length(s0_list)
+length(s_unique)
 ```
 
-We have 23 conditional points.
+We have `r length(s0_list)` conditional points.
 
 ## Get corresponding lags and excesses
 
@@ -516,22 +520,58 @@ neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
 }
 ```
 
-We initialize the parameters with the values obtained from the WLSE method and we 
-consider an advection of 0.1 for both directions. It converges and the results of 
-the optimization on the COMEPHORE data are:
+We initialize the parameters with the values obtained from the WLSE method and without advection. 
+It converges and the results of the optimization on the COMEPHORE data are:
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.1, 0.1)
-
+init_param <- c(beta1, beta2, alpha1, alpha2, 0., 0.)
+q <- 0.96
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        data = rain_new, quantile = quantile, list_lags = list_lags,
+        data = rain_new, quantile = q, list_lags = list_lags,
         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
         t0_list = t0_list, threshold = FALSE,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
         control = list(maxit = 10000),
-        hessian = TRUE)
+        hessian = F)
+estimated_params_noadv <- result$par
+# Check the convergence
+if (result$convergence != 0) {
+  warning("The optimization did not converge.")
+}
+
+# Extract the results
+df_result_noadv <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        adv1 = result$par[5],
+                        adv2 = result$par[6])
+
+colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+kable(df_result_noadv, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
+
+
+Same but now we consider an advection of 0.1 for both directions. It converges and the results of 
+the optimization on the COMEPHORE data are:
+
+```{r, echo=FALSE}
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
+
+result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+        data = rain_new, quantile = q, list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+        t0_list = t0_list, threshold = FALSE,
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        control = list(maxit = 10000),
+        hessian = F)
 estimated_params <- result$par
 # Check the convergence
 if (result$convergence != 0) {
@@ -553,6 +593,79 @@ kable(df_result, format = "latex") %>%
   "responsive"), latex_options = "H")
 ```
 
+
+Same but now we consider an advection of $0.01$ for both directions. It converges and the results of 
+the optimization on the COMEPHORE data are:
+
+```{r, echo=FALSE}
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.01, 0.01)
+
+result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+        data = rain_new, quantile = q, list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+        t0_list = t0_list, threshold = FALSE,
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        control = list(maxit = 10000),
+        hessian = F)
+estimated_params2 <- result$par
+# Check the convergence
+if (result$convergence != 0) {
+  warning("The optimization did not converge.")
+}
+
+# Extract the results
+df_result2 <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        adv1 = result$par[5],
+                        adv2 = result$par[6])
+
+colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+kable(df_result2, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
+
+
+Same but now we consider an initial advection of $(0.2, 0.1)$. It converges and the results of 
+the optimization on the COMEPHORE data are:
+
+```{r, echo=FALSE}
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
+
+result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+        data = rain_new, quantile = q, list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+        t0_list = t0_list, threshold = FALSE,
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        control = list(maxit = 10000),
+        hessian = F)
+estimated_params2 <- result$par
+# Check the convergence
+if (result$convergence != 0) {
+  warning("The optimization did not converge.")
+}
+
+# Extract the results
+df_result2 <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        adv1 = result$par[5],
+                        adv2 = result$par[6])
+
+colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+kable(df_result2, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
+```
 
 ```{r, echo=FALSE}
 # # Get the hessian
@@ -580,7 +693,30 @@ kable(df_result, format = "latex") %>%
 
 ## Variogram
 
-```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate"}
+### Without initial advection
+
+```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate with no initial advection in the optimization"}
+# compute variogram with parameters
+tau_values <- c(0)
+result <- df_result_noadv
+df_lags <- list_lags[[5]]
+generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+
+tau_values <- c(5)
+result <- df_result_noadv
+df_lags <- list_lags[[5]]
+generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+
+tau_values <- c(10)
+result <- df_result_noadv
+df_lags <- list_lags[[5]]
+generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+```
+
+
+### With initial advection of 0.1
+
+```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate with initial advection of 0.1 in the optimization"}
 # compute variogram with parameters
 tau_values <- c(0)
 result <- df_result
