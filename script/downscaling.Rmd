@@ -124,54 +124,54 @@ plot(rain_com_after2007$date, rain_com_after2007$p1, type = "l", col = "blue",
 ```
 
 ```{r}
-library(ggplot2)
-library(dplyr)
+# library(ggplot2)
+# library(dplyr)
 
-rain_com_new <- rain_com_new %>%
-  mutate(
-    period = ifelse(date < as.Date("2007-01-01"), "Before 2007", "After 2007")
-  )
+# rain_com_new <- rain_com_new %>%
+#   mutate(
+#     period = ifelse(date < as.Date("2007-01-01"), "Before 2007", "After 2007")
+#   )
 
-comephore_all <- ggplot(rain_com_new, aes(x = date, y = p1, color = period)) +
-  geom_line() +
-  labs(
-    title = "Rainfall Before and After 2007",
-    x = "Date",
-    y = "Rainfall (mm)"
-  ) +
-  theme_minimal()
+# comephore_all <- ggplot(rain_com_new, aes(x = date, y = p1, color = period)) +
+#   geom_line() +
+#   labs(
+#     title = "Rainfall Before and After 2007",
+#     x = "Date",
+#     y = "Rainfall (mm)"
+#   ) +
+#   theme_minimal()
 
-ggsave("../images/rainfall_before_after_2007.png", comephore_all, width = 10, height = 6)
+# ggsave("../images/rainfall_before_after_2007.png", comephore_all, width = 10, height = 6)
 
-rain_com_non_zero <- rain_com_new %>% filter(p1 > 0)
+# rain_com_non_zero <- rain_com_new %>% filter(p1 > 0)
 
-rain_com_non_zero %>%
-  group_by(period) %>%
-  summarise(
-    mean_p1 = mean(p1, na.rm = TRUE),
-    median_p1 = median(p1, na.rm = TRUE),
-    sd_p1 = sd(p1, na.rm = TRUE),
-    min_p1 = min(p1, na.rm = TRUE),
-    max_p1 = max(p1, na.rm = TRUE)
-  )
+# rain_com_non_zero %>%
+#   group_by(period) %>%
+#   summarise(
+#     mean_p1 = mean(p1, na.rm = TRUE),
+#     median_p1 = median(p1, na.rm = TRUE),
+#     sd_p1 = sd(p1, na.rm = TRUE),
+#     min_p1 = min(p1, na.rm = TRUE),
+#     max_p1 = max(p1, na.rm = TRUE)
+#   )
 
-anova_result <- aov(p1 ~ period, data = rain_com_new)
-summary(anova_result)
+# anova_result <- aov(p1 ~ period, data = rain_com_new)
+# summary(anova_result)
 
-rain_com_non_zero$period <- factor(rain_com_non_zero$period, 
-                          levels = c("Before 2007", "After 2007"))
+# rain_com_non_zero$period <- factor(rain_com_non_zero$period, 
+#                           levels = c("Before 2007", "After 2007"))
 
-bp_2007 <- ggplot(rain_com_non_zero, aes(x = period, y = p399)) +
-  geom_violin(trim = FALSE, alpha = 0.5) +
-  geom_boxplot(width = 0.1, alpha = 0.8) +
-  labs(
-    title = "",
-    x = "Period",
-    y = "Rainfall (mm)"
-  ) +
-  theme_minimal()
+# bp_2007 <- ggplot(rain_com_non_zero, aes(x = period, y = p399)) +
+#   geom_violin(trim = FALSE, alpha = 0.5) +
+#   geom_boxplot(width = 0.1, alpha = 0.8) +
+#   labs(
+#     title = "",
+#     x = "Period",
+#     y = "Rainfall (mm)"
+#   ) +
+#   theme_minimal()
 
-ggsave("../images/boxplot_before_after_2007.png", bp_2007, width = 7, height = 6)
+# ggsave("../images/boxplot_before_after_2007.png", bp_2007, width = 7, height = 6)
 
 ```
 
@@ -372,6 +372,8 @@ if (length(chunk_list) > 0) {
 ## Get data 
 
 ```{r}
+output_file <- "../data/downscaled_data.csv"
+
 df_Y_X_raw <- read.csv(output_file, sep = ";")
 colnames(df_Y_X_raw)[which(colnames(df_Y_X_raw) == "X_obs")] <- "X"
 # nrow(df_Y_X_raw)
@@ -391,6 +393,8 @@ df_Y_X <- df_Y_X %>%
     )
   )
 
+library(tidyr)
+
 # Transform each X into a vector and distribute its elements into columns
 df_Y_X_transformed <-  df_Y_X %>%
   mutate(
@@ -399,34 +403,25 @@ df_Y_X_transformed <-  df_Y_X %>%
   ) %>%
   unnest_wider(X, names_sep = "")
 
-# head(df_Y_X_transformed)
+head(df_Y_X_transformed)
 # colnames(df_Y_X_transformed)
+# typeof(df_Y_X_transformed$lon_Y)
 # typeof(df_Y_X_transformed)
 
 df_downscaling <- as.data.frame(df_Y_X_transformed)
 head(df_downscaling)
 
-df_downscaling <- df_downscaling %>%
-  separate(
-    time,
-    into = c("date", "hour_minute_second"),
-    sep = " "
-  ) %>%
-  separate(
-    date,
-    into = c("year", "month", "day"),
-    sep = "-"
-  ) %>%
-  separate(
-    hour_minute_second,
-    into = c("hour", "minute", "second"),
-    sep = ":"
-  )
+# Keep time as a POSIXct object
+df_downscaling$time <- as.POSIXct(df_downscaling$time,
+                                  format = "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
+library(lubridate)
+df_downscaling$hour <- hour(df_downscaling$time)
+df_downscaling$minute <- minute(df_downscaling$time)
+df_downscaling$day <- day(df_downscaling$time)
+df_downscaling$month <- month(df_downscaling$time, label = FALSE)
+df_downscaling$year <- year(df_downscaling$time)
 head(df_downscaling)
-
-# Add site coordinates
-df_downscaling$coord_x_s <- location_gauges$Longitude[match(df_downscaling$lon, location_gauges$codestation)]
 ```
 
 
@@ -469,26 +464,36 @@ df_downscaling$coord_x_s <- location_gauges$Longitude[match(df_downscaling$lon, 
 library(keras)
 library(tensorflow)
 
-n_observations <- nrow(df_downscaling)
-n_sites <- 17
-n_predictors <- ncol(df_downscaling) - 1
+df_downscaling_all <- df_downscaling
+df_downscaling_nn <- df_downscaling_all[df_downscaling_all$Y_obs > 0, ]
 
-X_all <- df_downscaling[, -c("Y_obs")]
+# sum(is.na(df_downscaling$Y_obs))
+# sum(is.na(df_downscaling$lat_X))
+
+n_observations <- nrow(df_downscaling_nn)
+n_sites <- 17
+n_predictors <- ncol(df_downscaling_nn) - 2
+
+X_all <- df_downscaling_nn[, -c(which(names(df_downscaling_nn) == "Y_obs"),
+                           which(names(df_downscaling_nn) == "time"))]
+# sum(is.na(X_all))
 
 # Convert into a 3D array
 X_all <- array(unlist(X_all), dim = c(n_observations, n_sites, n_predictors))
 
 X.nn.k <- X_all  # Nn predictors for kappa
-X.X.nn.s <- X_all # Nn predictors for sigma
+X.nn.s <- X_all # Nn predictors for sigma
 
-Y_obs <- df_downscaling$Y_obs
+Y_obs <- df_downscaling_nn$Y_obs
 
 set.seed(123)
-train_idx <- sample(seq_len(n_observations, size = 0.8 * n_observations)
+train_idx <- sample(seq_len(n_observations), size = 0.8 * n_observations)
 Y.train <- Y_obs
 Y.valid <- Y_obs
 Y.train[-train_idx] <- -1e10
 Y.valid[train_idx] <- -1e10
+Y.train <- array(Y.train, dim = c(length(Y.train), 1))
+Y.valid <- array(Y.valid, dim = c(length(Y.valid), 1))
 
 # List of predictors
 X.s <- list("X.nn.s" = X.nn.s)
@@ -496,15 +501,38 @@ X.k <- list("X.nn.k" = X.nn.k)
 
 # Train the neural network model
 NN.fit <- eGPD.NN.train(Y.train, Y.valid, X.s, X.k, type = "MLP",
-      n.ep = 50, batch.size = 50, init.scale = 1, init.kappa = 1, init.xi = 0.1,
-      widths = c(6, 3), seed = 1)
+      n.ep = 50, batch.size = 20, init.scale = 0.25, init.kappa = 0.6, init.xi = 0.5,
+      widths = c(4, 2), seed = 1)
+
+NN.fit
+# we can change widths to reduce complexity (before c(6, 3))
+
+# Future predictions
+# row_df <- df_downscaling_nn[n_test + 10, , ]
+# X <- array(unlist(row_df[-c(which(names(row_df) == "Y_obs"),
+#                               which(names(row_df) == "time")]), 
+#             dim = c(1, n_sites, n_predictors))
+X.nn.s <- X
+X.nn.k <- X
+
+X.s <- list("X.nn.s" = X.nn.s)
+X.k <- list("X.nn.k" = X.nn.k)
 
 # Predict with the trained model
 out <- eGPD.NN.predict(X.s = X.s, X.k = X.k, NN.fit$model)
-
+# out$pred.xi
+# out$pred.kappa
 # Results
-print("sigma linear coefficients: "); print(round(out$lin.coeff_s,2))
-print("kappa linear coefficients: "); print(round(out$lin.coeff_k,2))
+print("sigma linear coefficients: "); print(round(out$pred.sigma, 5))
+print("kappa linear coefficients: "); print(round(out$pred.kappa,2))
+
+head(out$pred.sigma)
+
+sigma_site1 <- out$pred.sigma[, 1]
+
+year_idx <- which(df_downscaling$year == 2019)
+sigma_site1_2019 <- sigma_site1[year_idx]
+
 ```
 
 

@@ -60,41 +60,150 @@ btfgreen <- "#69b3a2"
 # LOCATION ---------------------------------------------------------------------
 ################################################################################
 # get location of each rain gauge
-# # setwd("./script")
-# location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
-# location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-#                                  "crbm", "archiw", "archie", "um35", "chu1",
-#                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
+# setwd("./script")
+location_gauges <- read.csv("./data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
+location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
+                                 "crbm", "archiw", "archie", "um35", "chu1",
+                                 "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
 
-# # Get distances matrix
-# dist_mat <- get_dist_mat(location_gauges)
-# df_dist <- reshape_distances(dist_mat)
+# Get distances matrix
+dist_mat <- get_dist_mat(location_gauges)
+df_dist <- reshape_distances(dist_mat)
 
-# ################################################################################
-# # DATA -------------------------------------------------------------------------
-# ################################################################################
-# # get rain measurements
-# # load data
-# load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
-# rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+################################################################################
+# DATA -------------------------------------------------------------------------
+################################################################################
+# get rain measurements
+# load data
+load("./data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 ```
+
+
+```{r, echo=FALSE}
+# put dates as index 
+rownames(rain) <- rain$dates
+# Remove the Time column to focus on site data
+rain <- rain[, -1]
+
+# Remove rows where all values are NA
+rain <- rain[rowSums(is.na(rain)) != ncol(rain), ]
+# head(rain)
+
+dist_matrix <- distm(
+location_gauges[, c("Longitude", "Latitude")],
+fun = distHaversine
+)
+
+colnames(dist_matrix) <- location_gauges$codestation
+rownames(dist_matrix) <- location_gauges$codestation
+
+dist_df <- as.data.frame(as.table(dist_matrix))
+names(dist_df) <- c("Site1", "Site2", "Distance")
+
+dist_df <- dist_df[as.character(dist_df$Site1) != as.character(dist_df$Site2), ]
+
+autocorr_pairs <- data.frame(
+Site1 = location_gauges$codestation,
+Site2 = location_gauges$codestation,
+Distance = 0
+)
+
+
+# Combine the original distance dataframe with autocorr_pairs
+dist_df <- rbind(dist_df, autocorr_pairs)
+
+# Define breaks with 0 explicitly included at the beginning
+breaks <- quantile(dist_df$Distance,
+                     probs = seq(0, 1, length.out = 12))
+
+dist_df$Class <- cut(dist_df$Distance, breaks = breaks,
+                       labels = 0:10, include.lowest = TRUE)
+
+# from breaks get intervals for each class
+class_intervals <- data.frame(
+  Class = 0:10,
+  Interval = paste0("[", round(breaks[-length(breaks)],0), ", ", round(breaks[-1],0), "]")
+)
+
+# Print the resulting class intervals
+print(class_intervals)
+
+
+# Calculate the frequency of distances in each class
+class_frequency <- table(dist_df$Class)
+
+# Create a data frame with class intervals, frequency, and the width for each class
+class_interval_summary <- data.frame(
+  Class = as.integer(names(class_frequency)),
+  Frequency = as.integer(class_frequency),
+  IntervalStart = breaks[-length(breaks)],
+  IntervalEnd = breaks[-1],
+  IntervalWidth = breaks[-1] - breaks[-length(breaks)]
+)
+
+
+# Now create the data for geom_rect
+df_for_rect <- data.frame(
+  xmin = class_interval_summary$IntervalStart,  # Starting position (x-axis)
+  xmax = class_interval_summary$IntervalEnd,    # Ending position (x-axis)
+  ymin = 0,                                     # Bottom of the bars (y-axis)
+  ymax = class_interval_summary$Frequency,       # Height of the bars (y-axis)
+  Class = class_interval_summary$Class,          # Class for coloring
+  IntervalWidth = class_interval_summary$IntervalWidth  # For sizing
+)
+
+# Plot the histogram using geom_rect for variable bar widths
+ggplot(df_for_rect) +
+  geom_rect(aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), colour = "#f3eeee", fill=btfgreen, alpha=0.5) +
+  theme_minimal() +
+  labs(
+    x = "Distance Class Interval",
+    y = "Frequency (number of pairs)"
+  ) +
+  scale_x_continuous(breaks = breaks, labels = round(breaks, 0)) +  # Custom x-axis breaks
+  btf_theme
+
+# save plot
+ggsave("./images/histogram_distance_class_intervals.png", width = 6, height = 4)
+
+# Create matrix of radius
+radius_intervals <- unique(breaks)
+radius <- as.integer(radius_intervals)
+rad_mat <- dist_mat
+# Loop through radius and set distances in matrix
+for (i in 2:length(radius)) {
+  curr_radius <- radius[i]
+  prev_radius <- radius[i - 1]
+  rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
+  # rad_mat[dist_mat > curr_radius] <- Inf
+}
+
+rad_mat[dist_mat == 0] <- 0
+# Make a triangle
+rad_mat[lower.tri(rad_mat)] <- NA
+# in km
+rad_mat <- rad_mat * 1000 # change les resultats...
+
+```
+
 
 
 ```{r, fig.width = 4, fig.height = 3, echo=FALSE, fig.cap="Histogram of distance classes"}
 # # spatial structure with an almost constant amount of pairs in each intervals
-# df_dist_order <- df_dist[order(df_dist$value), ]
-# num_intervals <- 10
-# quantiles_rad <- quantile(df_dist_order$value,
-#                             probs = seq(0, 1, length.out = num_intervals + 1))
-# radius_intervals <- unique(quantiles_rad)
-# radius <- as.integer(radius_intervals)
-# radius[length(radius)] <- 1550
-# dist_counts <- table(cut(df_dist$value, breaks = radius))
+df_dist_order <- df_dist[order(df_dist$value), ]
+num_intervals <- 15
+quantiles_rad <- quantile(df_dist_order$value,
+                            probs = seq(0, 1, length.out = num_intervals + 1))
+radius_intervals <- unique(quantiles_rad)
+radius <- as.integer(radius_intervals)
+radius[length(radius)] <- 1550
+dist_counts <- table(cut(df_dist$value, breaks = radius))
 
-# # Get dataframe for the histogram plot
-# df_hist <- data.frame(dist_counts)
+# Get dataframe for the histogram plot
+df_hist <- data.frame(dist_counts)
 
-# colnames(df_hist) <- c("Interval", "Count")
+colnames(df_hist) <- c("Interval", "Count")
 
 # df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
 # df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
@@ -111,21 +220,21 @@ btfgreen <- "#69b3a2"
 
 # histradius
 
-# # Create matrix of radius
-# rad_mat <- dist_mat
-# # Loop through radius and set distances in matrix
-# for (i in 2:length(radius)) {
-#   curr_radius <- radius[i]
-#   prev_radius <- radius[i - 1]
-#   rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
-#   rad_mat[dist_mat > curr_radius] <- Inf
-# }
+# Create matrix of radius
+rad_mat <- dist_mat
+# Loop through radius and set distances in matrix
+for (i in 2:length(radius)) {
+  curr_radius <- radius[i]
+  prev_radius <- radius[i - 1]
+  rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
+  rad_mat[dist_mat > curr_radius] <- Inf
+}
 
-# rad_mat[dist_mat == 0] <- 0
-# # Make a triangle
-# rad_mat[lower.tri(rad_mat)] <- NA
-# # in km
-# rad_mat <- rad_mat / 1000 # change les resultats...
+rad_mat[dist_mat == 0] <- 0
+# Make a triangle
+rad_mat[lower.tri(rad_mat)] <- NA
+# in km
+rad_mat <- rad_mat / 1000 # change les resultats...
 ```
 
 <!-- 
@@ -135,31 +244,25 @@ WLSE method from Buhl et al. (2019). -->
 
 ```{r, echo=FALSE, show=FALSE}
 # get the empirical chi
-# q <- 0.998
-# rain_new <- rain[-1]
-# rain_nozeros <- rain_new[rowSums(rain_new) > 0, ] #TODO verif ca 
-# # rain_no_zeros <- df[!apply(df == 0, 1, any), ]
+rain_nozeros <- rain[rowSums(rain) > 0, ]
+# reindex
+rownames(rain_nozeros) <- 1:nrow(rain_nozeros)
 
-# threshold <- quantile(rain_new$cnrs, probs = q, na.rm = T)
+# Spatial chi
+q <- 0.998
+chispa <- spatial_chi(rad_mat, rain, quantile = q)
+spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
 
-# # get the quantile from threshold in the data without 0
-# empirical_cdf <- ecdf(rain_nozeros$cnrs)
-# quantile_in_nozeros <- empirical_cdf(threshold)
+tmax <- 10
+q <- 0.998
+chitemp <- temporal_chi(rain, tmax = tmax, quantile = q)
+temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(rain_nozeros),
+                                      weights = "exp", summary = F)
 
-# q <- 0.96
-# chispa <- spatial_chi(rad_mat, rain_nozeros, quantile = q)
-# spa_estim <- get_estimate_variospa(chispa, weights = "exp", summary = F)
-
-# tmax <- 10
-# q <- 0.96
-# chitemp <- temporal_chi(rain_new, tmax = tmax, quantile = q)
-# temp_estim <- get_estimate_variotemp(chitemp, tmax, npoints = ncol(rain),
-#                                       weights = "exp", summary = F)
-
-# df_result <- data.frame(beta1 =  spa_estim[1],
-#                         beta2 = temp_estim[1],
-#                         alpha1 = spa_estim[2],
-#                         alpha2 = temp_estim[2])
+df_result <- data.frame(beta1 =  spa_estim[1],
+                        beta2 = temp_estim[1],
+                        alpha1 = spa_estim[2],
+                        alpha2 = temp_estim[2])
 
 # colnames(df_result) <- c("beta1", "alpha1", "beta2", "alpha2")
 

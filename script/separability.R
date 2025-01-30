@@ -38,7 +38,7 @@ btfgreen <- "#69b3a2"
 # LOCATION ---------------------------------------------------------------------
 ################################################################################
 # get location of each rain gauge
-location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
+location_gauges <- read.csv("./data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
 location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                                  "crbm", "archiw", "archie", "um35", "chu1",
                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
@@ -52,109 +52,17 @@ df_dist <- reshape_distances(dist_mat)
 ################################################################################
 # get rain measurements
 # load data
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+load("./data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
 rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+
+# put dates as index 
+rownames(rain) <- rain$dates
 # Remove the Time column to focus on site data
 rain <- rain[, -1]
 
-# Compute covariance matrix
-calculate_spatio_temporal_covariance <- function(data) {
-  n_sites <- ncol(data)
-#   n_times <- nrow(data)
-
-  # Initialize a covariance matrix
-  cov_matrix <- matrix(0, n_sites, n_sites)
-
-  # Calculate covariance between each pair of sites across all time points
-  for (i in 1:n_sites) {
-    for (j in 1:n_sites) {
-      # remove NA for the pair of sites
-      data_pair <- na.omit(data.frame(data[[i]], data[[j]]))
-      cov_matrix[i, j] <- cov(data_pair[[1]], data_pair[[2]])
-    }
-  }
-  return(cov_matrix)
-}
-
-cov_matrix <- calculate_spatio_temporal_covariance(rain)
-
-plot(cov_matrix)
-
-temporal_covariances <- sapply(rain, function(site) {
-  site <- na.omit(site)
-  cov(site, site)
-})
-
-print(temporal_covariances)
-plot(temporal_covariances)
-
-transposed_data <- t(rain)
-
-spatial_covariances <- apply(transposed_data, 2, function(instant) {
-  instant <- na.omit(instant)
-  cov(instant, instant)
-})
-
-plot(spatial_covariances)
-
-# Separability asumption
-C_h_t <- spatial_covariances + temporal_covariances
-
-
-library(geosphere)
-
-# Obtenir les distances géodésiques
-dist_matrix_geo <- distm(
-  location_gauges[, c("Longitude", "Latitude")],
-  fun = distHaversine
-)
-
-colnames(dist_matrix_geo) <- location_gauges$codestation
-rownames(dist_matrix_geo) <- location_gauges$codestation
-
-# Convertir en dataframe
-dist_df <- as.data.frame(as.table(dist_matrix_geo))
-names(dist_df) <- c("Site1", "Site2", "Distance")
-
-dist_df <- dist_df[as.character(dist_df$Site1) != as.character(dist_df$Site2), ]
-
-breaks <- seq(min(dist_df$Distance), max(dist_df$Distance), length.out = 11)
-dist_df$Class <- cut(dist_df$Distance, breaks = breaks, labels = 1:10, include.lowest = TRUE)
-table(dist_df$Class)
-
-dist_df$Class <- cut(dist_df$Distance, breaks = quantile(dist_df$Distance, probs = seq(0, 1, length.out = 11)), 
-                     labels = 1:10, include.lowest = TRUE)
-
-table(dist_df$Class)
-
-mean_dist <- aggregate(Distance ~ Class, data = dist_df, FUN = mean)
-
-labels <- 1:10
-
-df_lags$class <- cut(lags_h, breaks = breaks, labels = labels, include.lowest = TRUE)
-
-table(df_lags$class)
-
-kmeans_result <- kmeans(h_vect, centers = 10)
-
-df_lags$class <- factor(kmeans_result$cluster)
-
-
-lags_tau <- 0:10 
-
-results <- expand.grid(h = lags_h, tau = lags_tau)
-results$C_h_tau <- mapply(function(h, tau) spatio_temporal_covariance(site_data, h, tau),
-                          results$h, results$tau)
-results$C_S_h <- sapply(results$h, function(h) spatial_covariance(site_data, h))
-results$C_T_tau <- sapply(results$tau, function(tau) temporal_covariance(site_data, tau))
-results$Sum_C_S_T <- results$C_S_h + results$C_T_tau
-
-# C(h, tau) ≈ C_S(h) + C_T(tau) ???
-# results$Equality <- abs(results$C_h_tau - results$Sum_C_S_T) < 1e-6
-
-print(results)
-
-library(geosphere)
+# Remove rows where all values are NA
+rain <- rain[rowSums(is.na(rain)) != ncol(rain), ]
+head(rain)
 
 dist_matrix <- distm(
 location_gauges[, c("Longitude", "Latitude")],
@@ -180,9 +88,63 @@ breaks <- quantile(dist_df$Distance[dist_df$Distance > 0],
 dist_df$Class <- cut(dist_df$Distance, breaks = c(0, breaks),
                        labels = 0:10, include.lowest = TRUE)
 
+# from breaks get intervals for each class
+class_intervals <- data.frame(
+  Class = 0:10,
+  Interval = paste0("(", round(breaks, 0), ", ", round(c(breaks[-1], Inf), 0), "]")
+  )
 
-spatio_temporal_covariance <- function(data, dist_df, tau_values,
-                                        num_classes = 10) {
+
+# Calculate the frequency of distances in each class
+class_frequency <- table(dist_df$Class)
+
+# Create a data frame with class intervals, frequency, and the width for each class
+class_interval_summary <- data.frame(
+  Class = as.integer(names(class_frequency)),
+  Frequency = as.integer(class_frequency),
+  IntervalStart = breaks[class_intervals$Class + 1],  # Start of each interval
+  IntervalEnd = c(breaks[-1], Inf),  # End of each interval
+  IntervalWidth = c(diff(breaks), Inf)  # Width of each interval
+)
+
+
+# Now create the data for geom_rect
+df_for_rect <- data.frame(
+  xmin = class_interval_summary$IntervalStart,  # Starting position (x-axis)
+  xmax = class_interval_summary$IntervalEnd,    # Ending position (x-axis)
+  ymin = 0,                                     # Bottom of the bars (y-axis)
+  ymax = class_interval_summary$Frequency,       # Height of the bars (y-axis)
+  Class = class_interval_summary$Class,          # Class for coloring
+  IntervalWidth = class_interval_summary$IntervalWidth  # For sizing
+)
+
+# Load ggplot2 for visualization
+library(ggplot2)
+
+# Plot the histogram using geom_rect for variable bar widths
+ggplot(df_for_rect) +
+  geom_rect(aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), colour = "#f3eeee", fill=btfgreen, alpha=0.5) +
+  theme_minimal() +
+  labs(
+    x = "Distance Class Interval",
+    y = "Frequency (number of pairs)"
+  ) +
+  scale_x_continuous(breaks = breaks, labels = round(breaks, 0)) +  # Custom x-axis breaks
+  btf_theme
+
+# save plot
+ggsave("./images/separability/histogram_distance_class_intervals.png", width = 6, height = 4)
+
+
+# Plot
+ggplot(data, aes(ymin = 0)) + 
+    geom_rect(aes(xmin = left, xmax = right, ymax = value, colour = group, fill = group)) +
+    xlab("number of obs") + 
+    ylab("value") +
+    theme_ipsum() +
+    theme(legend.position="none") 
+
+spatio_temporal_covariance <- function(data, dist_df, tau_values, num_classes = 10) {
   num_classes <- length(unique(dist_df$Class)) - 1
 
   class_means <- aggregate(Distance ~ Class, data = dist_df, mean)
@@ -194,9 +156,10 @@ spatio_temporal_covariance <- function(data, dist_df, tau_values,
   for (tau in tau_values) {
     for (class in 0:num_classes) {
       pairs <- dist_df[dist_df$Class == class, ]
-
-      if (class == 0) {
-        covariances <- sapply(1:nrow(pairs), function(i) {
+      
+      covariances <- sapply(1:nrow(pairs), function(i) {
+        if (class == 0) {
+          # For autocovariance (same site)
           site <- as.integer(pairs$Site1[i])
 
           if (tau >= nrow(data)) return(NA)
@@ -204,11 +167,8 @@ spatio_temporal_covariance <- function(data, dist_df, tau_values,
           original <- data[1:(nrow(data) - tau), site, drop = TRUE]
           shifted <- data[(1 + tau):nrow(data), site, drop = TRUE]
 
-          safe_cov <- function(x, y) cov(x, y, use = "complete.obs")
-          safe_cov(original, shifted)
-        })
-      } else {
-        covariances <- sapply(1:nrow(pairs), function(i) {
+        } else {
+          # For cross-covariance (different sites)
           site1 <- as.integer(pairs$Site1[i])
           site2 <- as.integer(pairs$Site2[i])
 
@@ -216,11 +176,13 @@ spatio_temporal_covariance <- function(data, dist_df, tau_values,
 
           original <- data[1:(nrow(data) - tau), site1, drop = TRUE]
           shifted <- data[(1 + tau):nrow(data), site2, drop = TRUE]
+        }
 
-          safe_cov <- function(x, y) cov(x, y, use = "complete.obs")
-          safe_cov(original, shifted)
-        })
-      }
+        # Only calculate covariance for non-zero pairs
+        valid_indices <- !(original == 0 | shifted == 0)
+        safe_cov <- function(x, y) cov(x[valid_indices], y[valid_indices], use = "complete.obs")
+        safe_cov(original, shifted)
+      })
 
       mean_cov <- mean(covariances, na.rm = TRUE)
       results$Covariance[results$Class == class & results$Tau == tau] <- mean_cov
@@ -235,3 +197,240 @@ spatio_temporal_covariance <- function(data, dist_df, tau_values,
   
   return(results)
 }
+
+
+spatial_covariance <- function(data, dist_df) {
+  num_classes <- length(unique(dist_df$Class)) - 1
+  
+  class_means <- aggregate(Distance ~ Class, data = dist_df, mean)
+  
+  results <- data.frame(Class = 0:num_classes, covspa = NA, h_mean = NA)
+  
+  for (class in 0:num_classes) {
+    pairs <- dist_df[dist_df$Class == class, ]
+    
+    covariances <- sapply(1:nrow(pairs), function(i) {
+      if (class == 0) {
+        # Compute covariance for the same site (i.e., autocovariance)
+        site <- as.integer(pairs$Site1[i])
+        original <- data[, site]
+        shifted <- data[, site]
+        
+      } else {
+        # Compute covariance between different sites
+        site1 <- as.integer(pairs$Site1[i])
+        site2 <- as.integer(pairs$Site2[i])
+        original <- data[, site1]
+        shifted <- data[, site2]
+      }
+      
+      # Only calculate covariance for non-zero pairs
+      valid_indices <- !(original == 0 | shifted == 0)
+      safe_cov <- function(x, y) cov(x[valid_indices], y[valid_indices], use = "complete.obs")
+      safe_cov(original, shifted)
+    })
+    
+    mean_cov <- mean(covariances, na.rm = TRUE)
+    results$covspa[results$Class == class] <- mean_cov
+    
+    if (class > 0) {
+      results$h_mean[results$Class == class] <- class_means$Distance[class_means$Class == class]
+    } else {
+      results$h_mean[results$Class == class] <- 0
+    }
+  }
+  
+  return(results)
+}
+
+temporal_covariance <- function(data, tau_values) {
+  results <- data.frame(Tau = tau_values, covtemp = NA)
+  
+  for (tau in tau_values) {
+    covariances <- sapply(1:ncol(data), function(site) {
+      if (tau >= nrow(data)) return(NA)
+      
+      original <- data[1:(nrow(data) - tau), site, drop = TRUE]
+      shifted <- data[(1 + tau):nrow(data), site, drop = TRUE]
+      
+      # Only calculate covariance for non-zero pairs
+      valid_indices <- !(original == 0 | shifted == 0)
+      safe_cov <- function(x, y) cov(x[valid_indices], y[valid_indices], use = "complete.obs")
+      safe_cov(original, shifted)
+    })
+    
+    # Compute the mean covariance for the given tau
+    mean_cov <- mean(covariances, na.rm = TRUE)
+    results$covtemp[results$Tau == tau] <- mean_cov
+  }
+  
+  return(results)
+}
+
+
+spatial_results <- spatial_covariance(rain, dist_df)
+ggplot(spatial_results, aes(x = h_mean, y = covspa)) +
+  geom_point() + geom_line() +
+  ggtitle("Estimated Spatial Covariance C_S(h)")
+
+
+tau_values <- 0:10  # Define the range of temporal lags to compute covariance
+temporal_results <- temporal_covariance(rain, tau_values)
+
+# Plot temporal covariance function C_T(τ)
+ggplot(temporal_results, aes(x = Tau, y = covtemp)) +
+  geom_point() + geom_line() +
+  ggtitle("Estimated Temporal Covariance C_T(τ)")
+
+
+C_plus <- spatial_results$covspa + temporal_results$covtemp
+# spatial_results$C_plus <- C_plus
+
+# # Plot the sum of spatial and temporal covariances
+# ggplot(spatial_results, aes(x = h_mean, y = C_plus)) +
+#   geom_point() + geom_line() +
+#   ggtitle("Estimated Sum of Spatial and Temporal Covariances C_S(h) + C_T(τ)")
+
+tau_values <- 0:10
+results <- spatio_temporal_covariance(rain, dist_df, tau_values)
+
+results
+
+
+df_res <- results
+
+# New dataframe with C(h, tau), C_S + C_T, and the class intervals and tau
+df_res <- merge(df_res, class_intervals, by = "Class")
+df_res <- merge(df_res, temporal_results, by = "Tau")
+df_res <- merge(df_res, spatial_results, by = "Class")
+
+# remove h_mean.y column
+df_res <- df_res[, -which(names(df_res) == "h_mean.y")]
+
+# rename h_mean.x to h_mean
+colnames(df_res)[colnames(df_res) == "h_mean.x"] <- "h_mean"
+
+df_res$covsep <- df_res$covspa + df_res$covtemp
+
+# reorder columns by class and tau
+df_res <- df_res[order(df_res$Tau), ]
+
+
+
+# same against tau for fixed h
+class <- 8
+df_res_h <- df_res[df_res$Class == class, ]
+interval <- unique(df_res_h$Interval)
+ggplot(df_res_h, aes(x = Tau)) +
+  geom_line(aes(y = Covariance, color = "C(h,tau)"), size = 1) +  # Plot C(h,tau)
+  geom_point(aes(y = Covariance, color = "C(h,tau)"), size = 2) +  # Plot C(h,tau)
+  geom_line(aes(y = covsep, color = "C_s(h) + C_t(tau)"), size = 1, linetype = "dashed") +  # Plot covsep (C_s(h) + C_t(tau))
+  geom_point(aes(y = covsep, color = "C_s(h) + C_t(tau)"), size = 2) +  # Plot covsep points
+  labs(x = expression("Time lag" ~ tau ~ "(5 minutes)"),  # LaTeX for x-axis
+       y = expression("Covariance"),  # LaTeX for y-axis
+       color = "Covariance Type") +
+  scale_color_manual(values = c("C(h,tau)" = btfgreen, "C_s(h) + C_t(tau)" = "#b68080"), labels = c(TeX(r"($C(h, \tau)$)"), TeX(r"($C(h,0) + C(0,\tau)$)"))) +
+  theme_minimal() +
+  ggtitle(paste("Covariance for Class = ", interval)) # LaTeX for title
+
+# save plot
+ggsave(paste0("./images/separability/covariances_against_tau_class_", class, ".png"), width = 6, height = 4)
+
+# for a fixed tau, plot C(h, tau) against h
+tau <- 6
+df_res_tau <- df_res[df_res$Tau == tau, ]
+
+ggplot(df_res_tau, aes(x = h_mean)) +
+  geom_line(aes(y = Covariance, color = "C(h,tau)"), size = 1) +  # Plot C(h,tau)
+  geom_point(aes(y = Covariance, color = "C(h,tau)"), size = 2) +  # Plot C(h,tau)
+  geom_line(aes(y = covsep, color = "C_s(h) + C_t(tau)"), size = 1, linetype = "dashed") +  # Plot covsep (C_s(h) + C_t(tau))
+  geom_point(aes(y = covsep, color = "C_s(h) + C_t(tau)"), size = 2) +  # Plot covsep points
+  labs(x = expression("Distance" ~ h ~ "(meters)"),  # LaTeX for x-axis
+       y = expression("Covariance"),  # LaTeX for y-axis
+       color = "Covariance Type") +
+  scale_color_manual(values = c("C(h,tau)" = btfgreen, "C_s(h) + C_t(tau)" = "#b68080"), labels = c(TeX(r"($C(h, \tau)$)"), TeX(r"($C(h,0) + C(0,\tau)$)"))) +
+  theme_minimal() +
+  ggtitle(expression(paste("Covariance for Time Lag = ", tau, " minutes")))  # LaTeX for title
+
+# save plot
+ggsave(paste0("./images/separability/covariances_against_h_tau_", tau, ".png"), width = 6, height = 4)
+
+# Rename the class labels with class intervals
+results <- merge(results, class_intervals, by = "Class")
+
+# Plot the results C(h, tau) vs. time lag
+ggplot(results, aes(x = Tau, y = Covariance, color = factor(Interval))) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Time lag (minutes)",
+       y = "Covariance",
+       color = "Distance class") +
+  theme_minimal()
+
+# Ensure Interval is a factor with the correct order
+results$Interval <- factor(results$Interval, levels = unique(results$Interval), ordered = TRUE)
+
+# Plot with correct legend order
+ggplot(results, aes(x = Tau, y = Covariance, color = Interval)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Time lag (minutes)",
+       y = "Covariance",
+       color = "Distance class") +
+  scale_color_manual(values = brewer.pal(n = 11, name = "Paired")) +
+  btf_theme
+
+# Save plot
+ggsave("./images/separability/covariances_against_tau.png", width = 6, height = 4)
+
+library(RColorBrewer)
+# Plot the results C(h, tau) vs. distance
+ggplot(results, aes(x = h_mean, y = Covariance, color = factor(Tau))) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Distance (meters)",
+       y = "Covariance",
+       color = "Time lag (5 minutes)") +
+  scale_color_manual(values = brewer.pal(n = 11, name = "Paired")) +
+  btf_theme
+
+ggsave("./images/separability/covariances_against_h.png", width = 6, height = 4)
+
+
+C_h <- aggregate(Covariance ~ Class, data = results, FUN = mean)
+colnames(C_h) <- c("Class", "C_h")
+
+C_tau <- aggregate(Covariance ~ Tau, data = results, FUN = mean)
+colnames(C_tau) <- c("Tau", "C_tau")
+
+# Plot the results C(h) vs. distance
+ggplot(C_h, aes(x = Class, y = C_h)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Distance class",
+       y = "Covariance") +
+  btf_theme
+
+# Plot the results C(tau) vs. time lag
+ggplot(C_tau, aes(x = Tau, y = C_tau)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Time lag (minutes)",
+       y = "Covariance") +
+  btf_theme
+
+
+# Merge C_h and C_tau into results
+results <- merge(results, C_h, by = "Class")
+results <- merge(results, C_tau, by = "Tau")
+
+# Compute R(h, τ)
+results$R_h_tau <- results$Covariance / (results$C_h  + results$C_tau)
+
+ggplot(results, aes(x = h_mean, y = R_h_tau, color = factor(Tau))) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Distances (meters)",
+       y = expression(R(h, tau)),
+       color = "Time lag (5 minutes)" ) +
+  theme_minimal()
