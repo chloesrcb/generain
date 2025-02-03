@@ -279,8 +279,10 @@ We consider 59 pixels in the Montpellier area.
 ```{r, echo=FALSE}
 # setwd("./script")
 # load data
-df_comephore <- read.csv("../data/comephore/inside_mtp.csv", sep = ",")
-loc_px <- read.csv("../data/comephore/loc_pixels_mtp.csv", sep = ",")
+df_comephore <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
+# put date in index
+rownames(df_comephore) <- df_comephore$date
 # ncol(df_comephore) # nb of pixels + dates
 comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix
@@ -472,139 +474,234 @@ kable(df_result, format = "latex") %>%
 
 ```{r, echo=FALSE}
 # Function to choose conditional points
-choose_conditional_points <- function(sites_coords, data, quantile,
-                                      min_spatial_dist, min_time_dist) {
-  # Ensure the quantile is within range
-  if (quantile < 0 || quantile > 1) {
-    stop("Quantile must be between 0 and 1.")
-  }
+# choose_conditional_points <- function(sites_coords, data, quantile,
+#                                       min_spatial_dist, min_time_dist) {
+#   # Ensure the quantile is within range
+#   if (quantile < 0 || quantile > 1) {
+#     stop("Quantile must be between 0 and 1.")
+#   }
 
-  # Uniformize the data
-  data_unif <- data
-  for (i in 1:ncol(data)) {
-    data_unif[, i] <- rank(data[, i]) / (nrow(data) + 1)
-  }
+#   # Uniformize the data
+#   data_unif <- data
+#   for (i in 1:ncol(data)) {
+#     data_unif[, i] <- rank(data[, i]) / (nrow(data) + 1)
+#   }
 
-  # Identify valid (site, time) where X_s,t > quantile
-  valid_indices <- which(as.matrix(data_unif) > quantile, arr.ind = TRUE)
+#   # Identify valid (site, time) where X_s,t > quantile
+#   valid_indices <- which(as.matrix(data_unif) > quantile, arr.ind = TRUE)
 
-  if (nrow(valid_indices) == 0) {
-    stop("No points exceed the given quantile for any time step.")
-  }
+#   if (nrow(valid_indices) == 0) {
+#     stop("No points exceed the given quantile for any time step.")
+#   }
 
-  # Initialize the selected points
-  selected_points <- list()
+#   # Initialize the selected points
+#   selected_points <- list()
 
-  # Variable to store the last selected point
-  last_selected <- NULL
+#   # Variable to store the last selected point
+#   last_selected <- NULL
 
-  # Iterate over valid indices to select points
-  for (i in seq_len(nrow(valid_indices))) {
-    current_index <- valid_indices[i, ] # Current index (time, site)
-    current_point <- list(
-      s0 = sites_coords[current_index[2], ],
-      t0 = as.numeric(current_index[1])
-    )
+#   # Iterate over valid indices to select points
+#   for (i in seq_len(nrow(valid_indices))) {
+#     current_index <- valid_indices[i, ] # Current index (time, site)
+#     current_point <- list(
+#       s0 = sites_coords[current_index[2], ],
+#       t0 = as.numeric(current_index[1])
+#     )
 
-    if (is.null(last_selected)) {
-      selected_points <- append(selected_points, list(current_point))
-      last_selected <- current_point # Update last selected point
-    } else {
-      # Check if this point is valid given previously selected points
-      # and the minimum spatial and time distances
-      dist_spa <- distHaversine(current_point$s0, last_selected$s0) / 1000
-      dist_time <- abs(current_point$t0 - last_selected$t0)
-      if (dist_spa >= min_spatial_dist || dist_time >= min_time_dist) {
-        selected_points <- append(selected_points, list(current_point))
-        last_selected <- current_point  # Update last selected point
+#     if (is.null(last_selected)) {
+#       selected_points <- append(selected_points, list(current_point))
+#       last_selected <- current_point # Update last selected point
+#     } else {
+#       # Check if this point is valid given previously selected points
+#       # and the minimum spatial and time distances
+#       dist_spa <- distHaversine(current_point$s0, last_selected$s0) / 1000
+#       dist_time <- abs(current_point$t0 - last_selected$t0)
+#       if (dist_spa >= min_spatial_dist || dist_time >= min_time_dist) {
+#         selected_points <- append(selected_points, list(current_point))
+#         last_selected <- current_point  # Update last selected point
+#       }
+#     }
+#   }
+
+#   if (length(selected_points) == 0) {
+#     stop("No spatio-temporal points satisfy the quantile, the minimum spatial 
+#           and/or time distances.")
+#   }
+
+#   return(selected_points)
+# }
+
+
+
+select_extreme_episodes <- function(sites_coords, data, quantile,
+                                    min_spatial_dist, min_time_dist,
+                                    delta, n_max_episodes, beta = 0) {
+  # get maximal value
+  max_value <- max(na.omit(data))
+  max_indices <- which(data == max_value, arr.ind = TRUE)
+  data_temp <- data # copy of the data
+
+  # initialize the selected points list
+  selected_points <- data.frame(s0 = character(), t0 = integer())
+
+  i <- 0
+  nb_episode <- 0 # number of episodes (selected points)
+  while (nb_episode < n_max_episodes && max_value > quantile) {
+    best_candidate <- NULL
+
+    for (idx in 1:nrow(max_indices)) {
+      s0_candidate <- colnames(data)[max_indices[idx, 2]]
+      t0_candidate <- max_indices[idx, 1]
+
+      if (nrow(selected_points) == 0) { # first episode
+        best_candidate <- data.frame(s0 = s0_candidate, t0 = t0_candidate)
+        nb_episode <- nb_episode + 1
+        break
+      } else {
+        # get distances and time differences within the selected points
+        distances <- distHaversine(sites_coords[selected_points$s0, ],
+                                   sites_coords[s0_candidate, ]) / 1000
+        time_differences <- abs(selected_points$t0 - t0_candidate)
+
+        # check if the candidate is valid given the minimum spatial and
+        # time distances
+        if (all(distances >= min_spatial_dist) ||
+                                      all(time_differences >= min_time_dist)) {
+          best_candidate <- data.frame(s0 = s0_candidate, t0 = t0_candidate)
+          nb_episode <- nb_episode + 1
+          break # stop the loop
+        } else { # not valid
+          # "remove" the candidate from the data to avoid selecting it again
+          data_temp[t0_candidate, s0_candidate] <- -Inf
+        }
       }
     }
-  }
 
-  if (length(selected_points) == 0) {
-    stop("No spatio-temporal points satisfy the quantile, the minimum spatial 
-          and/or time distances.")
-  }
+    # add the best candidate to the selected points
+    selected_points <- rbind(selected_points, best_candidate)
 
+    # "remove" the episode from the data
+    t_inf <- best_candidate$t0 - (delta - 1) - beta
+    t_sup <- best_candidate$t0 + (delta - 1) + beta
+    data_temp[t_inf:t_sup, best_candidate$s0] <- -Inf
+
+    # get the new maximal value
+    max_value <- max(na.omit(data_temp))
+    max_indices <- which(data_temp == max_value, arr.ind = TRUE)
+    i <- i + 1
+  }
   return(selected_points)
 }
+
+get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
+  # initialize the list of episodes
+  episodes <- list()
+  for (i in 1:nrow(selected_points)) {
+    # s0 <- selected_points$s0[i]
+    t0 <- selected_points$t0[i]
+    t_inf <- t0 - (delta - 1) - beta
+    t_sup <- t0 + (delta - 1) + beta
+    episode <- data[t_inf:t_sup, ] # get the episode
+    episodes <- append(episodes, list(episode))
+  }
+  return(episodes)
+}
+
+```
+
+```{r, echo=FALSE}
+library(geosphere)
+min_spatial_dist <- 2  # in km
+min_time_dist <- 5  # in hours
+delta <- 15 # step for the episode before and after the max value
+
+# quantile_non_standardise <- quantile(comephore$p142, 0.98)
+# quantile_standardise <- quantile(rank(comephore$p142) / (nrow(comephore) + 1), 0.98)
+# quantile_standardise <- quantile(data_standardise$p142, 0.98)
+# quantile <- quantile_standardise
+# data_standardise <- as.data.frame(scale(comephore))
+# standardize with rank
+# data_standardise <- rank[data_standardise] / (nrow(data_standardise) + 1)
+
+# Get the selected episodes
+selected_points <- select_extreme_episodes(sites_coords, comephore, 1,
+                                           min_spatial_dist, min_time_dist,
+                                           delta = 15, n_max_episodes = 1000)
+list_episodes <- get_extreme_episodes(selected_points, comephore,  delta = 15)
+
+s0_list <- selected_points$s0
+t0_list <- selected_points$t0
 ```
 
 ```{r, echo=TRUE}
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
+rownames(sites_coords) <- loc_px$pixel_name
 
-# remove 0
-rain_new <- comephore_nozeros
-quantile <- 0.96
-min_spatial_dist <- 4 # in km
-min_time_dist <- 24*30 # in hours
+# # remove 0
+# rain_new <- comephore_nozeros
+# quantile <- 0.96
+# min_spatial_dist <- 4 # in km
+# min_time_dist <- 24*30 # in hours
 
-selected_points <- choose_conditional_points(
-  sites_coords = sites_coords,
-  data = rain_new,
-  quantile = quantile,
-  min_spatial_dist = min_spatial_dist,
-  min_time_dist = min_time_dist
-)
+# selected_points <- choose_conditional_points(
+#   sites_coords = sites_coords,
+#   data = rain_new,
+#   quantile = quantile,
+#   min_spatial_dist = min_spatial_dist,
+#   min_time_dist = min_time_dist
+# )
 
-# Extract s0 and t0
-s0_list <- lapply(selected_points, `[[`, "s0")
-s_unique <- unique(s0_list)
-t0_list <- lapply(selected_points, `[[`, "t0")
+# # Extract s0 and t0
+# s0_list <- lapply(selected_points, `[[`, "s0")
+# s_unique <- unique(s0_list)
+# t0_list <- lapply(selected_points, `[[`, "t0")
 
-length(s0_list)
-length(s_unique)
+# length(s0_list)
+# length(s_unique)
+
 ```
 
-We have `r length(s0_list)` conditional points.
-
-## Get corresponding lags and excesses
+We have `r length(s0_list)` conditional points. We compute the lags and excesses for each of them.
 
 ```{r, echo=FALSE}
 library(parallel)
-
-rain_new <- comephore_nozeros
-# Get lags and excesses for each conditional point
-list_results <- mclapply(1:length(s0_list), function(i) {
-  s0 <- s0_list[[i]]
-  t0 <- t0_list[[i]]
-  lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 100,
+quantile <- 1
+list_results <- mclapply(1:length(s0), function(i) {
+  s0 <- s0_list[i]
+  s0_coords <- sites_coords[s0, ]
+  t0 <- t0_list[i]
+  episode <- selected_episodes[[i]]
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0, tau_max = 10,
                                       latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
-  excesses <- empirical_excesses(rain_new, q, lags, type = "rpareto")
+  excesses <- empirical_excesses(episode, quantile, lags, type = "rpareto")
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
-
-# Extract list_lags from list_results
-list_lags <- lapply(list_results, `[[`, "lags")
-
-# Extract list_excesses from list_results
-list_excesses <- lapply(list_results, `[[`, "excesses")
 ```
 
 
 ## Optimization results
 
 ```{r, echo=FALSE}
-neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
+neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
                     list_excesses, hmax = NA, s0_list = NA,
                     t0_list = NA, threshold = FALSE) {
   # print(params)
-  # Bounds for the parameters
-  lower.bound <- c(1e-8, 1e-8, 1e-8, 1e-8)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
+  # # Bounds for the parameters
+  # lower.bound <- c(1e-8, 1e-8, 1e-8, 1e-8)
+  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  # if (length(params) == 6) {
+  #   lower.bound <- c(lower.bound, -Inf, -Inf)
+  #   upper.bound <- c(upper.bound, Inf, Inf)
+  # }
 
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
+  # # Check if the parameters are in the bounds
+  # if (any(params < lower.bound) || any(params > upper.bound)) {
+  #   return(1e50)
+  # }
 
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
@@ -612,9 +709,10 @@ neg_ll_composite_rpar <- function(params, data, list_lags, quantile,
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
-    s0 <- s0_list[[i]]
-    t0 <- t0_list[[i]]
-    nll_i <- neg_ll(params, data, df_lags, quantile, hmax = hmax,
+    episode <- list_episodes[[i]]
+    s0 <- s0_list[i]
+    t0 <- t0_list[i]
+    nll_i <- neg_ll(params, episode, df_lags, quantile, hmax = hmax,
                     excesses = excesses, s0 = s0, t0 = t0,
                     threshold = threshold)
     nll_composite <- nll_composite + nll_i
@@ -627,12 +725,12 @@ We initialize the parameters with the values obtained from the WLSE method and w
 It converges and the results of the optimization on the COMEPHORE data are:
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0., 0.)
-q <- 0.96
+init_param <- c(0.01, 0.2, 1.5, 1, -0.1, -0.2)
+q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        data = rain_new, quantile = q, list_lags = list_lags,
+        list_episodes = list_episodes, quantile = q, list_lags = list_lags,
         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        t0_list = t0_list, threshold = FALSE,
+        t0_list = t0_list, threshold = TRUE,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
