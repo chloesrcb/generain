@@ -661,3 +661,114 @@ save_simulations <- function(simu, ngrid, nsimu, folder, file = "rainBR",
     write.csv(df, file = filename, row.names = FALSE)
   }
 }
+
+
+#' select_extreme_episodes function
+#'
+#' Select extreme episodes based on the data, the quantile, the minimum spatial
+#' distance, the minimum time distance and the episode length.
+#'
+#' @param sites_coords The coordinates of the sites.
+#' @param data The data.
+#' @param quantile The quantile value.
+#' @param min_spatial_dist The minimum spatial distance.
+#' @param min_time_dist The minimum time distance.
+#' @param delta The episode length.
+#' @param n_max_episodes The maximum number of episodes to select.
+#' @param beta The buffer size. Default is 0.
+#'
+#' @return The selected points.
+#'
+#' @export
+select_extreme_episodes <- function(sites_coords, data, quantile,
+                                    min_spatial_dist, min_time_dist,
+                                    delta, n_max_episodes, beta = 0) {
+  # get maximal value
+  max_value <- max(na.omit(data))
+  max_indices <- which(data == max_value, arr.ind = TRUE)
+  data_temp <- data # copy of the data
+
+  # initialize the selected points list
+  selected_points <- data.frame(s0 = character(), t0 = integer())
+
+  i <- 0
+  nb_episode <- 0 # number of episodes (selected points)
+  while (nb_episode < n_max_episodes && max_value > quantile) {
+    best_candidate <- NULL
+
+    for (idx in 1:nrow(max_indices)) {
+      s0_candidate <- colnames(data)[max_indices[idx, 2]]
+      t0_candidate <- max_indices[idx, 1]
+
+      if (nrow(selected_points) == 0) { # first episode
+        best_candidate <- data.frame(s0 = s0_candidate, t0 = t0_candidate)
+        nb_episode <- nb_episode + 1
+        break
+      } else {
+        # get distances and time differences within the selected points
+        distances <- distHaversine(sites_coords[selected_points$s0, ],
+                                   sites_coords[s0_candidate, ]) / 1000
+        time_differences <- abs(selected_points$t0 - t0_candidate)
+
+        # check if the candidate is valid given the minimum spatial and
+        # time distances
+        if (all(distances >= min_spatial_dist) ||
+                                      all(time_differences >= min_time_dist)) {
+          best_candidate <- data.frame(s0 = s0_candidate, t0 = t0_candidate)
+          nb_episode <- nb_episode + 1
+          break # stop the loop
+        } else { # not valid
+          # "remove" the candidate from the data to avoid selecting it again
+          data_temp[t0_candidate, s0_candidate] <- -Inf
+        }
+      }
+    }
+
+    # add the best candidate to the selected points
+    selected_points <- rbind(selected_points, best_candidate)
+
+    # "remove" the episode from the data
+    t_inf <- best_candidate$t0 - (delta - 1) - beta
+    t_sup <- best_candidate$t0 + (delta - 1) + beta
+    data_temp[t_inf:t_sup, best_candidate$s0] <- -Inf
+
+    # get the new maximal value
+    max_value <- max(na.omit(data_temp))
+    max_indices <- which(data_temp == max_value, arr.ind = TRUE)
+    i <- i + 1
+  }
+
+  if (length(selected_points) == 0) {
+    stop("No spatio-temporal points satisfy the quantile, the minimum spatial 
+          and/or time distances.")
+  }
+
+  return(selected_points)
+}
+
+#' get_extreme_episodes function
+#'
+#' Get the extreme episodes based on the selected points and the data by keeping
+#' all sites for each episode.
+#'
+#' @param selected_points The selected points conditionning on X(s0,t0) > u.
+#' @param data The data.
+#' @param delta The episode length.
+#' @param beta The buffer size. Default is 0.
+#'
+#' @return The list of extreme episodes.
+#'
+#' @export
+get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
+  # initialize the list of episodes
+  episodes <- list()
+  for (i in 1:nrow(selected_points)) {
+    # s0 <- selected_points$s0[i]
+    t0 <- selected_points$t0[i]
+    t_inf <- t0 - (delta - 1) - beta
+    t_sup <- t0 + (delta - 1) + beta
+    episode <- data[t_inf:t_sup, ] # get the episode
+    episodes <- append(episodes, list(episode))
+  }
+  return(episodes)
+}

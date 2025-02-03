@@ -45,9 +45,23 @@ head(wind_data_2010_2019)
 # DXY: direction de FXY (rose de 360)
 # HXY         : heure de FXY (hhmm)
 
-wind_df <- wind_data_2010_2019 
+wind_df <- wind_data_2010_201
 # get stations names
 stations <- unique(wind_df$NOM_USUEL)
+length(stations)
+# get unique locations by station
+stations_loc <- wind_df %>% select(NOM_USUEL, LAT, LON) %>% unique()
+
+# plot all stations on a map around Montpellier
+# get the map
+library(leaflet)
+# Create a map centered on Montpellier
+leaflet() %>%
+  addTiles() %>%
+  addMarkers(lng = stations_loc$LON, lat = stations_loc$LAT, popup = stations_loc$NOM_USUEL)
+
+
+
 # keep only "Montpellier-Aéroport" and "Grabels"
 wind_df <- wind_df[wind_df$NOM_USUEL %in% c("MONTPELLIER-AEROPORT"),]
 
@@ -60,3 +74,110 @@ colnames(wind_df)[colnames(wind_df) == "AAAAMMJJHH"] <- "datetime"
 # remove AAAAMMJJHH
 wind_mtp <- wind_df[,c("datetime", "FF", "DD", "FXY", "DXY", "HXY")]
 head(wind_mtp)
+
+# for one year 2019
+wind_mtp_2019 <- wind_mtp[wind_mtp$datetime >= as.POSIXct("2019-01-01", tz = "UTC") & wind_mtp$datetime <= as.POSIXct("2019-12-31", tz = "UTC"),]
+
+# plot wind speed
+ggplot(wind_mtp_2019, aes(x = datetime, y = FF)) +
+  geom_line(color = btfgreen) +
+  labs(title = "Wind speed at Montpellier-Aéroport",
+       x = "Date",
+       y = "Wind speed (m/s)") +
+  btf_theme
+
+library(ggforce)
+# plot wind direction
+# Création de la rose des vents
+ggplot(wind_mtp_2019, aes(x = DD_rad, y = FF)) +
+  geom_histogram(stat = "identity", aes(fill = FF), binwidth = pi/8) +
+  coord_polar(start = -pi/2) +
+  scale_x_continuous(breaks = seq(0, 2*pi, pi/4), 
+                     labels = c("E", "NE", "N", "NW", "W", "SW", "S", "SE")) +
+  labs(title = "Rose des vents - Montpellier", x = "Direction du vent", y = "Fréquence") +
+  theme_minimal()
+
+library(dplyr)
+
+# for one year 2018
+wind_mtp_2018 <- wind_mtp[wind_mtp$datetime >= as.POSIXct("2018-01-01", tz = "UTC") & wind_mtp$datetime <= as.POSIXct("2018-12-31", tz = "UTC"),]
+
+wind_mtp_2018 <- wind_mtp_2018 %>%
+  mutate(direction_bin = cut(DD, breaks = seq(0, 360, by = 30), include.lowest = TRUE))
+
+wind_data <- wind_mtp_2018 %>%
+  group_by(direction_bin) %>%
+  summarise(count = n())
+
+angle_labels <- c("E", "NE", "N", "NW", "W", "SW", "S", "SE")
+angle_breaks <- seq(0, 315, by = 45)
+
+ggplot(wind_data, aes(x = as.numeric(direction_bin), y = count, fill = count)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar(start = -pi/2) +
+  scale_x_continuous(breaks = angle_breaks, labels = angle_labels) +
+  scale_fill_viridis_c(option = "rocket") +
+  labs(x = "Direction of wind", y = "Frequence") +
+  theme_minimal()
+
+# save
+ggsave("wind_rose_2018.png", width = 10, height = 10, units = "cm")
+
+wind_mtp_2019 <- wind_mtp_2019 %>%
+  mutate(direction_bin = cut(DD, breaks = seq(0, 360, by = 30), include.lowest = TRUE))
+
+wind_data <- wind_mtp_2019 %>%
+  group_by(direction_bin) %>%
+  summarise(count = n())
+
+angle_labels <- c("E", "NE", "N", "NW", "W", "SW", "S", "SE")
+angle_breaks <- seq(0, 315, by = 45) 
+
+ggplot(wind_data, aes(x = as.numeric(direction_bin), y = count, fill = count)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar(start = -pi/2) +
+  scale_x_continuous(breaks = angle_breaks, labels = angle_labels) +
+  scale_fill_viridis_c(option = "rocket") + 
+  labs(x = "Direction of wind", y = "Frequence") +
+  theme_minimal()
+
+
+ggsave("wind_rose_2019.png", width = 10, height = 10, units = "cm")
+
+
+library(ggplot2)
+library(dplyr)
+
+wind_mtp_2018 <- wind_mtp[wind_mtp$datetime >= as.POSIXct("2018-01-01", tz = "UTC") & wind_mtp$datetime <= as.POSIXct("2018-12-31", tz = "UTC"),]
+wind_mtp_2018 <- wind_mtp_2018 %>%
+  mutate(direction_bin = cut(DD, breaks = seq(0, 360, by = 30), include.lowest = TRUE),
+         year = "2018")
+
+wind_mtp_2019 <- wind_mtp[wind_mtp$datetime >= as.POSIXct("2019-01-01", tz = "UTC") & wind_mtp$datetime <= as.POSIXct("2019-12-31", tz = "UTC"),]
+wind_mtp_2019 <- wind_mtp_2019 %>%
+  mutate(direction_bin = cut(DD, breaks = seq(0, 360, by = 30), include.lowest = TRUE),
+         year = "2019")
+
+wind_data_combined <- bind_rows(wind_mtp_2018, wind_mtp_2019) %>%
+  group_by(direction_bin, year) %>%
+  summarise(count = n(), .groups = "drop")
+
+angle_labels <- c("E", "NE", "N", "NW", "W", "SW", "S", "SE")
+angle_breaks <- seq(0, 315, by = 45)
+
+ggplot(wind_data_combined, aes(x = as.numeric(direction_bin), y = count, fill = count)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar(start = -pi/2) +
+  scale_x_continuous(breaks = angle_breaks, labels = angle_labels) +
+  scale_fill_viridis_c(option = "rocket", limits = c(0, max(wind_data_combined$count))) + 
+  facet_wrap(~year) +
+  labs(x = "Direction of wind", y = "Frequence") +
+  btf_theme + 
+  theme(
+    legend.text = element_text(size = 5),    # Reduce the size of the legend text
+    legend.title = element_text(size = 5),   # Reduce the size of the legend title
+    legend.key.size = unit(0.2, "cm"),        # Reduce the size of the legend symbols
+    legend.position = "right"                # Position the legend on the right (optional)
+  )
+
+ggsave("../phd_extremes/wind_rose_comparison_2018_2019.png", width = 10, height = 5, units = "cm")
