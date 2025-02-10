@@ -23,7 +23,7 @@ par(cex.main = 0.8,
 library(generain)
 library(reshape2)
 library(ggplot2)
-source("load_libraries.R")
+source("./script/load_libraries.R")
 library(kableExtra)
 library(extRemes)
 library(bbmle)
@@ -369,7 +369,7 @@ colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
 
 # remove 0
-q <- 0.95
+q <- 0.996
 chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q,
                                mean = TRUE)
 # get h axis in minutes ie x5 minutes
@@ -383,7 +383,7 @@ chitemp_plot <- ggplot(df, aes(x = lag, y = chi)) +
 wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
                                     weights = "exp", summary = F)
 
-# print(wlse_temp)
+print(wlse_temp)
 alpha2 <- wlse_temp[[2]]
 beta2 <- wlse_temp[[1]]
 c2 <- log(beta2)
@@ -415,8 +415,8 @@ df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
 df_dist_km <- df_dist
 df_dist_km$value <- df_dist$value / 1000
 
-q <- 0.95
-chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore_nozeros,
+q <- 0.996
+chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                                  quantile = q, hmax = 7)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
@@ -430,7 +430,8 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   ylim(0, 1)
 
 # WLSE
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = F)
+print(wlse_spa)
 
 alpha1 <- wlse_spa[[2]]
 beta1 <- wlse_spa[[1]]
@@ -544,6 +545,12 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   # initialize the selected points list
   selected_points <- data.frame(s0 = character(), t0 = integer())
 
+  # transform the data to a uniform
+  data_unif <- data
+  for (i in 1:ncol(data)) {
+    data_unif[, i] <- rank(data[, i]) / (nrow(data) + 1)
+  }
+  data_temp <- data_unif
   i <- 0
   nb_episode <- 0 # number of episodes (selected points)
   while (nb_episode < n_max_episodes && max_value > quantile) {
@@ -611,9 +618,14 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
 
 ```{r, echo=FALSE}
 library(geosphere)
-min_spatial_dist <- 2  # in km
-min_time_dist <- 5  # in hours
+min_spatial_dist <- 5  # in km
+min_time_dist <- 24  # in hours
 delta <- 15 # step for the episode before and after the max value
+
+# Get coords
+sites_coords <- loc_px[, c("Longitude", "Latitude")]
+rownames(sites_coords) <- loc_px$pixel_name
+
 
 # quantile_non_standardise <- quantile(comephore$p142, 0.98)
 # quantile_standardise <- quantile(rank(comephore$p142) / (nrow(comephore) + 1), 0.98)
@@ -624,19 +636,18 @@ delta <- 15 # step for the episode before and after the max value
 # data_standardise <- rank[data_standardise] / (nrow(data_standardise) + 1)
 
 # Get the selected episodes
-selected_points <- select_extreme_episodes(sites_coords, comephore, 1,
+delta <- 15
+selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                            min_spatial_dist, min_time_dist,
-                                           delta = 15, n_max_episodes = 1000)
-list_episodes <- get_extreme_episodes(selected_points, comephore,  delta = 15)
-
+                                           delta = delta, n_max_episodes = 1000)
+list_episodes <- get_extreme_episodes(selected_points, comephore,  
+                                      delta = delta)
+head(list_episodes[[1]])
 s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 ```
 
 ```{r, echo=TRUE}
-# Get coords
-sites_coords <- loc_px[, c("Longitude", "Latitude")]
-rownames(sites_coords) <- loc_px$pixel_name
 
 # # remove 0
 # rain_new <- comephore_nozeros
@@ -666,95 +677,97 @@ We have `r length(s0_list)` conditional points. We compute the lags and excesses
 
 ```{r, echo=FALSE}
 library(parallel)
-quantile <- 1
-list_results <- mclapply(1:length(s0), function(i) {
+
+# get threshold corresponding to quantile q in comephore
+threshold <- quantile(comephore$p124, probs = q, na.rm = T)
+
+list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
   s0_coords <- sites_coords[s0, ]
   t0 <- t0_list[i]
-  episode <- selected_episodes[[i]]
+  episode <- list_episodes[[i]]
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0, tau_max = 10,
                                       latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
-  excesses <- empirical_excesses(episode, quantile, lags, type = "rpareto")
+  excesses <- empirical_excesses(episode, threshold, lags, type = "rpareto",
+                                  threshold = TRUE)
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
+
+list_lags <- lapply(list_results, `[[`, "lags")
+list_excesses <- lapply(list_results, `[[`, "excesses")
 ```
 
 
-## Optimization results
-
 ```{r, echo=FALSE}
-neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
-                    list_excesses, hmax = NA, s0_list = NA,
-                    t0_list = NA, threshold = FALSE) {
-  # print(params)
-  # # Bounds for the parameters
-  # lower.bound <- c(1e-8, 1e-8, 1e-8, 1e-8)
-  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  # if (length(params) == 6) {
-  #   lower.bound <- c(lower.bound, -Inf, -Inf)
-  #   upper.bound <- c(upper.bound, Inf, Inf)
-  # }
+# neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
+#                     list_excesses, hmax = NA, s0_list = NA,
+#                     t0_list = NA, threshold = FALSE) {
+#   # print(params)
+#   # # Bounds for the parameters
+#   # lower.bound <- c(1e-8, 1e-8, 1e-8, 1e-8)
+#   # upper.bound <- c(Inf, Inf, 1.999, 1.999)
+#   # if (length(params) == 6) {
+#   #   lower.bound <- c(lower.bound, -Inf, -Inf)
+#   #   upper.bound <- c(upper.bound, Inf, Inf)
+#   # }
 
-  # # Check if the parameters are in the bounds
-  # if (any(params < lower.bound) || any(params > upper.bound)) {
-  #   return(1e50)
-  # }
+#   # # Check if the parameters are in the bounds
+#   # if (any(params < lower.bound) || any(params > upper.bound)) {
+#   #   return(1e50)
+#   # }
 
-  m <- length(list_excesses) # number of r-pareto processes
-  nll_composite <- 0 # composite negative log-likelihood
-  for (i in 1:m) {
-    # extract lags and excesses from i-th r-pareto process from data
-    df_lags <- list_lags[[i]]
-    excesses <- list_excesses[[i]]
-    episode <- list_episodes[[i]]
-    s0 <- s0_list[i]
-    t0 <- t0_list[i]
-    nll_i <- neg_ll(params, episode, df_lags, quantile, hmax = hmax,
-                    excesses = excesses, s0 = s0, t0 = t0,
-                    threshold = threshold)
-    nll_composite <- nll_composite + nll_i
-  }
-  return(nll_composite)
-}
+#   m <- length(list_excesses) # number of r-pareto processes
+#   nll_composite <- 0 # composite negative log-likelihood
+#   for (i in 1:m) {
+#     # extract lags and excesses from i-th r-pareto process from data
+#     df_lags <- list_lags[[i]]
+#     excesses <- list_excesses[[i]]
+#     episode <- list_episodes[[i]]
+#     s0 <- s0_list[i]
+#     t0 <- t0_list[i]
+#     nll_i <- neg_ll(params, episode, df_lags, quantile, hmax = hmax,
+#                     excesses = excesses, s0 = s0, t0 = t0,
+#                     threshold = threshold)
+#     nll_composite <- nll_composite + nll_i
+#   }
+#   return(nll_composite)
+# }
 ```
 
-We initialize the parameters with the values obtained from the WLSE method and without advection. 
-It converges and the results of the optimization on the COMEPHORE data are:
-
 ```{r, echo=FALSE}
-init_param <- c(0.01, 0.2, 1.5, 1, -0.1, -0.2)
-q <- 1
-result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        list_episodes = list_episodes, quantile = q, list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        t0_list = t0_list, threshold = TRUE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000),
-        hessian = F)
-estimated_params_noadv <- result$par
-# Check the convergence
-if (result$convergence != 0) {
-  warning("The optimization did not converge.")
-}
+# init_param <- c(0.01, 0.2, 1.5, 1, -0.1, -0.2)
+# q <- 1
+# result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+#         list_episodes = list_episodes, quantile = q, list_lags = list_lags,
+#         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+#         t0_list = t0_list, threshold = TRUE,
+#         method = "L-BFGS-B",
+#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#         control = list(maxit = 10000),
+#         hessian = F)
+# estimated_params_noadv <- result$par
+# # Check the convergence
+# if (result$convergence != 0) {
+#   warning("The optimization did not converge.")
+# }
 
-# Extract the results
-df_result_noadv <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+# # Extract the results
+# df_result_noadv <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
 
-colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+# colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 
-kable(df_result_noadv, format = "latex") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-  "responsive"), latex_options = "H")
+# kable(df_result_noadv, format = "latex") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+#   "responsive"), latex_options = "H")
 ```
 
 
@@ -762,36 +775,36 @@ Same but now we consider an advection of 0.1 for both directions. It converges a
 the optimization on the COMEPHORE data are:
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
+# init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
 
-result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        data = rain_new, quantile = q, list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        t0_list = t0_list, threshold = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000),
-        hessian = F)
-estimated_params <- result$par
-# Check the convergence
-if (result$convergence != 0) {
-  warning("The optimization did not converge.")
-}
+# result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+#         data = rain_new, quantile = q, list_lags = list_lags,
+#         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+#         t0_list = t0_list, threshold = FALSE,
+#         method = "L-BFGS-B",
+#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#         control = list(maxit = 10000),
+#         hessian = F)
+# estimated_params <- result$par
+# # Check the convergence
+# if (result$convergence != 0) {
+#   warning("The optimization did not converge.")
+# }
 
-# Extract the results
-df_result <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+# # Extract the results
+# df_result <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
 
-colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+# colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 
-kable(df_result, format = "latex") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-  "responsive"), latex_options = "H")
+# kable(df_result, format = "latex") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+#   "responsive"), latex_options = "H")
 ```
 
 
@@ -799,36 +812,36 @@ Same but now we consider an advection of $0.01$ for both directions. It converge
 the optimization on the COMEPHORE data are:
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.01, 0.01)
+# init_param <- c(beta1, beta2, alpha1, alpha2, 0.01, 0.01)
 
-result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        data = rain_new, quantile = q, list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        t0_list = t0_list, threshold = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000),
-        hessian = F)
-estimated_params2 <- result$par
-# Check the convergence
-if (result$convergence != 0) {
-  warning("The optimization did not converge.")
-}
+# result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+#         data = rain_new, quantile = q, list_lags = list_lags,
+#         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+#         t0_list = t0_list, threshold = FALSE,
+#         method = "L-BFGS-B",
+#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#         control = list(maxit = 10000),
+#         hessian = F)
+# estimated_params2 <- result$par
+# # Check the convergence
+# if (result$convergence != 0) {
+#   warning("The optimization did not converge.")
+# }
 
-# Extract the results
-df_result2 <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+# # Extract the results
+# df_result2 <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
 
-colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+# colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 
-kable(df_result2, format = "latex") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-  "responsive"), latex_options = "H")
+# kable(df_result2, format = "latex") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+#   "responsive"), latex_options = "H")
 ```
 
 
@@ -836,36 +849,36 @@ Same but now we consider an initial advection of $(0.2, 0.1)$. It converges and 
 the optimization on the COMEPHORE data are:
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
+# init_param <- c(beta1, beta2, alpha1, alpha2, 0.2, 0.1)
 
-result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        data = rain_new, quantile = q, list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        t0_list = t0_list, threshold = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000),
-        hessian = F)
-estimated_params2 <- result$par
-# Check the convergence
-if (result$convergence != 0) {
-  warning("The optimization did not converge.")
-}
+# result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+#         data = rain_new, quantile = q, list_lags = list_lags,
+#         list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+#         t0_list = t0_list, threshold = FALSE,
+#         method = "L-BFGS-B",
+#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, -Inf, -Inf),
+#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#         control = list(maxit = 10000),
+#         hessian = F)
+# estimated_params2 <- result$par
+# # Check the convergence
+# if (result$convergence != 0) {
+#   warning("The optimization did not converge.")
+# }
 
-# Extract the results
-df_result2 <- data.frame(beta1 =  result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+# # Extract the results
+# df_result2 <- data.frame(beta1 =  result$par[1],
+#                         beta2 = result$par[2],
+#                         alpha1 = result$par[3],
+#                         alpha2 = result$par[4],
+#                         adv1 = result$par[5],
+#                         adv2 = result$par[6])
 
-colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+# colnames(df_result2) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
 
-kable(df_result2, format = "latex") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-  "responsive"), latex_options = "H")
+# kable(df_result2, format = "latex") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+#   "responsive"), latex_options = "H")
 ```
 
 ```{r, echo=FALSE}
@@ -892,45 +905,435 @@ kable(df_result2, format = "latex") %>%
 # conf_int <- cbind(result$par - 1.96 * se, result$par + 1.96 * se)
 ```
 
-## Variogram
-
-### Without initial advection
 
 ```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate with no initial advection in the optimization"}
 # compute variogram with parameters
-tau_values <- c(0)
-result <- df_result_noadv
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+# tau_values <- c(0)
+# result <- df_result_noadv
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
 
-tau_values <- c(5)
-result <- df_result_noadv
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+# tau_values <- c(5)
+# result <- df_result_noadv
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
 
-tau_values <- c(10)
-result <- df_result_noadv
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
+# tau_values <- c(10)
+# result <- df_result_noadv
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params_noadv, tau_values, chi=F)
 ```
 
 
-### With initial advection of 0.1
-
 ```{r, echo=FALSE, fig.width = 5, fig.height = 3, fig.cap="Variogram estimate with initial advection of 0.1 in the optimization"}
 # compute variogram with parameters
-tau_values <- c(0)
-result <- df_result
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+# tau_values <- c(0)
+# result <- df_result
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
 
-tau_values <- c(5)
-result <- df_result
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+# tau_values <- c(5)
+# result <- df_result
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
 
-tau_values <- c(10)
-result <- df_result
-df_lags <- list_lags[[5]]
-generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+# tau_values <- c(10)
+# result <- df_result
+# df_lags <- list_lags[[5]]
+# generate_variogram_plots(result, df_lags, estimated_params, tau_values, chi=F)
+```
+
+# Add wind per episode
+
+
+```{r, echo=FALSE}
+# get wind data
+wind_mtp <- read.csv("./data/wind/data_gouv/wind_mtp.csv")
+
+library(dplyr)
+
+# Convert datetime to POSIXct
+wind_mtp$datetime <- as.POSIXct(wind_mtp$datetime,
+                                format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+convert_to_cardinal <- function(degrees) {
+  if (is.na(degrees)) {
+    return(NA)  # Return NA if the input is NA
+  }
+
+  directions <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW", "N")
+  breaks <- c(0, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5, 360)
+
+  return(directions[findInterval(degrees, breaks, rightmost.closed = TRUE)])
+}
+
+# Apply function to the DD column
+wind_mtp$cardDir <- sapply(wind_mtp$DD, convert_to_cardinal)
+wind_mtp$cardDir <- as.character(wind_mtp$cardDir)  # Ensure it's character, not factor
+wind_mtp$cardDir[is.na(wind_mtp$DD)] <- NA
+# Check if NA values are properly handled
+summary(wind_mtp)
+
+head(wind_mtp$cardDir)
+
+get_mode_dir <- function(x) {
+  x <- na.omit(x)  # Remove NA values
+  uniq_values <- unique(x)  # Get unique values
+  freq_table <- tabulate(match(x, uniq_values))  # Count occurrences
+  mode_value <- uniq_values[which.max(freq_table)]  # Most frequent value
+  return(mode_value)
+}
+
+get_mode_excess_dir <- function(x, quantile) {
+  x <- na.omit(x)  # Remove NA values
+  x_excesses <- x[x > quantile]
+  uniq_values <- unique(x_excesses)  # Get unique values
+  freq_table <- tabulate(match(x_excesses, uniq_values))  # Count occurrences
+  mode_value <- uniq_values[which.max(freq_table)]  # Most frequent value
+  return(mode_value)
+}
+
+get_mean_excess_dir <- function(x, quantile) {
+  x <- na.omit(x)  # Remove NA values
+  # get the mean for all excess above quantile
+  x_excesses <- x[x > quantile]
+  mean_dir <- mean(x_excesses)
+  return(mean_dir)
+}
+
+# Function to compute the mean wind speed and direction for each episode
+compute_wind_episode <- function(episode, delta, quantile) {
+  timestamps <- as.POSIXct(rownames(episode),
+                            format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+  # get column name of the max value
+  max_value <- max(episode, na.rm = TRUE)
+  Q0 <- names(episode)[which(sapply(episode, 
+                      function(col) max(col, na.rm = TRUE)) == max_value)]
+
+
+  # Subset the wind data for the episode
+  wind_subset <- wind_mtp %>%
+    filter(datetime %in% timestamps)
+
+  # Compute the mean wind speed and direction for the episode if there is data
+  if (nrow(wind_subset) > 0) {
+    FF <- wind_subset$FF[1 + delta]
+    cardDir <- get_mode_dir(wind_subset$cardDir)
+    DD <- mean(wind_subset$DD[wind_subset$cardDir == cardDir])
+    cardDir_excess <- get_mode_excess_dir(wind_subset$cardDir, quantile)
+    DD_excess <- get_mean_excess_dir(wind_subset$DD, quantile)
+    DD_t0 <- wind_subset$DD[1 + delta]
+  } else {
+    FF <- NA
+    DD <- NA
+    cardDir <- NA
+    cardDir_excess <- NA
+    DD_excess <- NA
+    DD_t0 <- NA
+  }
+
+  return(data.frame(FF = FF, DD = DD, cardDir = cardDir,
+                    cardDir_excess = cardDir_excess,
+                    DD_excess = DD_excess, DD_t0 = DD_t0))
+}
+
+wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = 15,
+                          quantile = threshold)
+
+wind_ep_df <- do.call(rbind, wind_per_episode)
+head(wind_ep_df)
+
+wind_ep_df$cardDirt0 <- sapply(wind_ep_df$DD_t0, convert_to_cardinal)
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Ensure cardDir is a factor with correct order
+wind_ep_df$cardDir <- factor(wind_ep_df$cardDir, 
+                             levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDir)) +
+  geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 1) +  # Bar plot for wind direction
+  coord_polar(start = 15*pi/8) +  # Convert to polar coordinates, starting at North
+  labs(x = "Wind Direction", y = "Count", title = "") +
+  theme_minimal() +  # Clean theme
+  theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
+
+
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_card_dir_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+# Ensure cardDir is a factor with correct order
+wind_ep_df$cardDirt0 <- factor(wind_ep_df$cardDirt0, 
+                             levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDirt0)) +
+  geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 1) +  # Bar plot for wind direction
+  coord_polar(start = 15*pi/8) +  # Convert to polar coordinates, starting at North
+  labs(x = "Wind Direction in t0", y = "Count", title = "") +
+  theme_minimal() +  # Clean theme
+  theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
+
+
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_card_dir_t0_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = DD_t0)) +
+  geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 5) +  # Bar plot for wind direction
+  coord_polar(start = 15.85*pi/8) +  # Convert to polar coordinates, starting at North
+  labs(x = "Wind Direction in t0", y = "Count", title = "") +
+  theme_minimal() +  # Clean theme
+  theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
+
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_dir_t0_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+# Mean by excess in episode
+wind_ep_df$cardDir_excess <- factor(wind_ep_df$cardDir_excess, 
+                             levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDir_excess)) +
+  geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 1) +  # Bar plot for wind direction
+  coord_polar(start = 15*pi/8) +  # Convert to polar coordinates, starting at North
+  labs(x = "Mean wind Direction in excess", y = "Count", title = "") +
+  theme_minimal() +  # Clean theme
+  theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
+
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_card_dir_excess_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+wind_ep_df$DD_excess <- as.numeric(wind_ep_df$DD_excess)
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = DD_excess)) +
+  geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 5) +  # Bar plot for wind direction
+  coord_polar(start = 15.85*pi/8) +  # Convert to polar coordinates, starting at North
+  labs(x = "Mean wind Direction in excess", y = "Count", title = "") +
+  theme_minimal() +  # Clean theme
+  theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
+
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_dir_excess_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+
+
+# Plot wind forces FF
+ggplot(wind_ep_df, aes(x = FF)) +
+  geom_bar(aes(y = ..count..), fill = btfgreen, color = "black") +
+  btf_theme +
+  xlab("Wind speed (m/s)") +
+  ylab("Count")
+
+filename <- paste(im_folder, "wind/datagouv/wind_speed_per_episode.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+
+
+# Plot count of cardinal directions for cardDir and DD_t0
+library(tidyr)
+library(dplyr)
+
+
+# Create a new column that checks if cardDir matches DD_t0
+wind_ep_df$Match <- wind_ep_df$cardDir == wind_ep_df$cardDirt0
+
+# Bar plot of matches vs mismatches
+ggplot(wind_ep_df, aes(x = Match)) +
+  geom_bar(aes(fill = Match), color = "#797474", alpha = 0.7, width = 0.5) +
+  scale_fill_manual(values = c("TRUE" = btfgreen, "FALSE" = "tomato")) +
+  labs(x = "Cardinal direction t0 == Most frequent cardinal direction", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"))
+
+filename <- paste(im_folder, "wind/datagouv/wind_dir_match.png", sep = "")
+ggsave(filename, width = 30, height = 15, units = "cm")
+```
+
+```{r, echo=FALSE}
+wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD)
+wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD)
+head(wind_ep_df)
+```
+
+## Optim with wind
+
+```{r, echo=FALSE}
+# Fonction pour calculer la distance Haversine entre deux points (x1, y1) et (x2, y2)
+haversine <- function(x1, y1, x2, y2) {
+  R <- 6371  # Rayon de la Terre en kilomètres
+  dx <- (x2 - x1) * pi / 180  # Différence en longitude (en radians)
+  dy <- (y2 - y1) * pi / 180  # Différence en latitude (en radians)
+  
+  a <- sin(dy / 2)^2 + cos(y1 * pi / 180) * cos(y2 * pi / 180) * sin(dx / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  
+  distance <- R * c  # Distance en kilomètres
+  return(distance)
+}
+
+theorical_chi <- function(params, df_lags, wind_vect = NA) {
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  if (all(is.na(wind_vect))) {
+    adv <- params[5:6]
+  } else {
+    eta1 <- params[5]
+    eta2 <- params[6]
+    # adv <- exp(eta1 + eta2 * wind_vect)
+    adv <- (abs(wind_vect)^eta1)*sign(wind_vect) * eta2
+  }
+
+  chi_df <- df_lags[c("s1", "s2", "tau")]
+  # Get vario and chi for each lagtemp in meters
+  chi_df$s1xv <- df_lags$s1x * 111320
+  chi_df$s1yv <- df_lags$s1y * 111320 * cos(df_lags$s1x * pi / 180)
+  chi_df$s2xv <- df_lags$s2x  * 111320 + adv[1] * df_lags$tau
+  chi_df$s2yv <- df_lags$s2y  * 111320 * cos(df_lags$s1x * pi / 180) 
+                                                          adv[2] * df_lags$tau
+  chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                        (chi_df$s2yv - chi_df$s1yv)^2)
+  # chi_df$hnormV <- haversine(chi_df$s1xv, chi_df$s1yv,
+  #                                chi_df$s2xv, chi_df$s2yv)
+  # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+  # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+  # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
+
+  chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
+                  (2 * beta2) * abs(chi_df$tau)^alpha2
+
+  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+  return(chi_df)
+}
+
+neg_ll <- function(params, data, df_lags, quantile, excesses, wind_vect = NA,
+                      hmax = NA,  s0 = NA, t0 = NA, threshold = FALSE) {
+  if (length(params) == 4) {
+    params <- c(params, 0, 0)
+  } else if (length(params) != 6) {
+    stop("The number of initial parameters must be 4 or 6.")
+  }
+
+  Tmax <- nrow(data) # number of total observations
+
+  if (all(!is.na(s0))) { # if we have a conditioning location
+    p <- 1 # sure excess for r-Pareto process in (s0,t0)
+  } else {
+    # number of marginal excesses
+    nmarg <- get_marginal_excess(data, quantile, threshold)
+    p <- nmarg / Tmax # probability of marginal excesses
+  }
+
+  # Bounds for the parameters
+  lower.bound <- c(1e-08, 1e-08, 1e-08, 1e-08)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6 && any(is.na(wind_vect))) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  } else if (length(params) == 6 && all(!is.na(wind_vect))) {
+    lower.bound <- c(lower.bound, 1e-08, 1e-08)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(1e50)
+  }
+
+  chi <- theorical_chi(params, df_lags, wind_vect) # get chi matrix
+  ll_df <- df_lags # copy the dataframe
+  ll_df$kij <- excesses$kij # number of excesses
+  ll_df$Tobs <- excesses$Tobs
+  ll_df$hnormV <- chi$hnormV
+  ll_df$chi <- chi$chi
+  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
+  ll_df$pchi <- 1 - p * ll_df$chi
+  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
+
+  # number of non-excesses
+  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
+  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
+              ll_df$non_excesses * log(ll_df$pchi)
+  if (!is.na(hmax)) {
+    ll_df <- ll_df[ll_df$hnorm <= hmax, ]
+  }
+
+  nll <- -sum(ll_df$ll, na.rm = TRUE)
+  return(nll)
+}
+
+neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
+                    list_excesses, wind_df, hmax = NA, s0_list = NA,
+                    t0_list = NA, threshold = FALSE) {
+  if (any(is.na(wind_df))) {
+    wind_vect <- NA
+  }
+  m <- length(list_excesses) # number of r-pareto processes
+  nll_composite <- 0 # composite negative log-likelihood
+  for (i in 1:m) {
+    # extract lags and excesses from i-th r-pareto process from data
+    df_lags <- list_lags[[i]]
+    excesses <- list_excesses[[i]]
+    episode <- list_episodes[[i]]
+    if (all(!is.na(wind_df))) {
+      wind_vx <- wind_df$vx[i]
+      wind_vy <- wind_df$vy[i]
+      wind_vect <- c(wind_vx, wind_vy)
+    }
+    s0 <- s0_list[i]
+    t0 <- t0_list[i]
+    nll_i <- neg_ll(params, episode, df_lags, quantile, wind_vect = wind_vect,
+                    hmax = hmax, excesses = excesses, s0 = s0, t0 = t0,
+                    threshold = threshold)
+    nll_composite <- nll_composite + nll_i
+  }
+  return(nll_composite)
+}
+
+```
+
+```{r, echo=FALSE}
+init_param <- c(beta1, beta2, alpha1, alpha2, 0, 0)
+q <- 1
+result <- optim(par = init_param, fn = neg_ll_composite_rpar,
+        list_episodes = list_episodes, quantile = q, list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 6, s0_list = s0_list,
+        wind_df = wind_ep_df,
+        t0_list = t0_list, threshold = TRUE,
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        control = list(maxit = 10000),
+        hessian = F)
+estimated_params_noadv <- result$par
+# Check the convergence
+if (result$convergence != 0) {
+  warning("The optimization did not converge.")
+}
+
+# Extract the results
+df_result_noadv <- data.frame(beta1 =  result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        adv1 = result$par[5],
+                        adv2 = result$par[6])
+
+colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+kable(df_result_noadv, format = "latex") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+  "responsive"), latex_options = "H")
 ```
