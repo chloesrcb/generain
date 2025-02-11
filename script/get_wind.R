@@ -98,17 +98,17 @@ convert_to_cardinal <- function(degrees) {
   if (is.na(degrees)) {
     return(NA)  # Return NA if the input is NA
   }
-  
-  directions <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW", "N")  
-  breaks <- c(0, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5, 360)  
-  
+
+  directions <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW", "N")
+  breaks <- c(0, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5, 360)
+
   return(directions[findInterval(degrees, breaks, rightmost.closed = TRUE)])
 }
 
 # Apply function to the DD column
 wind_mtp$cardDir <- sapply(wind_mtp$DD, convert_to_cardinal)
 wind_mtp$cardDir <- as.character(wind_mtp$cardDir)  # Ensure it's character, not factor
-wind_mtp$cardDir[is.na(wind_mtp$DD)] <- NA  
+wind_mtp$cardDir[is.na(wind_mtp$DD)] <- NA
 
 # Filter data for the years 2018 to 2023
 wind_mtp_years <- wind_mtp %>%
@@ -122,7 +122,7 @@ library(lubridate)  # For date handling
 wind_mtp_years$year <- year(as.POSIXct(wind_mtp_years$datetime, format="%Y-%m-%d %H:%M:%S", tz="UTC"))
 
 # Ensure cardDir is a factor
-wind_mtp_years$cardDir <- factor(wind_mtp_years$cardDir, 
+wind_mtp_years$cardDir <- factor(wind_mtp_years$cardDir,
                                  levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
 
 ggplot(wind_mtp_years, aes(x = cardDir)) +
@@ -134,6 +134,6 @@ ggplot(wind_mtp_years, aes(x = cardDir)) +
   theme(axis.text.x = element_text(size = 12, face = "bold"))
 
 
-filename <- paste0(im_folder, 
+filename <- paste0(im_folder,
                   "wind/datagouv/wind_rose_comparison_2018_2023.png")
 ggsave(filename, width = 30, height = 15, units = "cm")
