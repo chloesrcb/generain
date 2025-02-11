@@ -328,7 +328,7 @@ distances_regular_grid <- function(nsites, adv = c(0, 0), tau = 1:10) {
   } else {
     colnames(df_dist_long) <- c("Y", "X", "tau", "value")
   }
-  # df_dist <- reshape_distances(dist_matrix)
+
   return(df_dist_long)
 }
 
