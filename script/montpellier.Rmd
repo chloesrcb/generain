@@ -81,7 +81,7 @@ rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 
 
 ```{r, echo=FALSE}
-# put dates as index 
+# put dates as index
 rownames(rain) <- rain$dates
 # Remove the Time column to focus on site data
 rain <- rain[, -1]
@@ -293,83 +293,93 @@ df_dist <- reshape_distances(dist_mat)
 # Quantile choice
 
 ```{r}
+# # we want a quantile for u = 1
+# find_q_for_threshold <- function(col, threshold) {
+#   if (all(is.na(col))) return(NA)  
+#   ecdf(col)(threshold) 
+# }
+
+# # Appliquer à chaque colonne du dataframe
+# q_values <- sapply(comephore, find_q_for_threshold, threshold = 1)
+
+# # Afficher les résultats
+# q <- mean(q_values)
+```
+
+```{r}
 # Remove lines with just zeros
-comephore_nozeros <- comephore[rowSums(comephore) > 0, ]
+# comephore_nozeros <- comephore[rowSums(comephore) > 0, ]
 
-# Choose two site and remove zeros
-comephore_pair <- comephore_nozeros[, c(1,15)]
-comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
-chiplot(comephore_pair, xlim = c(0.8, 1), ylim1 = c(0.5, 1), which = 1,
-        qlim = c(0.8, 0.999))
-abline(v = 0.95, col = "red", lty = 2)
+# # Choose two site and remove zeros
+# comephore_pair <- comephore_nozeros[, c(1,15)]
+# comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
+# chiplot(comephore_pair, xlim = c(0.8, 1), ylim1 = c(0.5, 1), which = 1,
+#         qlim = c(0.8, 0.999))
+# abline(v = 0.95, col = "red", lty = 2)
 
-# count conjoint excesses
-q <- 0.95
-# uniformize the data
-n <- nrow(comephore_pair)
-data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
-                          rank(comephore_pair[, 2]) / (n + 1))
+# # count conjoint excesses
+# q <- 0.95
+# # uniformize the data
+# n <- nrow(comephore_pair)
+# data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
+#                           rank(comephore_pair[, 2]) / (n + 1))
 
-count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
-print(count_excesses)
+# count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
+# print(count_excesses)
 
-# With all zeros
-comephore_pair <- comephore[, c(1,10)]
-chiplot(comephore_pair, xlim = c(0.98, 1), ylim1 = c(0.5, 1), which = 1,
-        qlim = c(0.98, 0.9995))
+# # With all zeros
+# comephore_pair <- comephore[, c(1,10)]
+# chiplot(comephore_pair, xlim = c(0.98, 1), ylim1 = c(0.5, 1), which = 1,
+#         qlim = c(0.98, 0.9995))
 
-threshold <- quantile(comephore$p102, probs = 0.998, na.rm = T)
-# get the quantile from threshold in the data without 0 when the quantile is
-# 0.998 with zeros inside data
-empirical_cdf <- ecdf(comephore_pair$p102)
-quantile_in_nozeros <- empirical_cdf(threshold)
-print(quantile_in_nozeros)
+# threshold <- quantile(comephore$p102, probs = 0.998, na.rm = T)
+# # get the quantile from threshold in the data without 0 when the quantile is
+# # 0.998 with zeros inside data
+# empirical_cdf <- ecdf(comephore_pair$p102)
+# quantile_in_nozeros <- empirical_cdf(threshold)
+# print(quantile_in_nozeros)
 
-# Temporal chi
-rain_nolag <- comephore_nozeros$p142[1:(length(comephore_nozeros$p142) - 5)]
-rain_lag <- comephore_nozeros$p142[6:length(comephore_nozeros$p142)]
-comephore_pair <- cbind(rain_nolag, rain_lag)
-comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
-chiplot(comephore_pair, xlim = c(0.9, 1), ylim1 = c(0, 1), which = 1,
-        qlim = c(0.9, 0.995))
-abline(v = 0.95, col = "red", lty = 2)
+# # Temporal chi
+# rain_nolag <- comephore_nozeros$p142[1:(length(comephore_nozeros$p142) - 5)]
+# rain_lag <- comephore_nozeros$p142[6:length(comephore_nozeros$p142)]
+# comephore_pair <- cbind(rain_nolag, rain_lag)
+# comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
+# chiplot(comephore_pair, xlim = c(0.9, 1), ylim1 = c(0, 1), which = 1,
+#         qlim = c(0.9, 0.995))
+# abline(v = 0.95, col = "red", lty = 2)
 
-n <- nrow(comephore_pair)
-data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
-                          rank(comephore_pair[, 2]) / (n + 1))
-q <- 0.95
-count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
-print(count_excesses)
+# n <- nrow(comephore_pair)
+# data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
+#                           rank(comephore_pair[, 2]) / (n + 1))
+# q <- 0.95
+# count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
+# print(count_excesses)
 
-# We choose q = 0.95
-q <- 0.95
+# # We choose q = 0.95
+# q <- 0.95
 ```
 
 # Empirical chi and WLSE
 
 ```{r, echo=FALSE}
-tmax <- 10
-nsites <- length(loc_px$pixel_name)
-# Temporal chi with spatial lag fixed at 0
-# compute chiplot of every site with itself but lagged in time
-start_time <- Sys.time()
-chimat_dtlag <- temporal_chi(comephore_nozeros, quantile = q, tmax = tmax,
-                             mean = FALSE)
-end_time <- Sys.time()
-elapsed_time <- end_time - start_time
+# tmax <- 10
+# nsites <- length(loc_px$pixel_name)
+# # Temporal chi with spatial lag fixed at 0
+# # compute chiplot of every site with itself but lagged in time
+# start_time <- Sys.time()
+# chimat_dtlag <- temporal_chi(comephore_nozeros, quantile = q, tmax = tmax,
+#                              mean = FALSE)
+# end_time <- Sys.time()
+# elapsed_time <- end_time - start_time
 # print(elapsed_time)
 ```
 
 ## Temporal chi
 
 ```{r, echo=FALSE}
-par(mfrow = c(1, 1))
-chi_df_dt <- data.frame(chimat_dtlag)
-colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
-rownames(chi_df_dt) <- c(1:nsites) # stations
-
 # remove 0
 q <- 0.996
+tmax <- 10
 chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q,
                                mean = TRUE)
 # get h axis in minutes ie x5 minutes
@@ -381,7 +391,7 @@ chitemp_plot <- ggplot(df, aes(x = lag, y = chi)) +
   ylab(TeX(r"($\hat{\chi}$)"))
 
 wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
-                                    weights = "exp", summary = F)
+                                    weights = "exp", summary = T)
 
 print(wlse_temp)
 alpha2 <- wlse_temp[[2]]
@@ -411,11 +421,12 @@ chitemp_eta_estim
 
 ```{r, echo=FALSE}
 # Spatial chi ------------------------------------------------------------------
+df_dist <- reshape_distances(dist_mat)
 df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
 df_dist_km <- df_dist
 df_dist_km$value <- df_dist$value / 1000
 
-q <- 0.996
+# q <- 0.996
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                                  quantile = q, hmax = 7)
 
@@ -430,7 +441,7 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   ylim(0, 1)
 
 # WLSE
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = F)
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
 print(wlse_spa)
 
 alpha1 <- wlse_spa[[2]]
@@ -546,11 +557,11 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   selected_points <- data.frame(s0 = character(), t0 = integer())
 
   # transform the data to a uniform
-  data_unif <- data
-  for (i in 1:ncol(data)) {
-    data_unif[, i] <- rank(data[, i]) / (nrow(data) + 1)
-  }
-  data_temp <- data_unif
+  # data_unif <- data
+  # for (i in 1:ncol(data)) {
+  #   data_unif[, i] <- rank(data[, i]) / (nrow(data) + 1)
+  # }
+  # data_temp <- data_unif
   i <- 0
   nb_episode <- 0 # number of episodes (selected points)
   while (nb_episode < n_max_episodes && max_value > quantile) {
@@ -619,32 +630,48 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
 ```{r, echo=FALSE}
 library(geosphere)
 min_spatial_dist <- 5  # in km
-min_time_dist <- 24  # in hours
-delta <- 15 # step for the episode before and after the max value
+min_time_dist <- 10  # in hours
+delta <- 8 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-
-# quantile_non_standardise <- quantile(comephore$p142, 0.98)
-# quantile_standardise <- quantile(rank(comephore$p142) / (nrow(comephore) + 1), 0.98)
-# quantile_standardise <- quantile(data_standardise$p142, 0.98)
-# quantile <- quantile_standardise
-# data_standardise <- as.data.frame(scale(comephore))
-# standardize with rank
-# data_standardise <- rank[data_standardise] / (nrow(data_standardise) + 1)
-
 # Get the selected episodes
-delta <- 15
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
-                                           min_spatial_dist, min_time_dist,
-                                           delta = delta, n_max_episodes = 1000)
-list_episodes <- get_extreme_episodes(selected_points, comephore,  
+                                        min_spatial_dist, min_time_dist,
+                                        delta = delta, n_max_episodes = 10000)
+
+length(selected_points$s0)
+length(unique(selected_points$s0)) # can be same s0
+length(unique(selected_points$t0)) # never same t0
+
+# Get t0 of same s0
+selected_points <- selected_points[order(selected_points$s0), ]
+# histogram of s0 (s0 as factor)
+hist_s0 <- ggplot(selected_points, aes(x = s0)) +
+  geom_bar(fill = btfgreen, alpha = 0.8) +
+  btf_theme +
+  xlab("Site") +
+  ylab("Count") +
+  theme(axis.text.x = element_text(angle = 45))
+hist_s0
+
+# for s0 == "p142" plot each t0
+# plot each episode
+selected_points_p142 <- selected_points[selected_points$s0 == "p142", ]
+# order the t0
+selected_points_p142 <- selected_points_p142[order(selected_points_p142$t0), ]
+plot(selected_points_p142$t0, type = "l", col = btfgreen, xlab = "Episode",
+     ylab = "t0", main = "t0 for s0 = p142")
+
+
+list_episodes <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta)
 head(list_episodes[[1]])
 s0_list <- selected_points$s0
 t0_list <- selected_points$t0
+
 ```
 
 ```{r, echo=TRUE}
@@ -678,16 +705,15 @@ We have `r length(s0_list)` conditional points. We compute the lags and excesses
 ```{r, echo=FALSE}
 library(parallel)
 
-# get threshold corresponding to quantile q in comephore
-threshold <- quantile(comephore$p124, probs = q, na.rm = T)
-
+threshold <- quantile(comephore$p102, probs = q, na.rm = T)
+# Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
   s0_coords <- sites_coords[s0, ]
   t0 <- t0_list[i]
   episode <- list_episodes[[i]]
-  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0, tau_max = 10,
-                                      latlon = TRUE)
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0, 
+                                  tau_max = tmax, latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
@@ -984,19 +1010,19 @@ get_mode_dir <- function(x) {
   return(mode_value)
 }
 
-get_mode_excess_dir <- function(x, quantile) {
-  x <- na.omit(x)  # Remove NA values
-  x_excesses <- x[x > quantile]
+get_mode_excess_dir <- function(x, episode, quantile, s0) {
+  x_excesses <- x[episode[,s0] > quantile]
+  x_excesses <- na.omit(x_excesses)
   uniq_values <- unique(x_excesses)  # Get unique values
   freq_table <- tabulate(match(x_excesses, uniq_values))  # Count occurrences
   mode_value <- uniq_values[which.max(freq_table)]  # Most frequent value
   return(mode_value)
 }
 
-get_mean_excess_dir <- function(x, quantile) {
-  x <- na.omit(x)  # Remove NA values
+get_mean_excess_dir <- function(x, episode, quantile, s0) {
   # get the mean for all excess above quantile
-  x_excesses <- x[x > quantile]
+  x_excesses <- x[episode[,s0] > quantile]
+  x_excesses <- na.omit(x_excesses)
   mean_dir <- mean(x_excesses)
   return(mean_dir)
 }
@@ -1008,9 +1034,8 @@ compute_wind_episode <- function(episode, delta, quantile) {
 
   # get column name of the max value
   max_value <- max(episode, na.rm = TRUE)
-  Q0 <- names(episode)[which(sapply(episode, 
+  s0 <- names(episode)[which(sapply(episode, 
                       function(col) max(col, na.rm = TRUE)) == max_value)]
-
 
   # Subset the wind data for the episode
   wind_subset <- wind_mtp %>%
@@ -1021,8 +1046,9 @@ compute_wind_episode <- function(episode, delta, quantile) {
     FF <- wind_subset$FF[1 + delta]
     cardDir <- get_mode_dir(wind_subset$cardDir)
     DD <- mean(wind_subset$DD[wind_subset$cardDir == cardDir])
-    cardDir_excess <- get_mode_excess_dir(wind_subset$cardDir, quantile)
-    DD_excess <- get_mean_excess_dir(wind_subset$DD, quantile)
+    cardDir_excess <- get_mode_excess_dir(wind_subset$cardDir, episode,
+                                                              quantile, s0)
+    DD_excess <- get_mean_excess_dir(wind_subset$DD, episode, quantile, s0)
     DD_t0 <- wind_subset$DD[1 + delta]
   } else {
     FF <- NA
@@ -1038,7 +1064,7 @@ compute_wind_episode <- function(episode, delta, quantile) {
                     DD_excess = DD_excess, DD_t0 = DD_t0))
 }
 
-wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = 15,
+wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = delta,
                           quantile = threshold)
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
@@ -1104,7 +1130,7 @@ wind_ep_df$cardDir_excess <- factor(wind_ep_df$cardDir_excess,
 ggplot(wind_ep_df, aes(x = cardDir_excess)) +
   geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 1) +  # Bar plot for wind direction
   coord_polar(start = 15*pi/8) +  # Convert to polar coordinates, starting at North
-  labs(x = "Mean wind Direction in excess", y = "Count", title = "") +
+  labs(x = "Most frequent wind direction in excess for s0", y = "Count", title = "") +
   theme_minimal() +  # Clean theme
   theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
 
@@ -1118,15 +1144,13 @@ wind_ep_df$DD_excess <- as.numeric(wind_ep_df$DD_excess)
 ggplot(wind_ep_df, aes(x = DD_excess)) +
   geom_bar(color = "#797474", fill = btfgreen, alpha=0.5, width = 5) +  # Bar plot for wind direction
   coord_polar(start = 15.85*pi/8) +  # Convert to polar coordinates, starting at North
-  labs(x = "Mean wind Direction in excess", y = "Count", title = "") +
+  labs(x = "Mean wind direction in excess for s0", y = "Count", title = "") +
   theme_minimal() +  # Clean theme
   theme(axis.text.x = element_text(size = 12, face = "bold"))  # Improve readability
 
 # save the wind data
 filename <- paste(im_folder, "wind/datagouv/wind_dir_excess_per_episode.png", sep = "")
 ggsave(filename, width = 30, height = 15, units = "cm")
-
-
 
 # Plot wind forces FF
 ggplot(wind_ep_df, aes(x = FF)) +
@@ -1145,7 +1169,7 @@ library(dplyr)
 
 
 # Create a new column that checks if cardDir matches DD_t0
-wind_ep_df$Match <- wind_ep_df$cardDir == wind_ep_df$cardDirt0
+wind_ep_df$Match <- wind_ep_df$cardDir == wind_ep_df$cardDir_excess
 
 # Bar plot of matches vs mismatches
 ggplot(wind_ep_df, aes(x = Match)) +
@@ -1160,8 +1184,8 @@ ggsave(filename, width = 30, height = 15, units = "cm")
 ```
 
 ```{r, echo=FALSE}
-wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD)
-wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD)
+wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD_t0)
+wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD_t0)
 head(wind_ep_df)
 ```
 
@@ -1192,7 +1216,7 @@ theorical_chi <- function(params, df_lags, wind_vect = NA) {
     eta1 <- params[5]
     eta2 <- params[6]
     # adv <- exp(eta1 + eta2 * wind_vect)
-    adv <- (abs(wind_vect)^eta1)*sign(wind_vect) * eta2
+    adv <- (abs(wind_vect)^eta1) * sign(wind_vect) * eta2
   }
 
   chi_df <- df_lags[c("s1", "s2", "tau")]
@@ -1305,11 +1329,12 @@ neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
 ```
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 0, 0)
-q <- 1
+init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+# q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        list_episodes = list_episodes, quantile = q, list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 6, s0_list = s0_list,
+        list_episodes = list_episodes, quantile = threshold,
+        list_lags = list_lags,
+        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
         wind_df = wind_ep_df,
         t0_list = t0_list, threshold = TRUE,
         method = "L-BFGS-B",
@@ -1318,6 +1343,7 @@ result <- optim(par = init_param, fn = neg_ll_composite_rpar,
         control = list(maxit = 10000),
         hessian = F)
 estimated_params_noadv <- result$par
+
 # Check the convergence
 if (result$convergence != 0) {
   warning("The optimization did not converge.")
