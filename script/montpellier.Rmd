@@ -628,7 +628,6 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
 ```
 
 ```{r, echo=FALSE}
-library(geosphere)
 min_spatial_dist <- 5  # in km
 min_time_dist <- 10  # in hours
 delta <- 8 # step for the episode before and after the max value
@@ -1357,7 +1356,8 @@ df_result_noadv <- data.frame(beta1 =  result$par[1],
                         adv1 = result$par[5],
                         adv2 = result$par[6])
 
-colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+colnames(df_result_noadv) <- c("beta1", "beta2", "alpha1", "alpha2", "adv1",
+                                "adv2")
 
 kable(df_result_noadv, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",

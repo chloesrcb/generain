@@ -1,3 +1,7 @@
+# Package
+library(generain)
+
+# General
 library(plyr)
 library(dplyr)
 library(car)
@@ -41,6 +45,7 @@ library(gridExtra)
 
 # Extremes
 library(fExtremes)
+library(extRemes)
 library(ismev)
 library(evd)
 library(mev)
@@ -49,11 +54,15 @@ library(POT)
 # Models
 library(fields)
 library(lmtest)
+library(bbmle)
 
-# Tables
+# Tables and Latex
 library(kableExtra)
 
+# Parallel
+library(parallel)
 
+# PERSONNALIZATION ############################################################
 # ggplot theme
 # personnalized theme
 btf_theme <- theme_minimal() +
