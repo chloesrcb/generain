@@ -9,6 +9,7 @@ library(classInt)
 library(RStoolbox)
 library(tidyr)
 library(reshape2)
+library(data.table)
 
 # spatial 
 library(raster)

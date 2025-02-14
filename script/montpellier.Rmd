@@ -630,7 +630,7 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
 ```{r, echo=FALSE}
 min_spatial_dist <- 5  # in km
 min_time_dist <- 10  # in hours
-delta <- 8 # step for the episode before and after the max value
+delta <- 15 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
@@ -1217,16 +1217,23 @@ theorical_chi <- function(params, df_lags, wind_vect = NA) {
     # adv <- exp(eta1 + eta2 * wind_vect)
     adv <- (abs(wind_vect)^eta1) * sign(wind_vect) * eta2
   }
+  # print(adv)
 
   chi_df <- df_lags[c("s1", "s2", "tau")]
   # Get vario and chi for each lagtemp in meters
-  chi_df$s1xv <- df_lags$s1x * 111320
-  chi_df$s1yv <- df_lags$s1y * 111320 * cos(df_lags$s1x * pi / 180)
-  chi_df$s2xv <- df_lags$s2x  * 111320 + adv[1] * df_lags$tau
-  chi_df$s2yv <- df_lags$s2y  * 111320 * cos(df_lags$s1x * pi / 180) 
-                                                          adv[2] * df_lags$tau
-  chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                        (chi_df$s2yv - chi_df$s1yv)^2)
+  lat_m_per_deg <- 111132.92 - 559.82 * cos(2 * df_lags$s1y * pi / 180) +
+                  1.175 * cos(4 * df_lags$s1y * pi / 180)
+
+  lon_m_per_deg <- 111412.84 * cos(df_lags$s1y * pi / 180) -
+                    93.5 * cos(3 * df_lags$s1y * pi / 180)
+
+  chi_df$s1xv <- df_lags$s1x * lon_m_per_deg
+  chi_df$s1yv <- df_lags$s1y * lat_m_per_deg
+  chi_df$s2xv <- df_lags$s2x * lon_m_per_deg + adv[1] * df_lags$tau
+  chi_df$s2yv <- df_lags$s2y * lat_m_per_deg + adv[2] * df_lags$tau
+
+  chi_df$hnormV <- (sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                        (chi_df$s2yv - chi_df$s1yv)^2)) / 1000
   # chi_df$hnormV <- haversine(chi_df$s1xv, chi_df$s1yv,
   #                                chi_df$s2xv, chi_df$s2yv)
   # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
@@ -1300,17 +1307,18 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, wind_vect = NA,
 neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
                     list_excesses, wind_df, hmax = NA, s0_list = NA,
                     t0_list = NA, threshold = FALSE) {
-  if (any(is.na(wind_df))) {
+  if (all(is.na(wind_df))) {
     wind_vect <- NA
   }
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
+  print(params)
   for (i in 1:m) {
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
     episode <- list_episodes[[i]]
-    if (all(!is.na(wind_df))) {
+    if (!all(is.na(wind_df))) {
       wind_vx <- wind_df$vx[i]
       wind_vy <- wind_df$vy[i]
       wind_vect <- c(wind_vx, wind_vy)
@@ -1328,19 +1336,18 @@ neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
 ```
 
 ```{r, echo=FALSE}
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+init_param <- c(beta1, beta2, alpha1, alpha2, 0, 0)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
         list_episodes = list_episodes, quantile = threshold,
         list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
+        list_excesses = list_excesses, hmax = 5, s0_list = s0_list,
         wind_df = wind_ep_df,
         t0_list = t0_list, threshold = TRUE,
         method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+        lower = c(1e-08, 1e-08, 1e-08, 1e-06, 1e-06, 1e-06),
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000),
-        hessian = F)
+        control = list(maxit = 10000))
 estimated_params_noadv <- result$par
 
 # Check the convergence
