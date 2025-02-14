@@ -249,19 +249,22 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   lags$s2x <- df_coords$Longitude[lags$s2]
   lags$s2y <- df_coords$Latitude[lags$s2]
 
-  s1_coords <- df_coords[ind_s0, c("Longitude", "Latitude")]
+  s1_coords <- unlist(df_coords[ind_s0, c("Longitude", "Latitude")])
   s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
 
   # Vector coordinates between two sites
   # Convert to meters using Haversine distance for hx, hy
   if (latlon) {
     # Geodesic distance
-    lags$hnorm <- distHaversine(s1_coords, s2_coords)
-
-    # Projection hx, hy in m
-    lags$hx <- (s2_coords$Longitude - s1_coords$Longitude) *
-                          cos(mean(s1_coords$Latitude) * pi / 180) * 111320
-    lags$hy <- (s2_coords$Latitude - s1_coords$Latitude) * 111320
+    for (i in 1:nrow(lags)) {
+      s2_coords <- c(lags$s2x[i], lags$s2y[i])
+      lags$hnorm[i] <- distHaversine(s1_coords, s2_coords)
+      # Calculate hx and hy in meters
+      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s2_coords[1], s1_coords[2]))
+      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
+                                  c(s1_coords[1], s2_coords[2]))
+    }
   } else {
     lags$hx <- s2_coords$Longitude - s1_coords$Longitude
     lags$hy <- s2_coords$Latitude - s1_coords$Latitude

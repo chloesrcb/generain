@@ -239,7 +239,8 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 
 #' Generate variogram plots
 #'
-#' This function generates variogram plots for multiple tau values.
+#' This function generates theoretical and empirical variogram plots for 
+#' multiple tau values.
 #'
 #' @param result The result of the variogram estimation.
 #' @param df_lags The dataframe of lags.
@@ -312,4 +313,66 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
                                     "Theoretical" = "#dc7c7c")) +
       theme(legend.position = "bottom")
   }
+}
+
+
+#' Generate a variogram plot for rpareto
+#' 
+#' This function generates a variogram plot for the rpareto model.
+#' 
+#' @param result The result of the variogram estimation.
+#' @param df_lags The dataframe of lags.
+#' @param wind_df The dataframe of wind data.
+#' @param tau_values The values of tau to generate plots for.
+#' @param chi A logical value indicating whether to plot the chi values.
+#'           Default is FALSE.
+#' 
+#' @return None, but generates plots.
+#' 
+#' @import ggplot2
+#' 
+#' @export
+generate_variogram_plots_rpareto <- function(result, df_lags, wind_df) {
+  # Get the estimated variogram
+  beta1 <- result$beta1
+  beta2 <- result$beta2
+  alpha1 <- result$alpha1
+  alpha2 <- result$alpha2
+  eta1 <- result$eta1
+  eta2 <- result$eta2
+
+  # Compute advection for each row
+  adv_df <- wind_df %>%
+    mutate(
+      adv_x = (abs(vx)^eta1) * sign(vx) * eta2,
+      adv_y = (abs(vy)^eta1) * sign(vy) * eta2
+    )
+
+  # Apply theorical_chi for each row's advection
+  empirical_chi <- adv_df %>%
+    rowwise() %>%
+    mutate(chi = list(theorical_chi(c(beta1, beta2, alpha1, alpha2, 
+                              adv_x, adv_y), df_lags))) %>%
+    unnest(chi)
+
+  # keep chi for hnormv > 0
+  empirical_chi <- empirical_chi %>%
+    filter(hnormV > 0)
+  
+  df_chi <- empirical_chi[, c("hnormV", "vario", "tau")]
+  
+  # Plot chi$vario in function on hnorm for each tau
+  ggplot(df_chi, aes(x = hnormV, y = vario)) +
+    geom_line(color=btfgreen) +
+    facet_wrap(~ tau, scales = "free_x",
+        labeller = labeller(tau = function(x) paste0("tau = ", x))) +
+    labs(
+      title = "",
+      x = "Spatial Lag",
+      y = "Variogram"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+
+
 }
