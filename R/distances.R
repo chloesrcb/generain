@@ -266,8 +266,8 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
                                   c(s1_coords[1], s2_coords[2]))
     }
   } else {
-    lags$hx <- s2_coords$Longitude - s1_coords$Longitude
-    lags$hy <- s2_coords$Latitude - s1_coords$Latitude
+    lags$hx <- s2_coords$Longitude - s1_coords[1]
+    lags$hy <- s2_coords$Latitude - s1_coords[2]
     lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
   }
 
