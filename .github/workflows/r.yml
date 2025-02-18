@@ -25,6 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev libxml2-dev libssl-dev
           sudo apt-get install -y libfontconfig1-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev  # Fix for ragg issues
+          sudo apt-get install -y libgit2-dev
 
       - name: Install dependencies from inst/archives
         run: |
