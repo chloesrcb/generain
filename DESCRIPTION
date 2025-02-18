@@ -22,12 +22,10 @@ Imports:
   evd,
   mev,
   lmtest,
-  kableExtra,
   knitr,
   graphics,
   scoringRules,
   sp,
-  RandomFields,
   doParallel,
   foreach,
   POT
