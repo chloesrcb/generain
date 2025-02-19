@@ -54,6 +54,9 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
   ind_s1 <- df_lags$s1[1] # s0
+  # if (t0 == 0) {
+  #   t0 <- t0 + 1 # for simulation TODO
+  # }
   for (t in unique_tau) { # loop over temporal lags
     df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
 
@@ -68,7 +71,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       colnames(rain_cp) <- c("s2")
 
       # shifted data
-      X_s_t <- rain_cp$s2[((t0 + 1) + abs(t))] # X_{s,t0 + tau}
+      X_s_t <- rain_cp$s2[((t0) + abs(t))] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
 
       # store the number of excesses and T - tau
@@ -106,7 +109,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 #'
 #' @export
 empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
-                               type = "rpareto", t0 = 1) {
+                               type = "rpareto", t0 = 0) {
   if (type == "rpareto") {
     excesses <- empirical_excesses_rpar(data_rain, quantile, df_lags, threshold,
                 t0)

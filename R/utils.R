@@ -332,7 +332,7 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
 #' @import ggplot2
 #' 
 #' @export
-generate_variogram_plots_rpareto <- function(result, df_lags, wind_df) {
+generate_variogram_plots_rpareto <- function(result, lags_r, wind_r) {
   # Get the estimated variogram
   beta1 <- result$beta1
   beta2 <- result$beta2
@@ -342,7 +342,7 @@ generate_variogram_plots_rpareto <- function(result, df_lags, wind_df) {
   eta2 <- result$eta2
 
   # Compute advection for each row
-  adv_df <- wind_df %>%
+  adv_df <- wind_r %>%
     mutate(
       adv_x = (abs(vx)^eta1) * sign(vx) * eta2,
       adv_y = (abs(vy)^eta1) * sign(vy) * eta2
@@ -351,16 +351,16 @@ generate_variogram_plots_rpareto <- function(result, df_lags, wind_df) {
   # Apply theorical_chi for each row's advection
   empirical_chi <- adv_df %>%
     rowwise() %>%
-    mutate(chi = list(theorical_chi(c(beta1, beta2, alpha1, alpha2, 
+    mutate(chi = list(theorical_chi(c(beta1, beta2, alpha1, alpha2,
                               adv_x, adv_y), df_lags))) %>%
     unnest(chi)
 
   # keep chi for hnormv > 0
   empirical_chi <- empirical_chi %>%
     filter(hnormV > 0)
-  
+
   df_chi <- empirical_chi[, c("hnormV", "vario", "tau")]
-  
+
   # Plot chi$vario in function on hnorm for each tau
   ggplot(df_chi, aes(x = hnormV, y = vario)) +
     geom_line(color=btfgreen) +
@@ -373,6 +373,5 @@ generate_variogram_plots_rpareto <- function(result, df_lags, wind_df) {
     ) +
     theme_minimal() +
     theme(legend.position = "bottom")
-
 
 }

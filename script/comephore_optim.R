@@ -11,6 +11,9 @@ source("./script/load_libraries.R")
 # LOAD DATA ####################################################################
 df_comephore <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
 loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
+
+# Take only data after 2007
+df_comephore <- df_comephore %>% filter(date > as.Date("2007-12-31"))
 # put date in index
 rownames(df_comephore) <- df_comephore$date
 comephore <- df_comephore[-1] # remove dates column
@@ -19,9 +22,12 @@ dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 nsites <- nrow(loc_px)
 
+
+
+
 # CHOOSE QUANTILE ##############################################################
 
-q <- 0.999
+q <- 0.998
 
 # BUHL WLSE ####################################################################
 
@@ -105,7 +111,7 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q <- 0.996
+q <- 0.998
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                                  quantile = q, hmax = hmax)
 
@@ -127,7 +133,7 @@ filename <- paste(im_folder, "WLSE/comephore/spatial_chi_", q,
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # WLSE
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = F)
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
 print(wlse_spa)
 
 alpha1 <- wlse_spa[[2]]
@@ -334,7 +340,7 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
 
 min_spatial_dist <- 5  # in km
 min_time_dist <- 5  # in hours
-delta <- 20 # step for the episode before and after the max value
+delta <- 12 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
@@ -369,15 +375,16 @@ t0_list <- selected_points$t0
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
   s0_coords <- sites_coords[s0, ]
-  t0 <- t0_list[i]
+  t0 <- t0_time_list[i]
   episode <- list_episodes[[i]]
-  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
+  ind_t0 <- delta
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0,
                                   tau_max = tmax, latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
   excesses <- empirical_excesses(episode, threshold, lags, type = "rpareto",
-                                  threshold = TRUE)
+                                  threshold = TRUE, t0 = ind_t0)
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -448,6 +455,7 @@ compute_wind_episode <- function(episode, delta, quantile) {
     cardDir_excess <- get_mode_dir(wind_subset_excess$cardDir)
     DD_excess <- mean(wind_subset_excess$DD[wind_subset_excess$cardDir ==
                                                             cardDir_excess])
+    DD_excess <- mean(wind_subset_excess$DD)
     DD_t0 <- wind_subset$DD[1 + delta]
   } else {
     FF <- NA
@@ -596,12 +604,6 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 # filename <- paste(im_folder, "wind/datagouv/wind_dir_match.png", sep = "")
 # ggsave(filename, width = 30, height = 15, units = "cm")
 
-# Get wind vector coordinates  (vx, vy)
-wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD_t0)
-wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD_t0)
-head(wind_ep_df)
-
-
 # OPTIMIZATION #################################################################
 
 # Haversine distance between (x1, y1) and (x2, y2)
@@ -739,6 +741,12 @@ neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
   return(nll_composite)
 }
 
+
+# Get wind vector coordinates  (vx, vy)
+wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD_t0)
+wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD_t0)
+head(wind_ep_df)
+
 wind_df <- wind_ep_df[, c("vx", "vy")]
 
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
@@ -746,7 +754,7 @@ init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
         list_episodes = list_episodes, quantile = threshold,
         list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 10, s0_list = s0_list,
+        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
         wind_df = wind_df,
         t0_list = t0_list, threshold = TRUE,
         method = "L-BFGS-B",
@@ -767,8 +775,16 @@ df_result <- data.frame(beta1 =  result$par[1],
                         beta2 = result$par[2],
                         alpha1 = result$par[3],
                         alpha2 = result$par[4],
-                        adv1 = result$par[5],
-                        adv2 = result$par[6])
+                        eta1 = result$par[5],
+                        eta2 = result$par[6])
+
+
+df_result <- data.frame(beta1 = 6.12,
+                        beta2 = 0.14,
+                        alpha1 = 0.01,
+                        alpha2 = 0.24,
+                        eta1 = 1.37,
+                        eta2 = 1.25)
 
 colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2", "eta1",
                                 "eta2")
@@ -780,12 +796,13 @@ kable(df_result, format = "latex") %>%
 # VARIOGRAM PLOTS ##############################################################
 
 # compute variogram with parameters
-tau_values <- c(0)
 result <- df_result
-df_lags <- list_lags[[5]]
-generate_variogram_plots_rpareto(result, df_lags, wind_df)
+num_ep <- 200
+df_lags_s0t0 <- list_lags[[num_ep]]
+wind_s0t0 <- wind_df[num_ep, ]
+generate_variogram_plots_rpareto(result, df_lags_s0t0, wind_s0t0)
 
 # save the plot
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_", end_filename,
-                    sep = "")
+filename <- paste(im_folder, "optim/comephore/variogram_rpareto_DD_t0_ep", num_ep, 
+                "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
