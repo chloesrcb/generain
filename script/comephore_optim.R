@@ -13,7 +13,7 @@ df_comephore <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
 loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
 
 # Take only data after 2007
-df_comephore <- df_comephore %>% filter(date > as.Date("2007-12-31"))
+# df_comephore <- df_comephore %>% filter(date > as.Date("2007-12-31"))
 # put date in index
 rownames(df_comephore) <- df_comephore$date
 comephore <- df_comephore[-1] # remove dates column
@@ -22,12 +22,119 @@ dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 nsites <- nrow(loc_px)
 
+# DATA WITHOUT 0 ###############################################################
 
+# Remove rows with all columns equal to 0
+# comephore_no0 <- comephore[rowSums(comephore) != 0, ]
 
+# nrow(comephore)
+# nrow(comephore_no0)
 
 # CHOOSE QUANTILE ##############################################################
 
-q <- 0.998
+# get a matrix of high quantiles for all pair
+# q <- 0.99 # quantile
+# list_count_quant <- quantile_matrix(q, comephore, qlim = TRUE, zeros = TRUE,
+#                                     count_min = 150) # with removing zeros
+# quant_mat <- list_count_quant[1][[1]]
+# count_mat <- list_count_quant[2]
+
+par(mfrow = c(1, 2))
+comephore_pair <- comephore[, c(12, 2)]
+comephore_pair_no0 <- comephore_pair[rowSums(comephore_pair) > 0, ]
+chiplot(comephore_pair_no0, xlim = c(0.85, 1), ylim1 = c(0.5, 1), which = 1,
+        qlim = c(0.85, 0.999))
+abline(v = 0.96, col = "red", lty = 2)
+
+# Same with all zeros
+comephore_pair <- comephore[, c(12, 2)]
+chiplot(comephore_pair, xlim = c(0.99, 1), ylim1 = c(0.5, 1), which = 1,
+        qlim = c(0.99, 0.9999))
+abline(v = 0.998, col = "red", lty = 2)
+
+
+# count conjoint excesses
+q <- 0.96
+# uniformize the data
+n <- nrow(comephore_pair_no0)
+data_unif <- cbind(rank(comephore_pair_no0[, 1]) / (n + 1),
+                          rank(comephore_pair_no0[, 2]) / (n + 1))
+
+count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
+print(count_excesses)
+
+# count conjoint excesses
+q <- 0.9975
+# uniformize the data
+n <- nrow(comephore_pair)
+data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
+                          rank(comephore_pair[, 2]) / (n + 1))
+
+count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
+print(count_excesses)
+
+q_no0_spa <- 0.96
+# get the corresponding quantile in the data without 0 and with 0
+q_value_no0 <- quantile(c(comephore_pair_no0[,1], comephore_pair_no0[,2]), 
+                        probs = q_no0_spa, na.rm = TRUE)
+
+q_equiv_prob <- ecdf(c(comephore_pair[,1], comephore_pair[,2]))(q_value_no0)
+print(q_equiv_prob)
+
+q_equiv <- quantile(c(comephore[,1], comephore[,15]), probs = q_equiv_prob, 
+              na.rm = TRUE)
+print(q_equiv)  # quantile and threshold
+
+q_spa <- round(q_equiv_prob, 4)
+
+# Temporal chi
+par(mfrow = c(1,2))
+rain_nolag <- comephore$p102[1:(length(comephore$p102) - 5)]
+rain_lag <- comephore$p102[6:length(comephore$p102)]
+comephore_pair <- cbind(rain_nolag, rain_lag)
+comephore_pair_no0 <- comephore_pair[rowSums(comephore_pair) > 0, ]
+chiplot(comephore_pair_no0, xlim = c(0.8, 0.99), ylim1 = c(0, 1), which = 1,
+        qlim = c(0.8, 0.99))
+abline(v = 0.96, col = "red", lty = 2)
+
+comephore_pair <- cbind(rain_nolag, rain_lag)
+# comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
+chiplot(comephore_pair, xlim = c(0.98, 1), ylim1 = c(0, 1), which = 1,
+        qlim = c(0.98, 0.999))
+abline(v = 0.995, col = "red", lty = 2)
+
+# count conjoint excesses
+q_no0_spa <- 0.96
+# uniformize the data
+n <- nrow(comephore_pair_no0)
+data_unif <- cbind(rank(comephore_pair_no0[, 1]) / (n + 1),
+                          rank(comephore_pair_no0[, 2]) / (n + 1))
+
+count_excesses <- sum(data_unif[, 1] > q_no0 & data_unif[, 2] > q_no0_spa)
+print(count_excesses)
+
+# count conjoint excesses
+q <- 0.996
+# uniformize the data
+n <- nrow(comephore_pair)
+data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
+                          rank(comephore_pair[, 2]) / (n + 1))
+
+count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
+print(count_excesses)
+
+q_no0_temp <- 0.94
+# get the corresponding quantile in the data without 0 and with 0
+q_value_no0 <- quantile(c(comephore_pair_no0[,1], comephore_pair_no0[,2]), 
+                        probs = q_no0_temp, na.rm = TRUE)
+
+q_equiv_prob <- ecdf(c(comephore_pair[,1], comephore_pair[,2]))(q_value_no0)
+print(q_equiv_prob)
+
+q_temp <- round(q_equiv_prob, 4)
+q_equiv <- quantile(c(comephore[,1], comephore[,15]), probs = q_equiv_prob, 
+              na.rm = TRUE)
+print(q_equiv)  # quantile and threshold
 
 # BUHL WLSE ####################################################################
 
@@ -35,8 +142,8 @@ q <- 0.998
 tmax <- 10
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
-chimat_dtlag <- temporal_chi(comephore, quantile = q, tmax = tmax,
-                             mean = FALSE)
+chimat_dtlag <- temporal_chi(comephore, quantile = q_no0_temp, tmax = tmax,
+                             mean = FALSE, zeros = FALSE)
 
 chi_df_dt <- data.frame(chimat_dtlag)
 colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
@@ -58,16 +165,16 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 chitemp
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/temporal_chi_boxplot_", q,
+filename <- paste(im_folder, "WLSE/comephore/temporal_chi_boxplot_", q_no0_temp,
                     ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # Mean of chi
-chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q,
-                               mean = TRUE)
+chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q_no0_temp,
+                               mean = TRUE, zeros = FALSE)
 # get h axis in minutes ie x5 minutes
-df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-chitemp_plot <- ggplot(df, aes(x = lag, y = chi)) +
+df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
+chitemp_plot <- ggplot(df_chi, aes(x = lag, y = chi)) +
   geom_point(color = btfgreen) +
   btf_theme +
   xlab(TeX(r"($\tau$ (hours))")) +
@@ -75,14 +182,18 @@ chitemp_plot <- ggplot(df, aes(x = lag, y = chi)) +
 
 chitemp_plot
 
-wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
-                                    weights = "exp", summary = T)
+# remove the first value
+# df_chi <- df_chi[-1, ]
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
 print(wlse_temp)
-alpha2 <- wlse_temp[[2]]
-beta2 <- wlse_temp[[1]]
-c2 <- log(beta2)
+c2 <- wlse_temp[[1]]
+beta2 <- wlse_temp[[2]]
+alpha2 <- wlse_temp[[3]]
 
-dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+dftemp <- data.frame(lag = log(df_chi$lag), chi = eta(df_chi$chi))
+
+# remove first row
+# dftemp <- dftemp[-1, ]
 
 chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
   geom_point(color = btfgreen) +
@@ -95,8 +206,8 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 chitemp_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/temporal_chi_eta_estim_", q,
-                    ".png", sep = "")
+filename <- paste(im_folder, "WLSE/comephore/temporal_chi_eta_estim_", 
+                q_no0_temp, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # Spatial chi
@@ -111,9 +222,9 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q <- 0.998
+q <- q_no0_spa
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
-                                 quantile = q, hmax = hmax)
+                                 quantile = q, hmax = hmax, zeros = FALSE)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
@@ -133,12 +244,12 @@ filename <- paste(im_folder, "WLSE/comephore/spatial_chi_", q,
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # WLSE
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
 print(wlse_spa)
 
-alpha1 <- wlse_spa[[2]]
-beta1 <- wlse_spa[[1]]
-c1 <- log(beta1)
+c1 <- wlse_spa[[1]]
+beta1 <- wlse_spa[[2]]
+alpha1 <- wlse_spa[[3]]
 
 chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
@@ -243,6 +354,9 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   data <- as.matrix(data)
   # n_sites <- ncol(data)
 
+  data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") /
+                                                (length(col) + 1))
+
   # Extract site names
   site_names <- colnames(data)
 
@@ -254,14 +368,15 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   colnames(dist_matrix) <- site_names
 
   # Get initial max values
-  max_value <- max(na.omit(data))
-  max_indices <- which(data == max_value, arr.ind = TRUE)
-
-  # Store selected points
-  selected_points <- data.table(s0 = character(), t0 = integer())
+  max_value <- max(na.omit(data_unif))
+  max_indices <- which(data_unif == max_value, arr.ind = TRUE)
+ 
+  # Store selected points and corresponding threshold
+  selected_points <- data.table(s0 = character(), t0 = integer(), 
+                                u_s0 = numeric())
 
   # Logical mask for invalid times
-  invalid_time_mask <- matrix(FALSE, nrow(data), ncol(data))
+  invalid_time_mask <- matrix(FALSE, nrow(data_unif), ncol(data_unif))
 
   nb_episode <- 0
 
@@ -271,9 +386,11 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
     for (idx in seq_len(nrow(max_indices))) {
       s0_candidate <- site_names[max_indices[idx, 2]]
       t0_candidate <- max_indices[idx, 1]
-
+      u_s0 <- quantile(data[, s0_candidate], probs = quantile,
+                              na.rm = TRUE)
       if (nrow(selected_points) == 0) { # First selection
-        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate)
+        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate,
+                                    u_s0 = u_s0)
         nb_episode <- nb_episode + 1
         break
       } else {
@@ -287,9 +404,10 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
           time_differences <- abs(selected_points$t0 - t0_candidate)
 
           # Validate the candidate
-          if (all(distances >= min_spatial_dist) || 
+          if (all(distances >= min_spatial_dist) ||
                             all(time_differences >= min_time_dist)) {
-            best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate)
+            best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate,
+                                        u_s0 = u_s0)
             nb_episode <- nb_episode + 1
             # print(nb_episode)
             break
@@ -307,13 +425,13 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
 
       # Remove nearby temporal data
       t_inf <- max(1, best_candidate$t0 - (delta - 1) - beta)
-      t_sup <- min(nrow(data), best_candidate$t0 + (delta - 1) + beta)
-      invalid_time_mask[t_inf:t_sup, 
+      t_sup <- min(nrow(data_unif), best_candidate$t0 + (delta - 1) + beta)
+      invalid_time_mask[t_inf:t_sup,
                         which(site_names == best_candidate$s0)] <- TRUE
     }
 
     # Update max selection by ignoring invalid positions
-    masked_data <- data
+    masked_data <- data_unif
     masked_data[invalid_time_mask] <- -Inf
     max_value <- max(masked_data)
     max_indices <- which(masked_data == max_value, arr.ind = TRUE)
@@ -323,8 +441,12 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
 }
 
 
-
-get_extreme_episodes <- function(selected_points, data, delta, beta = 0) {
+get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
+                                unif = FALSE) {
+  if (unif) { # uniformize the data
+   data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
+                                                (length(col) + 1))
+  }
   # initialize the list of episodes
   episodes <- list()
   for (i in 1:nrow(selected_points)) {
@@ -346,45 +468,47 @@ delta <- 12 # step for the episode before and after the max value
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.998 # quantile
-threshold <- 1000 # initialize the threshold to a high value
-# get minimal threshold for q quantile for all columns in comephore
-for (i in 1:ncol(comephore)) {
-  threshold <- min(threshold, quantile(comephore[, i], probs = q, na.rm = TRUE))
-}
+q <- 0.999 # quantile
+# threshold <- 1000 # initialize the threshold to a high value
+# # get minimal threshold for q quantile for all columns in comephore
+# for (i in 1:ncol(comephore)) {
+#   threshold <- min(threshold, quantile(comephore[, i], probs = q, na.rm = TRUE))
+# }
 
 # Get the selected episodes
-selected_points <- select_extreme_episodes(sites_coords, comephore, threshold,
+selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                         min_spatial_dist, min_time_dist,
-                                        delta = delta, n_max_episodes = 10000)
+                                        delta = delta, n_max_episodes = 1000)
 
 n_episodes <- length(selected_points$s0)
 length(unique(selected_points$s0)) # can be same s0
-length(unique(selected_points$t0)) # never same t0
+length(unique(selected_points$t0)) # never same t0?
 
 list_episodes <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta)
+                                      delta = delta, unif = FALSE)
 list_episodes[[100]]
 nrow(list_episodes[[1]]) # size of episode
 
 # boxplot(list_episodes[[1]])
 s0_list <- selected_points$s0
 t0_list <- selected_points$t0
+u_list <- selected_points$u_s0
 
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
   s0_coords <- sites_coords[s0, ]
-  t0 <- t0_time_list[i]
+  # t0 <- t0_list[i]
   episode <- list_episodes[[i]]
-  ind_t0 <- delta
-  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0,
+  u <- u_list[i]
+  ind_t0_ep <- delta  # index of t0 in the episode
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
                                   tau_max = tmax, latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
-  excesses <- empirical_excesses(episode, threshold, lags, type = "rpareto",
-                                  threshold = TRUE, t0 = ind_t0)
+  excesses <- empirical_excesses(episode, u, lags, type = "rpareto",
+                                  threshold = TRUE, t0 = ind_t0_ep)
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -429,23 +553,23 @@ get_mode_dir <- function(x) {
 }
 
 # Function to compute the mean wind speed and direction for each episode
-compute_wind_episode <- function(episode, delta, quantile) {
+compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
   timestamps <- as.POSIXct(rownames(episode),
                             format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
   # get column name of the max value
-  max_value <- max(episode, na.rm = TRUE)
-  s0 <- names(episode)[which(sapply(episode,
-                      function(col) max(col, na.rm = TRUE)) == max_value)]
+  # max_value <- max(episode, na.rm = TRUE)
+  # s0 <- colnames(episode)[which(sapply(episode,
+  #                     function(col) max(col, na.rm = TRUE)) == max_value)]
 
   # Subset the wind data for the episode
-  wind_subset <- wind_mtp %>%
-    filter(datetime %in% timestamps)
+  wind_subset <- wind_df %>%
+    dplyr::filter(datetime %in% timestamps)
 
   # Time when there is excess above quantile in s0
-  s0_excess_time <- which(episode[, s0] > quantile)
-  wind_subset_excess <- wind_mtp %>%
-    filter(datetime %in% timestamps[s0_excess_time])
+  s0_excess_time <- which(episode[, s0] > u)
+  wind_subset_excess <- wind_df %>%
+    dplyr::filter(datetime %in% timestamps[s0_excess_time])
 
   # Compute the mean wind speed and direction for the episode if there is data
   if (nrow(wind_subset) > 0) {
@@ -471,8 +595,12 @@ compute_wind_episode <- function(episode, delta, quantile) {
                     DD_excess = DD_excess, DD_t0 = DD_t0))
 }
 
-wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = delta,
-                          quantile = threshold)
+
+wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
+               MoreArgs = list(wind_df = wind_mtp, delta = delta))
+
+# wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = delta,
+#                           quantile = q)
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
 head(wind_ep_df)
@@ -501,7 +629,7 @@ custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
 # Plot wind rose
 ggplot(wind_ep_df, aes(x = cardDir, fill = FF_interval)) +
   geom_bar(position = "stack", width = 1, color = "black") +
-  coord_polar(start = 15 * pi / 8) + 
+  coord_polar(start = 15 * pi / 8) +
   scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
   labs(x = "Direction", y = "Count", title = "") +
   theme_minimal() +
@@ -556,9 +684,10 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 # Mean by excess in episode
 wind_ep_df$cardDir_excess <- factor(wind_ep_df$cardDir_excess,
                         levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
-
+# remove NA values
+wind_plot <- wind_ep_df[!is.na(wind_ep_df$cardDir_excess), ]
 # Plot wind rose
-ggplot(wind_ep_df, aes(x = cardDir_excess, fill = FF_interval)) +
+ggplot(wind_plot, aes(x = cardDir_excess, fill = FF_interval)) +
   geom_bar(position = "stack", width = 1, color = "black") +
   coord_polar(start = 15 * pi / 8) +
   scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
@@ -576,7 +705,7 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 wind_ep_df$DD_excess <- as.numeric(wind_ep_df$DD_excess)
 
 # Plot wind rose
-ggplot(wind_ep_df, aes(x = DD_excess)) +
+ggplot(wind_plot, aes(x = DD_excess)) +
   geom_bar(color = "#797474", fill = btfgreen, alpha = 0.5, width = 5) +
   coord_polar(start = 15.85 * pi / 8) +
   labs(x = "Mean wind direction in excess for s0 (in degree)", y = "Count",
@@ -588,21 +717,6 @@ ggplot(wind_ep_df, aes(x = DD_excess)) +
 filename <- paste(im_folder, "wind/datagouv/wind_dir_excess_", end_filename,
                     sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
-
-# Plot count of cardinal directions for cardDir and DD_t0
-# wind_ep_df$Match <- wind_ep_df$cardDir == wind_ep_df$cardDir_excess
-
-# # Bar plot of matches vs mismatches
-# ggplot(wind_ep_df, aes(x = Match)) +
-#   geom_bar(aes(fill = Match), color = "#797474", alpha = 0.7, width = 0.5) +
-#   scale_fill_manual(values = c("TRUE" = btfgreen, "FALSE" = "tomato")) +
-#   labs(x = "Cardinal direction t0 == Most frequent cardinal direction",
-#         y = "Count", title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"))
-
-# filename <- paste(im_folder, "wind/datagouv/wind_dir_match.png", sep = "")
-# ggsave(filename, width = 30, height = 15, units = "cm")
 
 # OPTIMIZATION #################################################################
 
@@ -631,7 +745,7 @@ theorical_chi <- function(params, df_lags, wind_vect = NA) {
     eta2 <- params[6]
     adv <- (abs(wind_vect)^eta1) * sign(wind_vect) * eta2
   }
-
+  # print(adv)
   chi_df <- df_lags[c("s1", "s2", "tau")]
   # Get vario and chi for each lagtemp in meters
   lat_m_per_deg <- 111132.92 - 559.82 * cos(2 * df_lags$s1y * pi / 180) +
@@ -655,19 +769,25 @@ theorical_chi <- function(params, df_lags, wind_vect = NA) {
   return(chi_df)
 }
 
-neg_ll <- function(params, data, df_lags, quantile, excesses, wind_vect = NA,
-                      hmax = NA,  s0 = NA, t0 = NA, threshold = FALSE) {
+neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
+                      hmax = NA,  rpar = TRUE, threshold = FALSE,
+                      quantile = NA, data = NA) {
   if (length(params) == 4) {
     params <- c(params, 0, 0)
   } else if (length(params) != 6) {
     stop("The number of initial parameters must be 4 or 6.")
   }
 
-  Tmax <- nrow(data) # number of total observations
-
-  if (all(!is.na(s0))) { # if we have a conditioning location
+  if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
+    if (is.na(data)) {
+      stop("The data must be provided for the max-stable composite likelihood.")
+    } else if (is.na(quantile)) {
+      stop("The quantile or threshold must be provided for the
+            max-stable composite likelihood.")
+    }
+    Tmax <- nrow(data) # number of total observations
     # number of marginal excesses
     nmarg <- get_marginal_excess(data, quantile, threshold)
     p <- nmarg / Tmax # probability of marginal excesses
@@ -711,57 +831,122 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, wind_vect = NA,
   return(nll)
 }
 
-neg_ll_composite_rpar <- function(params, list_episodes, list_lags, quantile,
+neg_ll_composite_rpar <- function(params, list_lags,
                     list_excesses, wind_df, hmax = NA, s0_list = NA,
-                    t0_list = NA, threshold = FALSE) {
+                    t0_list = NA) {
   if (all(is.na(wind_df))) {
     wind_vect <- NA
   }
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
-  # print(params)
+  print(params)
   for (i in 1:m) {
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
-    episode <- list_episodes[[i]]
+    # episode <- list_episodes[[i]]
     if (!all(is.na(wind_df))) {
       wind_vx <- wind_df$vx[i]
       wind_vy <- wind_df$vy[i]
       wind_vect <- c(wind_vx, wind_vy)
     }
     s0 <- s0_list[i]
-    t0 <- t0_list[i]
-    nll_i <- neg_ll(params, episode, df_lags, quantile, wind_vect = wind_vect,
-                    hmax = hmax, excesses = excesses, s0 = s0, t0 = t0,
-                    threshold = threshold)
+    nll_i <- neg_ll(params, df_lags, wind_vect = wind_vect,
+                    hmax = hmax, excesses = excesses, s0 = s0)
     nll_composite <- nll_composite + nll_i
   }
-  print(nll_composite)
+  # print(nll_composite)
   return(nll_composite)
 }
 
 
+neg_ll_composite_rpar_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1,
+                    eta2, list_episodes, list_lags,
+                    list_excesses, wind_df, hmax = NA, s0_list = NA) {
+  params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
+  nll_composite <- neg_ll_composite_rpar(params, list_episodes, list_lags,
+                                      list_excesses, wind_df,
+                                      hmax = hmax, s0_list = s0_list)
+  return(nll_composite)
+}
+
+df_lags <- list_lags[[2]]
+excesses <- list_excesses[[2]]
+wind_vect <- c(wind_km_h$vx[2], wind_km_h$vy[2])
+init_param <- c(beta1, beta2, alpha1, alpha2, 1.1, 1)
+neg_ll(init_param, df_lags, excesses, wind_vect = wind_vect,
+                      hmax = 4)
+
+
 # Get wind vector coordinates  (vx, vy)
-wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD_t0)
-wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD_t0)
+wind_ep_df$vx <- wind_ep_df$FF * cos(wind_ep_df$DD)
+wind_ep_df$vy <- wind_ep_df$FF * sin(wind_ep_df$DD)
 head(wind_ep_df)
 
+# convert FF into km/h
+wind_km_h <- wind_ep_df
+wind_km_h$FF <- wind_km_h$FF * 3.6
+wind_km_h$vx <- wind_km_h$FF * cos(wind_km_h$DD)
+wind_km_h$vy <- wind_km_h$FF * sin(wind_km_h$DD)
+head(wind_km_h)
+
+
 wind_df <- wind_ep_df[, c("vx", "vy")]
+# which episode has NA wind values
+ind_NA <- which(is.na(wind_df$vx))
+
+if (any(ind_NA > 0)) {
+  # remove these episodes
+  wind <- wind_df[-ind_NA, ]
+  episodes <- list_episodes[-ind_NA]
+  s0s <- s0_list[-ind_NA]
+  t0s <- t0_list[-ind_NA]
+  lags <- list_lags[-ind_NA]
+  excesses <- list_excesses[-ind_NA]
+} else {
+  wind <- wind_df
+  episodes <- list_episodes
+  s0s <- s0_list
+  t0s <- t0_list
+  lags <- list_lags
+  excesses <- list_excesses
+}
 
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite_rpar,
-        list_episodes = list_episodes, quantile = threshold,
-        list_lags = list_lags,
-        list_excesses = list_excesses, hmax = 7, s0_list = s0_list,
-        wind_df = wind_df,
-        t0_list = t0_list, threshold = TRUE,
+        list_episodes = episodes,
+        list_lags = lags,
+        list_excesses = excesses, hmax = 7, s0_list = s0s,
+        wind_df = wind,
+        t0_list = t0s,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
         control = list(maxit = 10000),
         hessian = F)
+
+library(bbmle)
+result <- mle2(neg_ll_composite_rpar_fixpar,
+              start = list(beta1 = init_param[1],
+                           beta2 = init_param[2],
+                           alpha1 = init_param[3],
+                           alpha2 = init_param[4],
+                           eta1 = init_param[5],
+                           eta2 = init_param[6]),
+              data = list(list_episodes = episodes,
+                  list_lags = lags,
+                  list_excesses = excesses, hmax = 7,
+                  s0_list = s0s, wind_df = wind,
+                  t0_list = t0s,
+                  method = "L-BFGS-B",
+                  lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
+              control = list(maxit = 10000),
+              fixed = list(beta1 = init_param[1],
+                           beta2 = init_param[2],
+                           alpha1 = init_param[3],
+                           alpha2 = init_param[4]))
 
 estimated_params_noadv <- result$par
 
@@ -803,6 +988,6 @@ wind_s0t0 <- wind_df[num_ep, ]
 generate_variogram_plots_rpareto(result, df_lags_s0t0, wind_s0t0)
 
 # save the plot
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_DD_t0_ep", num_ep, 
-                "_", end_filename, sep = "")
+filename <- paste(im_folder, "optim/comephore/variogram_rpareto_DD_t0_ep",
+                    num_ep, "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")

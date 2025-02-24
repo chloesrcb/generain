@@ -119,7 +119,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   for (s in 1:nsites) {
     rain_Xs <- drop_na(data_rain[s]) # for one fixed station
     if (!zeros) {
-      Xs <- data.frame("site" = rain_Xs[rowSums(rain_Xs) > 0, ])
+      Xs <- data.frame("site" = rain_Xs[rain_Xs > 0, ])
     } else {
       Xs <- rain_Xs
     }
@@ -129,14 +129,14 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     }
     mean_excess_Xs <- mean(Xs_unif > q)
     for (t in 1:tmax){
-      Tmax <- nrow(rain_Xs)
       rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (in t_k)
       rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (in t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get couple
-      # remove zeros
-      data_cp <- data_cp[rowSums(data_cp) > 0, ]
       if (!zeros) {
-        Xs_cp <- data.frame("site" = data_cp[rowSums(data_cp != 0, na.rm = TRUE) > 0, ])
+        # remove zeros
+        Xs_cp <- data_cp[rowSums(data_cp) > 0, ]
+        # remove simultaneous zeros
+        # Xs_cp <- data.frame("site" = data_cp[rowSums(data_cp != 0, na.rm = TRUE) > 0, ])
       } else {
         Xs_cp <- data_cp
       }
@@ -178,7 +178,12 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
 #'
 #' @export
 temporal_chi_WLSE <- function(dftemp, weights){
-    # define weights to use (classic with residuals and Buhl one with exp)
+    # check if weights is valid
+    if (!(weights %in% c("residuals", "exp", "none"))) {
+      stop("Invalid weights parameter. Must be 'residuals', 'exp', or 'none'.")
+    }
+
+    # define weights to use
     if (weights == "residuals") {
       # LS reg (clasical model)
       model <- lm(tchi ~ lagtemp, data = dftemp)
@@ -192,7 +197,7 @@ temporal_chi_WLSE <- function(dftemp, weights){
     # perform weighted least squares regression
     wls_model_temp <- lm(tchi ~ lagtemp, data = dftemp, weights = wt)
 
-    # view summary of model
+    # get summary of model
     sum_wls_temp <- summary(wls_model_temp)
     return(sum_wls_temp)
 }
@@ -207,7 +212,6 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #'
 #' @param chitemp The chitemp parameter.
 #' @param tmax The tmax parameter.
-#' @param npoints The number of points parameter.
 #' @param weights The weights parameter, "residuals", "exp", or "none".
 #' @param summary Logical value indicating whether to return the summary of the
 #'              model. Default is FALSE.
@@ -219,15 +223,13 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @import lmtest
 #'
 #' @export
-get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
-                                  summary = FALSE) {
-  # every chi lagged mean
-  chi_df_dt <- as.data.frame(chitemp)
-  # mean_chi_lag <- apply(chi_df_dt, 2, mean)
-
+get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
   # regression on temporal chi
-  chitemp <- c(t(chi_df_dt))
-  lagtemp <- c(1:tmax) # minutes
+  chitemp <- df_chi$chi
+  lagtemp <- df_chi$lag
+  if (0 %in% lagtemp) {
+    stop("Lag cannot be 0.")
+  }
 
   # need to add a eta continuous function for the WLSE with log
   dftemp <- data.frame(tchi = eta(chitemp), lagtemp = log(lagtemp))
@@ -240,11 +242,11 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
   alpha_temp <- df_wls_temp$Estimate[2]
   c_temp <- df_wls_temp$Estimate[1]
   beta_temp <- exp(c_temp) # beta
+
   if (summary) {
-    return(list(beta_temp, alpha_temp, sum_wls_temp))
-  } else {
-    return(c(beta_temp, alpha_temp))
+    print(sum_wls_temp)
   }
+  return(c(c_temp, beta_temp, alpha_temp))
 }
 
 
@@ -257,10 +259,10 @@ get_estimate_variotemp <- function(chitemp, tmax, npoints, weights,
 #' the midpoint of the lags should be returned instead of the full lags.
 #'
 #' @param radius The radius used to calculate the spatial mean lags.
-#' @param mid Logical value indicating whether to return the midpoint of the 
+#' @param mid Logical value indicating whether to return the midpoint of the
 #'            lags. Default is FALSE.
 #'
-#' @return A vector of spatial mean lags or the midpoint of the lags if 'mid' 
+#' @return A vector of spatial mean lags or the midpoint of the lags if 'mid'
 #'         is TRUE.
 #'
 #' @import dplyr
@@ -430,26 +432,24 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
   q <- quantile
   # get unique distances from rad_mat
   h_vect <- sort(df_dist$value)
-  h_vect <- unique(h_vect[h_vect > 0])
+  h_vect <- unique(h_vect[h_vect > 0]) # remove 0
   if (!is.na(hmax)) {
     h_vect <- h_vect[h_vect <= hmax]
   }
 
   for (h in h_vect) {
-    # print(paste0("h = ", h))
     chi_val <- c()
     # get index pairs
     df_dist_h <- df_dist[df_dist$value == h, ]
-    ind_s2 <- as.numeric(as.character(df_dist_h$X))
-    ind_s1 <- df_dist_h$Y
-    for (i in seq_along(ind_s1)){
-      rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])])
-      colnames(rain_cp) <- c("s1", "s2")
-      rain_cp <- rain_cp[rowSums(rain_cp) > 0, ]
+    ind_s2 <- as.numeric(as.character(df_dist_h$X)) # get index of s2
+    ind_s1 <- df_dist_h$Y # get index of s1
+    for (i in seq_along(ind_s1)){ # loop over each pair of sites
+      rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])]) # get couple
+      colnames(rain_cp) <- c("s1", "s2") # rename columns
       if (!zeros) {
-          rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
+        rain_cp <- rain_cp[rowSums(rain_cp) > 0, ] # remove zeros
+        # rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
       }
-      # print(c(ind_s1[i], ind_s2[i]))
       if (length(quantile) > 1) {
         q <- quantile[ind_s1[i], ind_s2[i]]
       }
@@ -512,10 +512,9 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   c_spa <- wls_coef$Estimate[1]
   beta_spa <- exp(c_spa)
   if (summary) {
-    return(list(beta_spa, alpha_spa, sum_wls_lag))
-  } else {
-    return(c(beta_spa, alpha_spa))
+    print(sum_wls_lag)
   }
+  return(c(c_spa, beta_spa, alpha_spa))
 }
 
 

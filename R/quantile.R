@@ -33,31 +33,32 @@ quantile_matrix <- function(q, data_rain, count_min = 80, step = 0.005,
       for (j in (i):N) {
         # without NA values
         # if (i != j) {
-        data <- drop_na(data_rain[c(i, j)]) # for all pairs
+        data_pair <- drop_na(data_rain[c(i, j)]) # for all pairs
         if (!zeros) {
-          data <- data[rowSums(data != 0, na.rm = TRUE) > 0, ]
+          data_pair <- data_pair[rowSums(data, na.rm = TRUE) > 0, ]
         }
-        n <- nrow(data)
-        data <- cbind(rank(data[, 1]) / (n + 1), rank(data[, 2]) / (n + 1))
-        colnames(data) <- c("s1", "s2")
+        n <- nrow(data_pair)
+        data_pair <- cbind(rank(data_pair[, 1]) / (n + 1),
+                                rank(data_pair[, 2]) / (n + 1))
+        colnames(data_pair) <- c("s1", "s2")
         q_modif <- q
         # check excess above a threshold q
-        cp_cond <- as.data.frame(data[data[, 2] > q, ])
+        cp_cond <- as.data.frame(data_pair[data_pair[, 2] > q, ])
         # nb of simultaneous excesses
         count <- sum(cp_cond[, 1] > q)
         # if there are not enough data above the quantile
         while (count < count_min) {
             q_modif <- q_modif - step # we reduce it
-            cp_cond <- as.data.frame(data[data[, 2] > q_modif, ])
+            cp_cond <- as.data.frame(data_pair[data_pair[, 2] > q_modif, ])
             count <- sum(cp_cond[, 1] > q_modif)
         }
         quant_mat[i, j] <- q_modif
         if (q != q_modif) {
             if (qlim) {
-              chiplot(data, qlim = c(0.99, 0.999), xlim = c(0.99, 0.999),
+              chiplot(data_pair, qlim = c(0.9, 0.999), xlim = c(0.9, 0.999),
                   which = 1) # to check on plot
             } else {
-              chiplot(data, which = 1)
+              chiplot(data_pair, which = 1)
             }
             abline(v = q_modif)
         }

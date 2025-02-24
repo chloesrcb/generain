@@ -462,7 +462,7 @@ neg_ll_composite_simu_par <- function(beta1, beta2, alpha1, alpha2, adv1, adv2,
                     list_simu, df_lags, quantile, list_excesses, hmax = NA, 
                     s0 = NA, t0 = NA, threshold = FALSE) {
   params <- c(beta1, beta2, alpha1, alpha2, adv1, adv2)
-  nll_composite <- neg_ll_composite(params, list_simu, df_lags,
+  nll_composite <- neg_ll_composite_simu(params, list_simu, df_lags,
                                     quantile, list_excesses,
                                     hmax = hmax, s0 = s0, t0 = t0,
                                     threshold = threshold)
