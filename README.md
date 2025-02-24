@@ -9,7 +9,7 @@ Model for extreme and moderate precipitation
 
 or 
 
-```remotes::install_github('chloesrcb/generain')```
+```remotes::install_github('chloesrcb/generain', force=TRUE)```
 
 # Loading
 
@@ -33,5 +33,5 @@ Previously upload [RandomFields archive](https://cran.r-project.org/src/contrib/
 Rscript -e "install.packages('remotes')"
 Rscript -e "install.packages(pkgs = 'RandomFields_3.3.14.tar.gz', type='source', repos=NULL)"
 Rscript -e "install.packages(pkgs = 'RandomFieldsUtils_1.2.5.tar.gz', type='source', repos=NULL)"
-Rscript -e "remotes::install_github('chloesrcb/generain')"
+Rscript -e "remotes::install_github('chloesrcb/generain', force=TRUE)"
 ```
