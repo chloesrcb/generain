@@ -4,7 +4,7 @@
 \alias{generate_variogram_plots_rpareto}
 \title{Generate a variogram plot for rpareto}
 \usage{
-generate_variogram_plots_rpareto(result, df_lags, wind_df)
+generate_variogram_plots_rpareto(result, lags_r, wind_r)
 }
 \arguments{
 \item{result}{The result of the variogram estimation.}

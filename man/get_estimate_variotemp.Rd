@@ -4,19 +4,17 @@
 \alias{get_estimate_variotemp}
 \title{Calculate the estimate of variotemp}
 \usage{
-get_estimate_variotemp(chitemp, tmax, npoints, weights, summary = FALSE)
+get_estimate_variotemp(df_chi, weights, summary = FALSE)
 }
 \arguments{
-\item{chitemp}{The chitemp parameter.}
-
-\item{tmax}{The tmax parameter.}
-
-\item{npoints}{The number of points parameter.}
-
 \item{weights}{The weights parameter, "residuals", "exp", or "none".}
 
 \item{summary}{Logical value indicating whether to return the summary of the
 model. Default is FALSE.}
+
+\item{chitemp}{The chitemp parameter.}
+
+\item{tmax}{The tmax parameter.}
 }
 \value{
 The estimate of variotemp.

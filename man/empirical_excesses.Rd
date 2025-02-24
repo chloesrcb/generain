@@ -10,7 +10,7 @@ empirical_excesses(
   df_lags,
   threshold = FALSE,
   type = "rpareto",
-  t0 = 1
+  t0 = 0
 )
 }
 \arguments{

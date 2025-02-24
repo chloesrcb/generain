@@ -9,11 +9,11 @@ spatial_mean_lags(radius, mid = FALSE)
 \arguments{
 \item{radius}{The radius used to calculate the spatial mean lags.}
 
-\item{mid}{Logical value indicating whether to return the midpoint of the 
+\item{mid}{Logical value indicating whether to return the midpoint of the
 lags. Default is FALSE.}
 }
 \value{
-A vector of spatial mean lags or the midpoint of the lags if 'mid' 
+A vector of spatial mean lags or the midpoint of the lags if 'mid'
         is TRUE.
 }
 \description{
