@@ -6,36 +6,41 @@
 \usage{
 neg_ll(
   params,
-  data,
   df_lags,
-  quantile,
   excesses,
+  wind_vect = NA,
   hmax = NA,
-  s0 = NA,
-  t0 = NA,
-  threshold = FALSE
+  rpar = TRUE,
+  threshold = FALSE,
+  latlon = FALSE,
+  quantile = NA,
+  data = NA
 )
 }
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2).}
 
-\item{data}{The data dataframe.}
-
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
-
-\item{quantile}{The quantile value.}
 
 \item{excesses}{The excesses dataframe with the number of excesses kij and
 the number of possible excesses Tobs.}
 
+\item{wind_vect}{A vector of wind values. Default is NA.}
+
 \item{hmax}{The maximum spatial lag value. Default is NA.}
 
-\item{s0}{The conditioning location. Default is NA.}
-
-\item{t0}{The conditioning time. Default is NA.}
+\item{rpar}{A boolean value to indicate if the data is considered as a
+r-Pareto process. Default is TRUE.}
 
 \item{threshold}{A boolean value to indicate if the quantile variable is a
 threshold value and not a uniform quantile. Default is FALSE.}
+
+\item{latlon}{A boolean value to indicate if the locations are in latitude
+and longitude. Default is FALSE.}
+
+\item{quantile}{The quantile value. Default is NA.}
+
+\item{data}{The data dataframe (brown-resnick case). Default is NA.}
 }
 \value{
 The negative log-likelihood value.
@@ -43,6 +48,6 @@ The negative log-likelihood value.
 \description{
 Calculate the negative log-likelihood for a given set of variogram
 parameters by considering excess indicators following a binomial distribution
-with a probability parameter equals to the theorical spatio-temporal chi
+with a probability parameter equals to the theoretical spatio-temporal chi
 value.
 }

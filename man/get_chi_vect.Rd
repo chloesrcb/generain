@@ -7,7 +7,7 @@
 get_chi_vect(chi_mat, h_vect, tau, df_dist)
 }
 \arguments{
-\item{chi_mat}{The theorical spatio-temporal extremogram matrix.}
+\item{chi_mat}{The theoretical spatio-temporal extremogram matrix.}
 
 \item{h_vect}{The spatial lags vector.}
 
@@ -16,9 +16,9 @@ get_chi_vect(chi_mat, h_vect, tau, df_dist)
 \item{df_dist}{The distances long dataframe.}
 }
 \value{
-The theorical spatio-temporal extremogram vector.
+The theoretical spatio-temporal extremogram vector.
 }
 \description{
-This function calculates the theorical spatio-temporal extremogram vector
-based on the given theorical spatio-temporal extremogram matrix.
+This function calculates the theoretical spatio-temporal extremogram vector
+based on the given theoretical spatio-temporal extremogram matrix.
 }
