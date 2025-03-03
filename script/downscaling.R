@@ -7,11 +7,29 @@ cat("\014")
 # Load libraries and set theme
 source("./script/load_libraries.R")
 source("./script/pinnEV.R")
+library(sf)
+library(sp)
+library(geosphere)
 
 # LOAD DATA ####################################################################
 # Meteo France COMEPHORE data
-comephore_raw <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
+comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/coords_pixels.csv", sep = ",")
+colnames(loc_px) <- c("pixel_name", "Longitude", "Latitude")
+
+# Convert loc_px to an sf object with Lambert-93 CRS
+loc_sf <- st_as_sf(loc_px, coords = c("Longitude", "Latitude"), crs = 2154)
+
+# Transform to WGS84 (EPSG:4326)
+loc_wgs84 <- st_transform(loc_sf, 4326)
+
+# Extract transformed coordinates and add them back to the dataframe
+loc_px$Longitude <- st_coordinates(loc_wgs84)[, 1]  # X = Longitude
+loc_px$Latitude <- st_coordinates(loc_wgs84)[, 2]   # Y = Latitude
+
+# View updated dataframe
+head(loc_px)
+
 
 # Get the date after 2007
 comephore_raw$date <- as.Date(comephore_raw$date, format = "%Y-%m-%d %H:%M:%S")
@@ -67,6 +85,27 @@ location_gauges$coord_x_px <- loc_px$Longitude[match(closest_pixels,
                                                      loc_px$pixel_name)]
 location_gauges$coord_y_px <- loc_px$Latitude[match(closest_pixels,
                                                     loc_px$pixel_name)]
+
+print(location_gauges)
+
+# GET PIXELS IN 3 KM RADIUS ###################################################
+
+buffer <- 4000  # 3 km + 1 km (buffer)
+
+pixels_corresp <- unique(location_gauges$closest_pixel)
+index_pixels <- match(pixels_corresp, loc_px$pixel_name)
+# from distance matrix get the pixels in 3 km radius
+pixels_in_radius <- df_dist_com %>%
+  filter(Y %in% index_pixels & value <= buffer) %>%
+  select(X) %>%
+  pull()
+
+# Get the corresponding pixels
+loc_sub_px <- loc_px[loc_px$pixel_name %in% loc_px$pixel_name[pixels_in_radius], ]
+
+# TODO
+
+
 
 # GET DATES INTERVAL ###########################################################
 min_date <- min(rain_hsm$dates)
