@@ -222,7 +222,7 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
 
   # Dimensions
   n <- nrow(df_coords)
-  tau_lag <- 0:tau_max
+  tau_lag <- -tau_max:tau_max
   tau_len <- length(tau_lag)
 
   # Index of pairs (s0, si)
