@@ -11,7 +11,7 @@ library(tidyr)
 library(reshape2)
 library(data.table)
 
-# spatial 
+# spatial
 library(raster)
 library(rasterVis)
 library(elevatr)
@@ -59,6 +59,7 @@ library(bbmle)
 
 # Tables and Latex
 library(kableExtra)
+library(data.table)
 
 # Parallel
 library(parallel)
