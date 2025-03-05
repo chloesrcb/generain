@@ -8,8 +8,8 @@ cat("\014")
 source("./script/load_libraries.R")
 
 # LOAD DATA ####################################################################
-comephore_raw <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
+comephore_raw <- read.csv("./data/comephore/zoom_4km.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_px_zoom_4km.csv", sep = ",")
 
 df_comephore <- comephore_raw
 
@@ -283,7 +283,7 @@ kable(df_result, format = "latex") %>%
 
 # Spatio-temporal neighborhood parameters
 min_spatial_dist <- 5  # in km
-delta <- 20 # step for the episode before and after the max value
+delta <- 12 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
@@ -396,21 +396,34 @@ comephore[87840:87870, "p250"]
 
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5  # in km
+min_spatial_dist <- 3  # in km
 delta <- 12 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.998 # quantile
+q <- 0.997 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                         min_spatial_dist, delta = delta,
                                         n_max_episodes = 10000,
                                         time_ext = 0)
+list_episodes <- get_extreme_episodes(selected_points, comephore,
+                                      delta = delta, unif = FALSE)
 
+# Verif first episode
+episode <- list_episodes[[1]]
+# find col and row of the max value
+max_value <- max(episode)
+max_value_coords <- which(episode == max_value, arr.ind = TRUE)
+s0_col <- colnames(episode)[max_value_coords[2]]
+t0_row <- rownames(episode)[max_value_coords[1]]
+
+# selected_points$s0[1]
+# selected_points$t0[1]
+# rownames(comephore)[selected_points$t0[1]]
 
 # histogram of the number of episodes per s0
 df_hist <- data.frame(table(selected_points$s0))
@@ -462,7 +475,7 @@ s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
-tmax <- 5
+tmax <- 10
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -487,6 +500,13 @@ list_excesses <- lapply(list_results, `[[`, "excesses")
 list_lags[[1]]
 list_excesses[[1]]$kij
 
+s0 <- s0_list[1]
+s0_coords <- sites_coords[s0, ]
+excesses <- list_excesses[[1]]
+# sort excesses by hnorm from smallest to largest
+excesses <- excesses[order(excesses$hnorm), ]
+
+excesses[1:20, ]
 # # Initialisation des listes pour les résultats
 # all_k_sums <- c()
 # all_binomials <- c()  # Liste pour stocker les résultats de la binomiale théorique
@@ -854,9 +874,9 @@ library(knitr)
 library(kableExtra)
 
 # Paramètres pour les essais
-q_values <- c(0.996, 0.997, 0.998, 0.999)  # Quantiles à tester
-delta_values <- c(10, 15, 25)  # Valeurs delta (étapes)
-min_spatial_dist_values <- c(3, 5, 7, 8)  # Valeurs min_spatial_dist
+q_values <- c(0.997, 0.998, 0.999)  # Quantiles à tester
+delta_values <- c(12, 15, 20)  # Valeurs delta (étapes)
+min_spatial_dist_values <- c(3, 5, 7)  # Valeurs min_spatial_dist
 tau_ranges <- list(-5:5, -10:10)  # Plages de tau
 wind_direction_type <- c("t_0", "freq.")  # Composantes du vent
 

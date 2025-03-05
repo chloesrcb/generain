@@ -29,9 +29,9 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   data <- as.matrix(data)
   # n_sites <- ncol(data)
 
-  data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") /
-                                                (length(col) + 1))
-
+  # data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") /
+  #                                               (length(col) + 1))
+  threshold <- quantile(data, probs = quantile, na.rm = TRUE)
   # Extract site names
   site_names <- colnames(data)
 
@@ -43,19 +43,19 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
   colnames(dist_matrix) <- site_names
 
   # Get initial max values
-  max_value <- max(na.omit(data_unif))
-  max_indices <- which(data_unif == max_value, arr.ind = TRUE)
+  max_value <- max(na.omit(data))
+  max_indices <- which(data == max_value, arr.ind = TRUE)
 
   # Store selected points and corresponding threshold
   selected_points <- data.table(s0 = character(), t0 = integer(),
                                 u_s0 = numeric())
 
   # Logical mask for invalid times
-  invalid_time_mask <- matrix(FALSE, nrow(data_unif), ncol(data_unif))
+  invalid_time_mask <- matrix(FALSE, nrow(data), ncol(data))
 
   nb_episode <- 0
 
-  while (nb_episode < n_max_episodes && max_value > quantile) {
+  while (nb_episode < n_max_episodes && max_value > threshold) {
     best_candidate <- NULL
 
     for (idx in seq_len(nrow(max_indices))) {
@@ -107,7 +107,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
     }
 
     # Update max selection by ignoring invalid positions
-    masked_data <- data_unif
+    masked_data <- data
     masked_data[invalid_time_mask] <- -Inf
     max_value <- max(masked_data)
     max_indices <- which(masked_data == max_value, arr.ind = TRUE)
