@@ -42,6 +42,8 @@ select_extreme_episodes(
 \item{n_max_episodes}{The maximum number of episodes to select.}
 
 \item{beta}{The buffer size. Default is 0.}
+
+\item{time_ext}{The temporal window extension. Default is 0.}
 }
 \value{
 A list of selected points (s0, t0) and the corresponding threshold 

@@ -11,9 +11,9 @@ neg_ll_composite_simu(
   quantile,
   list_excesses,
   hmax = NA,
-  s0 = NA,
-  t0 = NA,
-  threshold = FALSE
+  threshold = FALSE,
+  directional = FALSE,
+  rpar = TRUE
 )
 }
 \arguments{
@@ -29,9 +29,14 @@ neg_ll_composite_simu(
 
 \item{hmax}{The maximum spatial lag value.}
 
-\item{s0}{The starting location.}
+\item{threshold}{A boolean value to indicate if the quantile variable is a
+threshold value and not a uniform quantile. Default is FALSE.}
 
-\item{t0}{The starting time.}
+\item{directional}{A boolean value to indicate if the variogram is
+directional. Default is TRUE.}
+
+\item{rpar}{A boolean value to indicate if the data is considered as an
+r-Pareto process. Default is TRUE.}
 }
 \value{
 The negative log-likelihood value.

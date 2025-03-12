@@ -14,7 +14,8 @@ neg_ll(
   threshold = FALSE,
   latlon = FALSE,
   quantile = NA,
-  data = NA
+  data = NA,
+  directional = TRUE
 )
 }
 \arguments{

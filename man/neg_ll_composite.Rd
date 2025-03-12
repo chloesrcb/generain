@@ -10,7 +10,8 @@ neg_ll_composite(
   list_excesses,
   wind_df = NA,
   hmax = NA,
-  latlon = TRUE
+  latlon = TRUE,
+  directional = TRUE
 )
 }
 \arguments{
@@ -27,6 +28,9 @@ eta1, eta2).}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is TRUE.}
+
+\item{directional}{A boolean value to indicate if the variogram is
+directional. Default is TRUE.}
 }
 \value{
 The negative log-likelihood value.
