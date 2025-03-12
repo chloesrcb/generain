@@ -430,7 +430,7 @@ colnames(df_hist) <- c("s0", "count")
 ggplot(df_hist, aes(x = count)) +
   geom_histogram(binwidth = 1, fill = btfgreen, color = "black") +
   btf_theme +
-  xlab("Number of episodes") +
+  xlab("Site") +
   ylab("Count")
 
 s0_max_ep <- df_hist$s0[which.max(df_hist$count)]

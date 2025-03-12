@@ -101,8 +101,8 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
       selected_points <- rbindlist(list(selected_points, best_candidate))
 
       # Remove nearby temporal data
-      t_inf <- max(1, best_candidate$t0 - (delta - 1) - time_ext)
-      t_sup <- min(nrow(data), best_candidate$t0 + (delta - 1) + time_ext)
+      t_inf <- max(1, best_candidate$t0 - delta - time_ext)
+      t_sup <- min(nrow(data), best_candidate$t0 + delta + time_ext)
       invalid_time_mask[t_inf:t_sup,
                         which(site_names == best_candidate$s0)] <- TRUE
     }
@@ -143,10 +143,12 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
 
   # Compute time intervals
   intervals <- data.table(
-    t_inf = filtered_points$t0 - (delta - 1) - beta,
+    t_inf = filtered_points$t0 - delta - beta,
     t_sup = filtered_points$t0 + delta + beta
   )
 
+  setorder(intervals) # Ensure the data is sorted by time
+  
   # Check for overlap
   for (i in 2:nrow(intervals)) {
     if (intervals$t_inf[i] <= intervals$t_sup[i - 1]) {
@@ -156,6 +158,7 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
 
   return(FALSE)  # No overlap found
 }
+
 
 #' get_extreme_episodes function
 #'
