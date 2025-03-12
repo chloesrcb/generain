@@ -121,7 +121,7 @@ get_euclidean_distance <- function(point1, point2) {
 #' This function calculates the lag vectors between pairs of points.
 #'
 #' @param df_coords A dataframe containing the coordinates of the points.
-#' @param tau_max The maximum temporal lag. Default is 10.
+#' @param tau_vect A vector of temporal lags.
 #' @param latlon Logical indicating whether the coordinates are in latitude and
 #'               longitude format. Default is FALSE.
 #'
@@ -130,8 +130,7 @@ get_euclidean_distance <- function(point1, point2) {
 #' @return A dataframe containing the lag vectors.
 #'
 #' @export
-get_lag_vectors <- function(df_coords, tau_max = 10, latlon = FALSE) {
-  tau_vect <- 0:tau_max
+get_lag_vectors <- function(df_coords, tau_vect, latlon = FALSE) {
   # Dimensions
   n <- nrow(df_coords)
   tau_len <- length(tau_vect)
@@ -169,23 +168,15 @@ get_lag_vectors <- function(df_coords, tau_max = 10, latlon = FALSE) {
 
   # Convert to meters using Haversine distance for hx, hy
   if (latlon) {
-    for (i in 1:nrow(lags)) {
-      s1_coords <- c(lags$s1x[i], lags$s1y[i])
-      s2_coords <- c(lags$s2x[i], lags$s2y[i])
+    lags$hnorm <- haversine_distance_with_advection(lags$s1y, lags$s1x,
+                                              lags$s2y, lags$s2x,
+                                              c(0, 0), lags$tau)$distance
 
-      # Calculate hx and hy in meters
-      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s2_coords[1], s1_coords[2]))
-      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s1_coords[1], s2_coords[2]))
-    }
   } else {
     lags$hx <- lags$s2x - lags$s1x # s - s0
     lags$hy <- lags$s2y - lags$s1y
+    lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2) # Euclidean distance
   }
-
-  # Calculate hnorm (Euclidean distance in meters)
-  lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
 
   return(lags)
 }
@@ -257,13 +248,10 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   if (latlon) {
     # Geodesic distance
     for (i in 1:nrow(lags)) {
-      s2_coords <- c(lags$s2x[i], lags$s2y[i])
-      lags$hnorm[i] <- distHaversine(s1_coords, s2_coords)
-      # Calculate hx and hy in meters
-      lags$hx[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s2_coords[1], s1_coords[2]))
-      lags$hy[i] <- distHaversine(c(s1_coords[1], s1_coords[2]),
-                                  c(s1_coords[1], s2_coords[2]))
+      lags$hnorm <- haversine_distance_with_advection(lags$s1y, lags$s1x,
+                                              lags$s2y, lags$s2x,
+                                              c(0, 0), lags$tau)$distance
+
     }
   } else {
     lags$hx <- s2_coords$Longitude - s1_coords[1]
@@ -352,4 +340,134 @@ generate_grid_coords <- function(grid_size) {
     Latitude = rep(1:grid_size, times = grid_size)  # Y
   )
   return(sites_coords)
+}
+
+
+#' generate_realistic_latlon_grid generates a data frame with site IDs and
+#' random latitude and longitude values within given ranges.
+#'
+#' @param n_sites the number of sites to generate
+#' @param lat_range the range of latitude values. Default is c(40, 50).
+#' @param lon_range the range of longitude values. Default is c(-5, 5).
+#' @return a data frame with site IDs and coordinates
+#'
+#' @export
+generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
+                                                        lon_range = c(-5, 5)) {
+  # Generate random lat/lon values within given ranges
+  latitudes <- runif(n_sites, min = lat_range[1], max = lat_range[2])
+  longitudes <- runif(n_sites, min = lon_range[1], max = lon_range[2])
+
+  # Create a data frame with site IDs
+  sites_coords <- data.frame(
+    site_id = 1:n_sites,
+    lat = latitudes,
+    lon = longitudes
+  )
+
+  return(sites_coords)
+}
+
+
+#' haversine_distance_with_advection function
+#'
+#' This function calculates the Haversine distance between two points 
+#' with advection applied.
+#'
+#' @param lat1 Latitude of the first point.
+#' @param lon1 Longitude of the first point.
+#' @param lat2 Latitude of the second point.
+#' @param lon2 Longitude of the second point.
+#' @param adv A vector of advection values (in m/s).
+#' @param tau Temporal lag (in seconds).
+#' @return The Haversine distance between the two points with advection applied.
+#'
+#' @export
+haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
+                                                                          tau) {
+
+  # Radius of the Earth in meters
+  R <- 6371000
+
+  # Convert coordinates to radians
+  lat1_rad <- lat1 * pi / 180
+  lon1_rad <- lon1 * pi / 180
+  lat2_rad <- lat2 * pi / 180
+  lon2_rad <- lon2 * pi / 180
+
+  # Convert coordinates to meters (Cartesian coordinate system)
+  m_per_deg_lat <- 111132.954  # meters per degree of latitude
+  m_per_deg_lon <- 111132.954 * cos(lat1_rad)  # meters per degree of longitude
+
+  # Coordinates in meters
+  x1 <- lon1 * m_per_deg_lon
+  y1 <- lat1 * m_per_deg_lat
+  x2 <- lon2 * m_per_deg_lon
+  y2 <- lat2 * m_per_deg_lat
+
+  # Apply advection (in m/s, so multiply by tau)
+  x2_adj <- x2 + adv[1] * tau  # Apply advection to longitude
+  y2_adj <- y2 + adv[2] * tau  # Apply advection to latitude
+
+  # Reconvert adjusted coordinates to degrees
+  lon2_adj <- x2_adj / m_per_deg_lon
+  lat2_adj <- y2_adj / m_per_deg_lat
+
+  # Recalculate adjusted coordinates in radians
+  lat2_adj_rad <- lat2_adj * pi / 180
+  lon2_adj_rad <- lon2_adj * pi / 180
+
+  # Calculate the Haversine distance between (lat1, lon1)
+  # and (lat2_adj, lon2_adj)
+  delta_lat_rad <- lat2_adj_rad - lat1_rad
+  delta_lon_rad <- lon2_rad - lon1_rad
+
+  a <- sin(delta_lat_rad / 2)^2 + cos(lat1_rad) * cos(lat2_adj_rad) * 
+                                                    sin(delta_lon_rad / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+
+  # Calculate the distance in meters
+  distance <- R * c / 1000  # Convert to kilometers
+
+  # If near 0, return 0
+  distance <- ifelse(distance < 1e-06, 0, distance)
+
+  return(distance)
+}
+
+
+haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) {
+  # Effectuer le calcul de la distance Haversine classique
+  deltaLat <- (lat2 - lat1) * pi / 180
+  deltaLon <- (lon2 - lon1) * pi / 180
+  a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  distance <- 6371000 * c  # Rayon de la Terre en mètres
+  
+  # Si l'advection est présente, ajustez la distance en fonction de l'advection et du temps
+  if (length(adv) == 2) {
+    adv_x <- adv[1] * tau  # Advection en X (longitude)
+    adv_y <- adv[2] * tau  # Advection en Y (latitude)
+
+    lon2_adj <- lon2 + adv_x / (111.32 * cos(lat2 * pi / 180))  # ajustement en longitude
+    lat2_adj <- lat2 + adv_y / 111.32  # ajustement en latitude
+
+    # Recalculer la distance après l'ajustement
+    deltaLat_adj <- (lat2_adj - lat1) * pi / 180
+    deltaLon_adj <- (lon2_adj - lon1) * pi / 180
+    a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) * cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
+    c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
+    distance <- 6371000 * c_adj  # Rayon de la Terre en mètres
+  }
+
+  # Calculer la direction (theta) en utilisant atan2
+  deltaLat <- (lat2 - lat1) * pi / 180
+  deltaLon <- (lon2 - lon1) * pi / 180
+  theta <- atan2(deltaLat, deltaLon)  # Direction du vecteur
+  theta_meteo <- (pi/2 - theta_dir) %% (2 * pi) # Direction météorologique
+  # Si la distance est inférieure à une très petite valeur, mettre à zéro pour chaque élément
+  distance <- ifelse(distance < 1e-06, 0, distance)
+
+  # Retourner la norme et l'angle (theta)
+  return(list(distance = distance / 1000, theta = theta_meteo))
 }

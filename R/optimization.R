@@ -148,7 +148,7 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
   )
 
   setorder(intervals) # Ensure the data is sorted by time
-  
+
   # Check for overlap
   for (i in 2:nrow(intervals)) {
     if (intervals$t_inf[i] <= intervals$t_sup[i - 1]) {
@@ -452,46 +452,39 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
   chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
 
   if (latlon) {
-    # Convert degrees to kilometers or meters (longitude varies with latitude)
-    lat_convert <- 111.32  # km per degree
-    chi_df$lon_convert_s1 <- lat_convert
-    chi_df$lon_convert_s2 <- lat_convert * cos(pi * chi_df$s2y / 180)
-
-    # Convert s1 coordinates
-    chi_df$s1xv <- chi_df$s1x * chi_df$lon_convert_s1
-    chi_df$s1yv <- chi_df$s1y * lat_convert
-
-    # Correct s2 coordinates with advection
-    chi_df$s2xv <- chi_df$s2x * chi_df$lon_convert_s2 - as.numeric(adv[1]) *
-                                                                      chi_df$tau
-    chi_df$s2yv <- chi_df$s2y * lat_convert - as.numeric(adv[2]) * df_lags$tau
-
     # Compute spatial distance in km
-    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                          (chi_df$s2yv - chi_df$s1yv)^2)
+    haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
+                                      chi_df$s2y, chi_df$s2x, -adv, chi_df$tau)
+    chi_df$hnormV <- haversine_df$distance
 
     # Directional adjustment: compute the angle (theta) for the directional
     # variogram
-    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+    chi_df$theta <- haversine_df$theta
 
   } else {
     # Cartesian coordinates case
-    chi_df$s1xv <- df_lags$s1x
-    chi_df$s1yv <- df_lags$s1y
-    chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
-    chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
-    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                          (chi_df$s2yv - chi_df$s1yv)^2)
+    chi_df$s1xv <- chi_df$s1x
+    chi_df$s1yv <- chi_df$s1y
+    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau
+    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
+    if (all(adv == 0)) {
+      chi_df$hnormV <- chi_df$hnorm
+    } else {
+      chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                            (chi_df$s2yv - chi_df$s1yv)^2)
+    }
 
     # Directional adjustment: compute the angle (theta) for the directional
     # variogram
-    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+    # TODO: Check if this is correct
+    # chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
   }
 
   if (directional) {
-      # Apply directional distance adjustment (cos(theta))
-      chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
-      chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
+      # Apply directional distance adjustment (cos(theta)) with
+      # north as reference (ie sin and cos are swapped)
+      chi_df$x_polar <- chi_df$hnormV * sin(chi_df$theta)
+      chi_df$y_polar <- chi_df$hnormV * cos(chi_df$theta)
       chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
   } else {
       # Only distance lag
@@ -504,7 +497,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
 
   # Regularize chi to prevent very small or very large values
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8)  # Bound chi TODO
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1), 1e-8)  # Bound chi TODO
 
   return(chi_df)
 }
@@ -605,7 +598,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
 
   # Regularize chi to prevent very small or very large values
-  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8) # Bound chi
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1), 1e-8) # Bound chi
 
   return(chi_df)
 }
@@ -715,7 +708,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NULL,
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
   
   # Regularize chi to prevent very small or very large values
-  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8) # Bound chi
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1), 1e-8) # Bound chi
   
   return(chi_df)
 }
@@ -901,14 +894,12 @@ neg_ll_composite <- function(params, list_lags,
   }
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
-  # print(params)
+  print(params)
   for (i in 1:m) {
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
     if (!all(is.na(wind_df))) {
-      # wind_vx <- wind_df$vx[i]
-      # wind_vy <- wind_df$vy[i]
       wind_vect <- wind_df[i,]
     }
     nll_i <- neg_ll(params, df_lags, wind_vect = wind_vect,
@@ -927,10 +918,10 @@ neg_ll_composite <- function(params, list_lags,
 # WIND COVARIATES --------------------------------------------------------------
 
 #' convert_to_cardinal function
-#' 
+#'
 #' Convert wind direction in degrees to cardinal direction between N, NE, E, SE,
 #' S, SW, W, NW.
-#' 
+#'
 #' @param degrees The wind direction in degrees.
 #'
 #' @return The cardinal direction.
@@ -948,13 +939,13 @@ convert_to_cardinal <- function(degrees) {
 }
 
 #' cardinal_to_degree function
-#' 
+#'
 #' Convert cardinal direction between N, NE, E, SE, S, SW, W, NW to degrees.
-#' 
+#'
 #' @param cardinal The cardinal direction.
-#' 
+#'
 #' @return The wind direction in degrees.
-#' 
+#'
 #' @export
 cardinal_to_degree <- function(cardinal) {
   if (is.na(cardinal)) {
@@ -1012,7 +1003,7 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
 
   # Compute the mean wind speed and direction for the episode if there is data
   if (nrow(wind_subset) > 0) {
-    FF <- wind_subset$FF[delta]
+    FF <- wind_subset$FF[delta + 1]
     cardDir <- get_mode_dir(wind_subset$cardDir)
     DD <- mean(wind_subset$DD[wind_subset$cardDir == cardDir])
     DD_deg <- cardinal_to_degree(cardDir)
@@ -1020,8 +1011,8 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
     # DD_excess <- mean(wind_subset_excess$DD[wind_subset_excess$cardDir ==
     #                                                         cardDir_excess])
     # DD_excess <- mean(wind_subset_excess$DD)
-    DD_t0 <- wind_subset$DD[delta]
-    cardDir_t0 <- wind_subset$cardDir[delta]
+    DD_t0 <- wind_subset$DD[delta + 1]
+    cardDir_t0 <- wind_subset$cardDir[delta + 1]
   } else {
     FF <- NA
     DD <- NA
@@ -1036,6 +1027,7 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
   return(data.frame(FF = FF, DD = DD, DD_deg = DD_deg, cardDir = cardDir,
                     DD_t0 = DD_t0, cardDir_t0 = cardDir_t0))
 }
+
 
 # SIMU -------------------------------------------------------------------------
 

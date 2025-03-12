@@ -92,3 +92,27 @@ test_that("get_conditional_lag_vectors", {
   # check row
   expect_equal(nrow(df_lags), ngrid^2 * length(tau_vect))
 })
+
+
+test_that("haversine_distance_with_advection works correctly", {
+  lat1 <- 43.62505
+  lon1 <- 3.862038
+  lat2 <- 43.68333
+  lon2 <- 4.133333
+  adv <- c(0.0, 0.0)
+  tau <- 0
+  expected_distance_km <- 22.77
+
+  distance_with_adv <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
+                        adv, tau)$distance
+  expect_equal(round(distance_with_adv, 2), expected_distance_km)
+
+  theta_dir <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
+                        adv, tau)$theta
+  theta_deg <- theta_dir * 180 / pi
+  dir_card <- convert_to_cardinal(theta_deg)
+  theta_meteo <- (pi/2 - theta_dir) %% (2 * pi)
+  theta_meteo_deg <- theta_meteo * 180 / pi
+  dir_card_meteo <- convert_to_cardinal(theta_meteo_deg)
+  expect_equal(dir_card_meteo, "E")
+})

@@ -483,9 +483,6 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   ind_t0_ep <- delta + 1  # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
                                   tau_max = tmax, latlon = TRUE)
-  lags$hx <- lags$hx / 1000  # in km
-  lags$hy <- lags$hy / 1000  # in km
-  lags$hnorm <- lags$hnorm / 1000  # in km
   excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
                                   t0 = ind_t0_ep)
   list(lags = lags, excesses = excesses)
@@ -672,8 +669,10 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 # Compute the wind vector for each episode (-FF because it's the wind direction)
 wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
 wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
-# vx = -FF * sin(DD * pi / 180)  # Conversion de DD en radians
-# vy = -FF * cos(DD * pi / 180)  # Conversion de DD en radians
+
+# if values of vx or vy are really close to 0, set them to 0
+wind_ep_df$vx[abs(wind_ep_df$vx) < 1e-08] <- 0
+wind_ep_df$vy[abs(wind_ep_df$vy) < 1e-08] <- 0
 
 head(wind_ep_df)
 
@@ -696,13 +695,10 @@ if (any(ind_NA > 0)) {
 }
 
 # init_param <- c(beta1, 1.15, alpha1, 0.76, 1, 1)
-eta1 <- 1
-a_ratio <- 1
-phi <- 0.5
-beta1 = 0.01
-beta2 = 0.8
-alpha1 = 1.5
-alpha2 = 0.8
+# eta1 <- 1
+# a_ratio <- 1
+# phi <- 0.5
+
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
 # q <- 1
