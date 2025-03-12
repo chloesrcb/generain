@@ -8,8 +8,8 @@ cat("\014")
 source("./script/load_libraries.R")
 
 # LOAD DATA ####################################################################
-comephore_raw <- read.csv("./data/comephore/zoom_4km.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_px_zoom_4km.csv", sep = ",")
+comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
 
 df_comephore <- comephore_raw
 
@@ -170,7 +170,7 @@ filename <- paste(im_folder, "WLSE/comephore/from2008_temporal_chi_boxplot_", q_
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # Mean of chi
-chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q_no0_temp,
+chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = 0.93,
                                mean = TRUE, zeros = FALSE)
 # get h axis in minutes ie x5 minutes
 df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
@@ -281,17 +281,6 @@ kable(df_result, format = "latex") %>%
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-# Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5  # in km
-delta <- 12 # step for the episode before and after the max value
-
-# Get coords
-sites_coords <- loc_px[, c("Longitude", "Latitude")]
-rownames(sites_coords) <- loc_px$pixel_name
-
-q <- 0.998 # quantile
-
-
 # Find zero gaps
 find_zero_gaps <- function(data) {
   data <- as.matrix(data)  # Ensure matrix format
@@ -396,7 +385,7 @@ comephore[87840:87870, "p250"]
 
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 3  # in km
+min_spatial_dist <- 5  # in km
 delta <- 12 # step for the episode before and after the max value
 
 # Get coords
@@ -410,9 +399,19 @@ selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                         min_spatial_dist, delta = delta,
                                         n_max_episodes = 10000,
                                         time_ext = 0)
-list_episodes <- get_extreme_episodes(selected_points, comephore,
+
+n_episodes <- length(selected_points$s0)
+print(n_episodes)
+length(unique(selected_points$s0)) # can be same s0
+length(unique(selected_points$t0)) # never same t0?
+print(min(selected_points$u_s0)) # min threshold
+
+list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
 
+list_episodes <- list_episodes_points$episodes
+
+length(list_episodes)
 # Verif first episode
 episode <- list_episodes[[1]]
 # find col and row of the max value
@@ -443,11 +442,7 @@ for (s in unique(selected_points$s0)) {
 }
 any(overlaps)
 
-n_episodes <- length(selected_points$s0)
-print(n_episodes)
-length(unique(selected_points$s0)) # can be same s0
-length(unique(selected_points$t0)) # never same t0?
-print(min(selected_points$u_s0)) # min threshold
+
 
 # get month and year for p236
 # list_date <- lapply(1:length(list_p236), function(ep) {
@@ -465,8 +460,10 @@ print(min(selected_points$u_s0)) # min threshold
 # year = "2010"
 # list_date[list_date[,3] == year, ]
 # # 34, 47
-list_episodes_unif <- get_extreme_episodes(selected_points, comephore,
+list_episodes_unif_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = TRUE)
+
+list_episodes_unif <- list_episodes_unif_points$episodes
 # list_episodes[[100]] # check the episode
 # nrow(list_episodes[[1]]) # size of episode
 
@@ -483,7 +480,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   # t0 <- t0_list[i]
   episode <- list_episodes_unif[[i]]
   u <- u_list[i]
-  ind_t0_ep <- delta  # index of t0 in the episode
+  ind_t0_ep <- delta + 1  # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
                                   tau_max = tmax, latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
@@ -497,15 +494,15 @@ list_results <- mclapply(1:length(s0_list), function(i) {
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
-list_lags[[1]]
-list_excesses[[1]]$kij
+# list_lags[[1]]
+# list_excesses[[1]]$kij
 
 s0 <- s0_list[1]
 s0_coords <- sites_coords[s0, ]
 excesses <- list_excesses[[1]]
 # sort excesses by hnorm from smallest to largest
 excesses <- excesses[order(excesses$hnorm), ]
-
+excesses$kij
 excesses[1:20, ]
 # # Initialisation des listes pour les résultats
 # all_k_sums <- c()
@@ -549,13 +546,13 @@ excesses[1:20, ]
 # ADD WIND DATA ################################################################
 
 
-list_episodes <- get_extreme_episodes(selected_points, comephore,
+list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
+
+list_episodes <- list_episodes_points$episodes
+
 wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
                MoreArgs = list(wind_df = wind_mtp, delta = delta))
-
-# wind_per_episode <- lapply(list_episodes, compute_wind_episode, delta = delta,
-#                           quantile = q)
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
 head(wind_ep_df)
@@ -571,112 +568,75 @@ wind_ep_df$cardDir <- factor(wind_ep_df$cardDir,
                        levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
 
 
-# # Define wind speed categories and reorder levels to change legend order
-# wind_ep_df <- wind_ep_df %>%
-#   mutate(FF_interval = factor(cut(FF,
-#                             breaks = c(0, 2, 5, 10, Inf),
-#                             labels = c("<2", "2-5", "5-10", ">10"),
-#                             right = FALSE),
-#                     levels = c(">10", "5-10", "2-5", "<2")))  # Reverse order
+# Define wind speed categories and reorder levels to change legend order
+wind_ep_df <- wind_ep_df %>%
+  mutate(FF_interval = factor(cut(FF,
+                            breaks = c(0, 2, 5, 10, Inf),
+                            labels = c("<2", "2-5", "5-10", ">10"),
+                            right = FALSE),
+                    levels = c(">10", "5-10", "2-5", "<2")))  # Reverse order
 
-# # Define wind direction order
-# wind_ep_df$cardDir <- factor(wind_ep_df$cardDir,
-#                     levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+# Define wind direction order
+wind_ep_df$cardDir <- factor(wind_ep_df$cardDir,
+                    levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
 
-# # Custom color palette
-# custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
+# Custom color palette
+custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
 
-# # Plot wind rose
-# ggplot(wind_ep_df, aes(x = cardDir, fill = FF_interval)) +
-#   geom_bar(position = "stack", width = 1, color = "black") +
-#   coord_polar(start = 15 * pi / 8) +
-#   scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
-#   labs(x = "Direction", y = "Count", title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"),
-#         legend.title = element_text(size = 12, face = "bold"),
-#         legend.text = element_text(size = 10))
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDir, fill = FF_interval)) +
+  geom_bar(position = "stack", width = 1, color = "black") +
+  coord_polar(start = 15 * pi / 8) +
+  scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
+  labs(x = "Direction", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
 
-# # Save plot
-# end_filename <- paste(n_episodes, "_ep_", min_spatial_dist, "_km_",
-#                       min_time_dist, "_h_delta_", delta, ".png", sep = "")
-# filename <- paste(im_folder, "wind/datagouv/wind_card_dir_", end_filename,
-#                     sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
+# Save plot
+end_filename <- paste(n_episodes, "_ep_", min_spatial_dist, "_km_",
+                      tmax, "_h_delta_", delta, ".png", sep = "")
+filename <- paste(im_folder, "wind/datagouv/wind_card_dir_", end_filename,
+                    sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
 
 
-# # Ensure cardDir is a factor with correct order
-# wind_ep_df$cardDirt0 <- factor(wind_ep_df$cardDirt0,
-#                         levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+# Ensure cardDir is a factor with correct order
+wind_ep_df$cardDir_t0 <- factor(wind_ep_df$cardDir_t0,
+                        levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
 
-# # Plot wind rose
-# ggplot(wind_ep_df, aes(x = cardDirt0, fill = FF_interval)) +
-#   geom_bar(position = "stack", width = 1, color = "black") +
-#   coord_polar(start = 15 * pi / 8) +
-#   scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
-#   labs(x = "Direction in t0", y = "Count", title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"),
-#         legend.title = element_text(size = 12, face = "bold"),
-#         legend.text = element_text(size = 10))
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDir_t0, fill = FF_interval)) +
+  geom_bar(position = "stack", width = 1, color = "black") +
+  coord_polar(start = 15 * pi / 8) +
+  scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
+  labs(x = "Direction in t0", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
 
-# # save the wind data
-# filename <- paste(im_folder, "wind/datagouv/wind_card_dir_t0_", end_filename,
-#                     sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_card_dir_t0_", end_filename,
+                    sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
 
-# # Plot wind rose for DD_t0
-# ggplot(wind_ep_df, aes(x = DD_t0)) +
-#   geom_bar(position = "stack", width = 3, color = "#5048489d", fill = btfgreen,
-#         alpha = 0.8) +
-#   coord_polar(start = 15.85 * pi / 8) +
-#   labs(x = "Direction in t0 (degree)", y = "Count", title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"),
-#         legend.title = element_text(size = 12, face = "bold"),
-#         legend.text = element_text(size = 10))
+# Plot wind rose for DD_t0
+ggplot(wind_ep_df, aes(x = DD_t0)) +
+  geom_bar(position = "stack", width = 3, color = "#5048489d", fill = btfgreen,
+        alpha = 0.8) +
+  coord_polar(start = 15.85 * pi / 8) +
+  labs(x = "Direction in t0 (degree)", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
 
-# # save the wind data
-# filename <- paste(im_folder, "wind/datagouv/wind_dir_t0_", end_filename,
-#                     sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
-
-# # Mean by excess in episode
-# wind_ep_df$cardDir_excess <- factor(wind_ep_df$cardDir_excess,
-#                         levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
-# # remove NA values
-# wind_plot <- wind_ep_df[!is.na(wind_ep_df$cardDir_excess), ]
-# # Plot wind rose
-# ggplot(wind_plot, aes(x = cardDir_excess, fill = FF_interval)) +
-#   geom_bar(position = "stack", width = 1, color = "black") +
-#   coord_polar(start = 15 * pi / 8) +
-#   scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
-#   labs(x = "Direction in excess (for s0)", y = "Count", title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"),
-#         legend.title = element_text(size = 12, face = "bold"),
-#         legend.text = element_text(size = 10))
-
-# # save the wind data
-# filename <- paste(im_folder,
-#             "wind/datagouv/wind_card_dir_excess_", end_filename, sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
-
-# wind_ep_df$DD_excess <- as.numeric(wind_ep_df$DD_excess)
-
-# # Plot wind rose
-# ggplot(wind_plot, aes(x = DD_excess)) +
-#   geom_bar(color = "#797474", fill = btfgreen, alpha = 0.5, width = 5) +
-#   coord_polar(start = 15.85 * pi / 8) +
-#   labs(x = "Mean wind direction in excess for s0 (in degree)", y = "Count",
-#         title = "") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(size = 12, face = "bold"))
-
-# # save the wind data
-# filename <- paste(im_folder, "wind/datagouv/wind_dir_excess_", end_filename,
-#                     sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/wind_dir_t0_", end_filename,
+                    sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
 
 # OPTIMIZATION #################################################################
 
@@ -710,14 +670,15 @@ wind_ep_df$cardDir <- factor(wind_ep_df$cardDir,
 # head(wind_km_h)
 
 # Compute the wind vector for each episode (-FF because it's the wind direction)
-wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
-wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
+wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
+wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
 # vx = -FF * sin(DD * pi / 180)  # Conversion de DD en radians
 # vy = -FF * cos(DD * pi / 180)  # Conversion de DD en radians
 
 head(wind_ep_df)
 
-wind_df <- wind_ep_df[, c("vx", "vy")]
+wind_df <- wind_ep_df[, c("DD_t0", "vx", "vy")]
+colnames(wind_df) <- c("dir", "vx", "vy")
 # which episode has NA wind values
 ind_NA <- which(is.na(wind_df$vx))
 
@@ -735,6 +696,13 @@ if (any(ind_NA > 0)) {
 }
 
 # init_param <- c(beta1, 1.15, alpha1, 0.76, 1, 1)
+eta1 <- 1
+a_ratio <- 1
+phi <- 0.5
+beta1 = 0.01
+beta2 = 0.8
+alpha1 = 1.5
+alpha2 = 0.8
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
 # q <- 1
@@ -750,6 +718,8 @@ result <- optim(par = init_param, fn = neg_ll_composite,
         control = list(maxit = 10000,
                       trace = 1),
         hessian = F)
+result
+
 
 
 # Check the convergence
@@ -772,62 +742,15 @@ kable(df_result, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
   "responsive"), latex_options = "H")
 
-# Advection estimation
-adv_hat <- abs(wind_df) ^ df_result$eta1 * sign(wind_df) * df_result$eta2
-print(adv_hat)
-
-# get wind FF and DD from adv_hat
-adv_hat$FF_hat_kmh <- sqrt(adv_hat$vx^2 + adv_hat$vy^2) # Wind magnitude in km/h
-adv_hat$FF_hat_ms <- adv_hat$FF_hat_kmh / 3.6  # Convert to m/s
-adv_hat$FF_hat_mms <- adv_hat$FF_hat_ms * 1000  # Convert to mm/s
-adv_hat$DD_hat <- atan2(adv_hat$vy, adv_hat$vx) * 180 / pi
-head(adv_hat)
-
-adv_hat$DD_hat <- ifelse(adv_hat$DD_hat < 0, adv_hat$DD_hat + 360, adv_hat$DD_hat)
-head(adv_hat)
-
-adv_hat$cardDir <- sapply(adv_hat$DD_hat, convert_to_cardinal)
-head(adv_hat)
-
-# Define wind speed categories and reorder levels to change legend order
-wind_plot_df <- adv_hat %>%
-  mutate(FF_interval = factor(cut(FF_hat_mms,
-                            breaks = c(0, 200, 250, 300, Inf),
-                            labels = c("<200", "200-250", "250-300", ">300"),
-                            right = FALSE),
-                    levels = c("<200", "200-250", "250-300", ">300")))  # Reverse order
-
-# Define wind direction order
-wind_plot_df$cardDir <- factor(wind_plot_df$cardDir,
-                    levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
-
-# remove NA values
-wind_plot_df <- wind_plot_df[!is.na(wind_plot_df$cardDir), ]
-# Custom color palette
-custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
-
-# Plot wind rose
-test <- ggplot(wind_plot_df, aes(x = cardDir, fill = FF_interval)) +
-  geom_bar(position = "stack", width = 1, color = "black") +
-  coord_polar(start = 0) +
-  scale_fill_manual(values = custom_colors, name = "Force (mm/s)") +
-  labs(x = "Direction", y = "Count", title = "") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(size = 12, face = "bold"),
-        legend.title = element_text(size = 12, face = "bold"),
-        legend.text = element_text(size = 10))
-
-ggsave("wind_rose.png", plot = test, width = 20, height = 15, units = "cm")
-
 
 # fix parameters
-neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1,
-                    eta2, list_lags,
+neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, a_ratio, phi, list_lags,
                     list_excesses, wind_df, hmax = NA, latlon = TRUE) {
-  params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
+  params <- c(beta1, beta2, alpha1, alpha2, eta1, a_ratio, phi)
   nll_composite <- neg_ll_composite(params, list_lags,
                                       list_excesses, wind_df,
-                                      hmax = hmax, latlon = latlon)
+                                      hmax = hmax, latlon = latlon,
+                                      directional = TRUE)
   return(nll_composite)
 }
 
@@ -837,8 +760,9 @@ result <- mle2(neg_ll_composite_fixpar,
                            beta2 = init_param[2],
                            alpha1 = init_param[3],
                            alpha2 = init_param[4],
-                           eta1 = init_param[5],
-                           eta2 = init_param[6]),
+                           eta1 = 1,
+                           a_ratio = 1,
+                           phi=0.5),
               data = list(list_lags = lags_opt,
                   list_excesses = excesses_opt, hmax = 7,
                   wind_df = wind_opt,
@@ -846,26 +770,49 @@ result <- mle2(neg_ll_composite_fixpar,
                   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
               control = list(maxit = 10000),
-              fixed = list(beta1 = init_param[1],
-                           beta2 = init_param[2],
-                           alpha1 = init_param[3],
+              fixed = list(beta2 = init_param[2],
                            alpha2 = init_param[4]))
+result
 
 
-# VARIOGRAM PLOTS ##############################################################
+# Vector of test values for eta1
+eta1_values <- seq(1e-08, 2, length.out = 50)
 
-# compute variogram with parameters
-result <- df_result
-num_ep <- 200
-df_lags_s0t0 <- list_lags[[num_ep]]
-wind_s0t0 <- wind_df[num_ep, ]
-generate_variogram_plots_rpareto(result, df_lags_s0t0, wind_s0t0)
+# Store for negative log-likelihood values
+neg_log_likelihoods <- numeric(length(eta1_values))
 
-# save the plot
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_DD_t0_ep",
-                    num_ep, "_", end_filename, sep = "")
-ggsave(filename, width = 20, height = 15, units = "cm")
+# Loop over different values of eta1
+for (i in seq_along(eta1_values)) {
+  params <- c(beta1, beta2, alpha1, 1, eta1_values[i], 1)
+  neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
+                              list_excesses = excesses_opt, hmax = 7,
+                              wind_df = wind_opt)
+  neg_log_likelihoods[i] <- neg_ll
+}
 
+par(mfrow = c(1, 1))
+# Plotting the likelihood function
+plot(eta1_values, neg_log_likelihoods, type = "l", col = "blue", lwd = 2,
+     xlab = expression(eta[1]), ylab = "- Log-likelihood",
+     main = "Likelihood profile as a function of eta1")
+
+
+eta1_values <- seq(0.001, 1.5, length.out = 30)
+beta2_values <- seq(0.1, 3, length.out = 30)
+
+likelihood_matrix <- matrix(NA, nrow = length(eta1_values), ncol = length(beta2_values))
+
+for (i in seq_along(eta1_values)) {
+  for (j in seq_along(beta2_values)) {
+    params <- c(beta1, beta2_values[j], alpha1, alpha2, eta1_values[i], 1)
+    likelihood_matrix[i, j] <- neg_ll_composite(params, list_lags = lags_opt,
+                                                list_excesses = excesses_opt, hmax = 7,
+                                                wind_df = wind_opt)
+  }
+}
+
+contour(eta1_values, beta2_values, likelihood_matrix, xlab = expression(eta[1]),
+        ylab = expression(beta[2]), main = "Log-likelihood contours for eta1 and beta2")
 
 
 # GENERATE TABLE FROM TEST #####################################################
@@ -873,34 +820,44 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 library(knitr)
 library(kableExtra)
 
-# Paramètres pour les essais
-q_values <- c(0.997, 0.998, 0.999)  # Quantiles à tester
-delta_values <- c(12, 15, 20)  # Valeurs delta (étapes)
-min_spatial_dist_values <- c(3, 5, 7)  # Valeurs min_spatial_dist
-tau_ranges <- list(-5:5, -10:10)  # Plages de tau
-wind_direction_type <- c("t_0", "freq.")  # Composantes du vent
+# Configurations
+q_values <- c(0.997, 0.998, 0.999)
+delta_values <- c(10, 12, 15)
+min_spatial_dist_values <- c(3, 5)
+tau_ranges <- list(-10:10)
+wind_direction_type <- c("t_0", "freq")
 
-# Initialisation d'un tableau pour stocker les résultats
+# Init results table
 results_table <- list()
+n_ep_list <- c()
 
-# Boucle sur les combinaisons de paramètres
 for (q in q_values) {
   for (delta in delta_values) {
     for (min_spatial_dist in min_spatial_dist_values) {
       for (tau_range in tau_ranges) {
         for (wind_dir in wind_direction_type) {
-          # Récupérer les points extrêmes
+          # print configuration
+          print(paste("q:", q, "delta:", delta, "minDist:", min_spatial_dist,
+                      "taumax:", max(tau_range), "direction:", wind_dir))
+
+          print("Select (s0, t0) pairs for extreme episodes")
+          #  Select (s0, t0) pairs for extreme episodes
           selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                               min_spatial_dist, delta = delta,
                                               n_max_episodes = 10000,
                                               time_ext = 0)
-          list_episodes_unif <- get_extreme_episodes(selected_points, comephore,
+          n_episodes <- length(selected_points$s0)
+          n_ep_list <- c(n_ep_list, n_episodes)
+          # Get the extreme episodes
+          list_episodes_unif_points <- get_extreme_episodes(selected_points, comephore,
                                           delta = delta, unif = TRUE)
-          s0_list <- selected_points$s0
-          t0_list <- selected_points$t0
-          u_list <- selected_points$u_s0
+          list_episodes_unif <- list_episodes_unif_points$episodes
+          s0_list <- selected_points$s0 # List of s0
+          t0_list <- selected_points$t0 # List of t0
+          u_list <- selected_points$u_s0 # List of threshold
           tmax <- max(tau_range)
-          # Lancer l'optimisation pour chaque essai
+          print("Compute the lags and excesses for each conditional point")
+          # Get the lags and excesses for each conditional point
           list_results <- mclapply(1:length(s0_list), function(i) {
             s0 <- s0_list[i]
             s0_coords <- sites_coords[s0, ]
@@ -920,29 +877,31 @@ for (q in q_values) {
           list_lags <- lapply(list_results, `[[`, "lags")
           list_excesses <- lapply(list_results, `[[`, "excesses")
 
-          list_episodes <- get_extreme_episodes(selected_points, comephore,
+          list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                           delta = delta, unif = FALSE)
-          # Calculer les vents par épisode
+          list_episodes <- list_episodes_points$episodes
+          # Get wind components for each episode
           wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list,
                             u_list,
                             MoreArgs = list(wind_df = wind_mtp, delta = delta))
 
           wind_ep_df <- do.call(rbind, wind_per_episode)
 
-          if (wind_dir == "t_0") {
+          if (wind_dir == "t_0") { # Use wind direction at t0
             wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
             wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
-          } else {
+          } else { # Use most frequent wind direction
             wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD * pi / 180)
             wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD * pi / 180)
           }
 
+          # Get wind vectors in a dataframe
           wind_df <- wind_ep_df[, c("vx", "vy")]
 
-          # Vérifier les NA
+          # Verify if there are NA values
           ind_NA <- which(is.na(wind_df$vx))
 
-          if (any(ind_NA > 0)) {
+          if (any(ind_NA > 0)) { # Remove episodes with NA values
             wind_opt <- wind_df[-ind_NA, ]
             episodes_opt <- list_episodes[-ind_NA]
             lags_opt <- list_lags[-ind_NA]
@@ -954,8 +913,10 @@ for (q in q_values) {
             excesses_opt <- list_excesses
           }
 
+          # Initial parameters
           init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
+          print("Optimization")
           # Optimisation
           result <- optim(par = init_param, fn = neg_ll_composite,
                           list_lags = lags_opt,
@@ -970,8 +931,8 @@ for (q in q_values) {
                                          trace = 1),
                           hessian = F)
 
-          # Vérification de la convergence
-          if (result$convergence != 0) {
+          # Check the convergence
+          if (result$convergence != 0) { # No convergence
             df_result <- data.frame(
               quantile = q,
               delta = delta,
@@ -985,8 +946,8 @@ for (q in q_values) {
               eta1 = "NC",
               eta2 = "NC"
             )
-          } else {
-            # Extraire les résultats
+          } else { # Convergence
+            # Extract the results
             df_result <- data.frame(
               quantile = q,
               delta = delta,
@@ -1002,7 +963,8 @@ for (q in q_values) {
             )
           }
 
-          # Ajouter au tableau des résultats
+          print(df_result)
+          # Add the results to the table
           results_table[[length(results_table) + 1]] <- df_result
         }
       }
@@ -1010,9 +972,179 @@ for (q in q_values) {
   }
 }
 
-# Combiner tous les résultats dans un dataframe
+# Combine the results into a single dataframe
 final_results <- do.call(rbind, results_table)
 
-# Affichage du tableau au format LaTeX
-kable(final_results, format = "latex", caption = "Optimization results with wind components as covariates") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), latex_options = "H")
+# Latex table
+kable(final_results, format = "latex",
+      caption = "Optimization results with wind components as covariates") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
+                                            "responsive"), latex_options = "H")
+
+
+# ADVECTION ESTIMATION #########################################################
+
+# get first result
+df_result <- final_results[31, ]
+df_result
+
+# Estimated advection vector with wind components
+adv_hat <- abs(wind_df) ^ as.numeric(df_result$eta1) * sign(wind_df) *
+                            as.numeric(df_result$eta2)
+print(adv_hat)
+
+# remove NA values
+adv_hat <- adv_hat[!is.na(adv_hat$vx), ]
+
+# get wind FF and DD from adv_hat
+adv_hat$FF_hat_kmh <- sqrt(adv_hat$vx^2 + adv_hat$vy^2) # Wind magnitude in km/h
+adv_hat$FF_hat_ms <- adv_hat$FF_hat_kmh / 3.6  # Convert to m/s
+adv_hat$FF_hat_mms <- adv_hat$FF_hat_ms * 1000  # Convert to mm/s
+adv_hat$DD_hat <- atan2(adv_hat$vy, adv_hat$vx) * 180 / pi
+head(adv_hat)
+
+adv_hat$DD_hat <- ifelse(adv_hat$DD_hat < 0, adv_hat$DD_hat + 360,
+                        adv_hat$DD_hat)
+head(adv_hat)
+
+adv_hat$cardDir <- sapply(adv_hat$DD_hat, convert_to_cardinal)
+head(adv_hat)
+
+# Define wind speed categories and reorder levels to change legend order
+wind_plot_df <- adv_hat %>%
+  mutate(FF_interval = factor(cut(FF_hat_mms,
+                            breaks = c(0, 100, 120, 150, 200, Inf),
+                            labels = c("<100", "100-120", "120-150", "150-200", ">200"),
+                            right = FALSE),
+            levels = c("<100", "100-120", "120-150", "150-200", ">200")))  # Reverse order
+
+# Define wind direction order
+wind_plot_df$cardDir <- factor(wind_plot_df$cardDir,
+                    levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+
+# remove NA values
+wind_plot_df <- wind_plot_df[!is.na(wind_plot_df$cardDir), ]
+# Custom color palette
+custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
+
+# Plot wind rose
+advplot <- ggplot(wind_plot_df, aes(x = cardDir, fill = FF_interval)) +
+  geom_bar(position = "stack", width = 1, color = "black") +
+  coord_polar(start = 0) +
+  scale_fill_manual(values = custom_colors, name = "Force (mm/s)") +
+  labs(x = "Direction", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+
+file_path <- paste(im_folder, "optim/comephore/estimated_adv_",
+                    df_result$quantile*1000, "_", df_result$delta, "_",
+                    df_result$minDist, "_", df_result$tau,
+                    "_", df_result$direction, ".png", sep = "")
+ggsave(file_path, plot = advplot, width = 20, height = 15, units = "cm")
+
+
+
+# VARIOGRAM PLOTS ##############################################################
+
+# compute variogram with parameters
+result <- df_result
+# convert last column into numeric
+result[, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")] <-
+  lapply(result[, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")],
+         as.numeric)
+
+beta1 <- result$beta1
+beta2 <- result$beta2
+alpha1 <- result$alpha1
+alpha2 <- result$alpha2
+eta1 <- result$eta1
+eta2 <- result$eta2
+
+# Compute advection for each row
+adv_df <- wind_df %>%
+  mutate(
+    adv_x = (abs(vx)^eta1) * sign(vx) * eta2,
+    adv_y = (abs(vy)^eta1) * sign(vy) * eta2
+  )
+  
+# remove NA values
+adv_df <- adv_df[!is.na(adv_df$adv_x), ]
+
+list_lags <- lapply(seq_along(list_lags), function(i) {
+  list_lags[[i]] %>%
+    mutate(vx = wind_df$vx[i], vy = wind_df$vy[i])
+})
+
+params <- c(beta1, beta2, alpha1, alpha2, adv_df$adv_x, adv_df$adv_y)
+
+list_chi <- lapply(seq_along(list_lags), function(i) {
+  theoretical_chi(params, list_lags[[i]], latlon = TRUE)
+})
+
+head(list_chi[[1]])
+
+df_chi_all <- bind_rows(list_chi, .id = "episode") 
+head(df_chi_all)
+
+
+library(ggplot2)
+
+df_chi_all$hlagabs <- abs(df_chi_all$hlag)
+
+ggplot(df_chi_all, aes(x = hlagabs, y = vario)) +
+  geom_line() +
+  facet_wrap(~ tau, scales = "free_x",
+      labeller = labeller(tau = function(x) paste0("tau = ", x))) +
+  labs(
+    title = "Directional variogram",
+    x = "Spatial lag",
+    y = "Variogram"
+  ) +
+  theme_minimal()
+
+n_episodes <- length(unique(df_chi_all$episode))
+# save the plot
+end_filename <- paste(df_result$quantile*1000, "_", min_spatial_dist, "km_",
+                     wind_dir, "_delta", delta, ".png", sep = "")
+filename <- paste(im_folder, "optim/comephore/variogram_rpareto_all",
+                    "_", end_filename, sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+
+# Plot only for tau = 10
+df_chi_tau10 <- df_chi_all[df_chi_all$tau == 10, ]
+
+ggplot(df_chi_tau10, aes(x = hlagabs, y = vario)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Spatial lag",
+    y = "Variogram"
+  ) +
+  theme_minimal()
+
+# save the plot
+filename <- paste(im_folder, "optim/comephore/variogram_rpareto_tau10",
+                    "_", end_filename, sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+# Plot only for tau = 10
+df_chi_tau10 <- df_chi_all[df_chi_all$tau == 0, ]
+
+ggplot(df_chi_tau10, aes(x = hlagabs, y = vario)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Spatial lag",
+    y = "Variogram"
+  ) +
+  theme_minimal()
+
+# save the plot
+filename <- paste(im_folder, "optim/comephore/variogram_rpareto_tau0",
+                    "_", end_filename, sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
