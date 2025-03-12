@@ -351,8 +351,8 @@ generate_variogram_plots_rpareto <- function(result, lags_r, wind_r) {
   # Apply theorical_chi for each row's advection
   empirical_chi <- adv_df %>%
     rowwise() %>%
-    mutate(chi = list(theorical_chi(c(beta1, beta2, alpha1, alpha2,
-                              adv_x, adv_y), df_lags))) %>%
+    mutate(chi = list(theoretical_chi(c(beta1, beta2, alpha1, alpha2,
+                              adv_x, adv_y), lags_r, latlon = TRUE))) %>%
     unnest(chi)
 
   # keep chi for hnormv > 0

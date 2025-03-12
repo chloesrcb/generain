@@ -20,10 +20,11 @@
 #'         value u_s0 for each episode.
 #'
 #' @import data.table
+#' @import geosphere
 #'
 #' @export
 select_extreme_episodes <- function(sites_coords, data, quantile,
-                                    min_spatial_dist, delta, 
+                                    min_spatial_dist, delta,
                                     n_max_episodes = 10000, time_ext = 0) {
   # Convert data to a matrix for fast access
   data <- as.matrix(data)
@@ -101,7 +102,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
 
       # Remove nearby temporal data
       t_inf <- max(1, best_candidate$t0 - (delta - 1) - time_ext)
-      t_sup <- min(nrow(data_unif), best_candidate$t0 + (delta - 1) + time_ext)
+      t_sup <- min(nrow(data), best_candidate$t0 + (delta - 1) + time_ext)
       invalid_time_mask[t_inf:t_sup,
                         which(site_names == best_candidate$s0)] <- TRUE
     }
@@ -131,7 +132,8 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
 #' @import data.table
 #'
 #' @export
-check_intervals_overlap <- function(s0_value, selected_points, delta, beta = 0) {
+check_intervals_overlap <- function(s0_value, selected_points, delta,
+                                                                beta = 0) {
   # Filter for the given s0
   filtered_points <- selected_points[selected_points$s0 == s0_value, ]
 
@@ -144,9 +146,6 @@ check_intervals_overlap <- function(s0_value, selected_points, delta, beta = 0) 
     t_inf = filtered_points$t0 - (delta - 1) - beta,
     t_sup = filtered_points$t0 + delta + beta
   )
-
-  # Sort intervals by start time
-  setorder(intervals, t_inf)
 
   # Check for overlap
   for (i in 2:nrow(intervals)) {
@@ -175,22 +174,42 @@ check_intervals_overlap <- function(s0_value, selected_points, delta, beta = 0) 
 #' @export
 get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
                                 unif = FALSE) {
-  if (unif) { # uniformize the data
-   data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
-                                                (length(col) + 1))
+  if (unif) { # Uniformize the data
+    data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
+                                              (length(col) + 1))
   }
-  # initialize the list of episodes
+
+  # Store valid episodes and valid indices
   episodes <- list()
+  valid_indices <- c()
+
   for (i in 1:nrow(selected_points)) {
-    # s0 <- selected_points$s0[i]
     t0 <- selected_points$t0[i]
-    t_inf <- t0 - (delta - 1) - beta
-    t_sup <- t0 + (delta) + beta
-    episode <- data[t_inf:t_sup, ] # get the episode
-    episodes <- append(episodes, list(episode))
+    t_inf <- t0 - (delta) - beta
+    t_sup <- t0 + delta + beta
+
+    # Check that the episode is the correct size (2 * delta)
+    episode_size <- t_sup - t_inf + 1
+    if (episode_size == 2 * delta + 1 + 2*beta) {
+      episode <- data[t_inf:t_sup, ]  # Get the episode
+      episodes <- append(episodes, list(episode))
+      valid_indices <- c(valid_indices, i)  # Mark this index as valid
+    }
   }
-  return(episodes)
+
+  # Subset selected_points to keep only valid points
+  new_selected_points <- selected_points[valid_indices, , drop = FALSE]
+
+  # Print message if selected_points has changed
+  if (nrow(new_selected_points) < nrow(selected_points)) {
+    removed_count <- nrow(selected_points) - nrow(new_selected_points)
+    print(paste("Warning: Removed", removed_count, "invalid selected points."))
+  }
+
+  # Return both valid episodes and updated selected points
+  return(list(episodes = episodes, selected_points = new_selected_points))
 }
+
 
 
 # EXCESSES ---------------------------------------------------------------------
@@ -331,7 +350,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
         rain_nolag <- rain_cp$s1[1:(Tmax - abs(t))] # get the data without lag
         rain_lag <- rain_cp$s2[(1 + abs(t)):Tmax] # get the data with lag
         Tobs <- length(rain_nolag) # number of observations for the lagged pair
-                                  # i.e. T - tau
+                                   # i.e. T - tau
 
         # transform the data in uniform data
         if (!threshold) {
@@ -362,7 +381,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
   return(excesses)
 }
 
-# THEORETICAL CHI ----------------------------------------------------------------
+# THEORETICAL CHI --------------------------------------------------------------
 
 #' Compute the theoretical chi matrix.
 #'
@@ -427,27 +446,22 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
     # adv <- pmax(adv, 1e-5)  # Prevent adv from collapsing to 0
   }
 
-  chi_df <- df_lags[c("s1", "s2", "tau")]
+  chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
 
   if (latlon) {
-    # Get coordinates in lat/lon
-    chi_df$s1lon <- df_lags$s1x
-    chi_df$s1lat <- df_lags$s1y
-    chi_df$s2lon <- df_lags$s2x
-    chi_df$s2lat <- df_lags$s2y
-
     # Convert degrees to kilometers or meters (longitude varies with latitude)
     lat_convert <- 111.32  # km per degree
-    chi_df$lon_convert_s1 <- lat_convert * cos(pi * chi_df$s1lat / 180)
-    chi_df$lon_convert_s2 <- lat_convert * cos(pi * chi_df$s2lat / 180)
+    chi_df$lon_convert_s1 <- lat_convert
+    chi_df$lon_convert_s2 <- lat_convert * cos(pi * chi_df$s2y / 180)
 
     # Convert s1 coordinates
-    chi_df$s1xv <- chi_df$s1lon * chi_df$lon_convert_s1
-    chi_df$s1yv <- chi_df$s1lat * lat_convert
+    chi_df$s1xv <- chi_df$s1x * chi_df$lon_convert_s1
+    chi_df$s1yv <- chi_df$s1y * lat_convert
 
     # Correct s2 coordinates with advection
-    chi_df$s2xv <- chi_df$s2lon * chi_df$lon_convert_s2 - adv[1] * df_lags$tau
-    chi_df$s2yv <- chi_df$s2lat * lat_convert - adv[2] * df_lags$tau
+    chi_df$s2xv <- chi_df$s2x * chi_df$lon_convert_s2 - as.numeric(adv[1]) *
+                                                                      chi_df$tau
+    chi_df$s2yv <- chi_df$s2y * lat_convert - as.numeric(adv[2]) * df_lags$tau
 
     # Compute spatial distance in km
     chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
@@ -473,7 +487,9 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
 
   if (directional) {
       # Apply directional distance adjustment (cos(theta))
-      chi_df$hlag <- chi_df$hnormV * cos(chi_df$theta)
+      chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
+      chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
+      chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
   } else {
       # Only distance lag
       chi_df$hlag <-  chi_df$hnormV
@@ -485,80 +501,51 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
 
   # Regularize chi to prevent very small or very large values
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8)  # Bound chi
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8)  # Bound chi TODO
 
   return(chi_df)
 }
 
-
-#' theoretical_chi_aniso function
-#'
-#' This function calculates the theoretical spatio-temporal extremogram
-#' based on the given parameters.
-#' 
-#' @param params A vector of parameters.
-#' @param df_lags The dataframe with spatial and temporal lag values.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'            and longitude. Default is FALSE.
-#' @param wind_vect A vector of wind values. Default is NA.
-#' 
-#' @return The theoretical spatio-temporal extremogram.
-#' 
-#' @export
-theoretical_chi_aniso <- function(params, df_lags, latlon = FALSE, 
-                                  wind_vect = NA) {
+theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
+                            directional = TRUE) {
   beta1 <- params[1]
   beta2 <- params[2]
-  beta3 <- params[3]
-  alpha1 <- params[4]
-  alpha2 <- params[5]
-  alpha3 <- params[6]
-
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  
+  # Handle advection vector
   if (all(is.na(wind_vect))) {
-    adv <- params[7:8]
+    adv <- params[5:6]
   } else {
-    eta1 <- params[7]
-    eta2 <- params[8]
-    adv <- (abs(wind_vect)^eta1) * sign(wind_vect) * eta2 * 3.6 # in km/h
+    eta1 <- params[5]
+    eta2 <- params[6]
+    wind_vect_kmh <- wind_vect * 3.6 # Convert wind to km/h
+    adv <- (abs(wind_vect_kmh)^eta1) * sign(wind_vect_kmh) * eta2 # in km/h
   }
-
+  
+  # Initialize dataframe with lags
   chi_df <- df_lags[c("s1", "s2", "tau")]
-
+  
+  # Handle coordinate transformation based on latlon
   if (latlon) {
     # Get coordinates in lat/lon
     chi_df$s1lon <- df_lags$s1x
     chi_df$s1lat <- df_lags$s1y
     chi_df$s2lon <- df_lags$s2x
     chi_df$s2lat <- df_lags$s2y
-
-    # Convert degrees to kilometers (longitude varies with latitude)
-    lat_to_km <- 111.32 # km per degree
-    chi_df$lon_to_km_s1 <- 111.32 * cos(pi * chi_df$s1lat / 180)
-    chi_df$lon_to_km_s2 <- 111.32 * cos(pi * chi_df$s2lat / 180)
-
+    
+    # Convert degrees to kilometers
+    lat_convert <- 111.32 # km per degree
+    chi_df$lon_convert_s1 <- lat_convert * cos(pi * chi_df$s1lat / 180)
+    chi_df$lon_convert_s2 <- lat_convert * cos(pi * chi_df$s2lat / 180)
+    
     # Convert s1 coordinates
-    chi_df$s1xv <- chi_df$s1lon * chi_df$lon_to_km_s1
-    chi_df$s1yv <- chi_df$s1lat * lat_to_km
-
+    chi_df$s1xv <- chi_df$s1lon * chi_df$lon_convert_s1
+    chi_df$s1yv <- chi_df$s1lat * lat_convert
+    
     # Correct s2 coordinates with advection
-    chi_df$s2xv <- chi_df$s2lon * chi_df$lon_to_km_s2 - adv[1] * df_lags$tau
-    chi_df$s2yv <- chi_df$s2lat * lat_to_km - adv[2] * df_lags$tau
-
-    # Compute spatial distance in km
-    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                          (chi_df$s2yv - chi_df$s1yv)^2) # km
-
-    # Directional adjustment: compute the angle (theta) for the directional
-    # variogram
-    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
-
-    # Apply directional distance adjustment (cos(theta))
-    # chi_df$hlag <- chi_df$hnormV * cos(chi_df$theta)
-    chi_df$hlag <- (chi_df$s2xv - chi_df$s1xv) * cos(chi_df$theta) +
-               (chi_df$s2yv - chi_df$s1yv) * sin(chi_df$theta)
-
-    chi_df$hx <- chi_df$hnormV * cos(chi_df$theta)
-    chi_df$hy <- chi_df$hnormV * sin(chi_df$theta)
+    chi_df$s2xv <- chi_df$s2lon * chi_df$lon_convert_s2 - adv[1] * chi_df$tau
+    chi_df$s2yv <- chi_df$s2lat * lat_convert - adv[2] * chi_df$tau
 
   } else {
     # Cartesian coordinates case
@@ -566,31 +553,170 @@ theoretical_chi_aniso <- function(params, df_lags, latlon = FALSE,
     chi_df$s1yv <- df_lags$s1y
     chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
     chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
-    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                          (chi_df$s2yv - chi_df$s1yv)^2)
-
-    # Directional adjustment: compute the angle (theta) for the directional
-    # variogram
-    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
-
-    # Apply directional distance adjustment (cos(theta))
-    # chi_df$hlag <- chi_df$hnormV * cos(chi_df$theta)
-    chi_df$hlag <- (chi_df$s2xv - chi_df$s1xv) * cos(chi_df$theta) +
-               (chi_df$s2yv - chi_df$s1yv) * sin(chi_df$theta)
   }
 
-  # Compute variogram and chi
-  # chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
-  #                 (2 * beta2) * abs(chi_df$tau)^alpha2
+  # Compute spatial vector h = s2 - s1
+  chi_df$h_x <- chi_df$s2xv - chi_df$s1xv
+  chi_df$h_y <- chi_df$s2yv - chi_df$s1yv
 
-  chi_df$vario <- (2 * beta1) * abs(chi_df$hx)^alpha1 +
-                  (2 * beta2) * abs(chi_df$hy)^alpha2 +
-                  (2 * beta3) * abs(chi_df$tau)^alpha3
+  # Standard Euclidean distance
+  chi_df$hnormV <- sqrt(chi_df$h_x^2 + chi_df$h_y^2)
 
+  # Compute the angle (theta) for directional analysis
+  # chi_df$theta <- atan2(chi_df$h_y, chi_df$h_x)
+
+  if (directional) {
+    # NEW DIRECTIONAL IMPLEMENTATION
+    # Get anisotropy parameters (add these to your params vector)
+    if (length(params) >= 8) {
+      # If anisotropy parameters are provided
+      a_ratio <- params[7]  # Ratio of major to minor axis (anisotropy ratio)
+      phi <- params[8]      # Angle of major axis (in radians)
+    } else {
+      # Default values if not provided
+      a_ratio <- 1.0        # Isotropic by default
+      phi <- 0.0            # No rotation by default
+    }
+
+    # Apply rotation and anisotropy transformation
+    # Transform h vector using the anisotropy matrix
+    chi_df$h_x_rotated <- chi_df$h_x * cos(phi) + chi_df$h_y * sin(phi)
+    chi_df$h_y_rotated <- -chi_df$h_x * sin(phi) + chi_df$h_y * cos(phi)
+
+    # Scale by anisotropy ratio
+    chi_df$h_x_scaled <- chi_df$h_x_rotated / a_ratio
+    chi_df$h_y_scaled <- chi_df$h_y_rotated
+
+    # Compute the adjusted distance with anisotropy
+    chi_df$hlag <- sqrt(chi_df$h_x_scaled^2 + chi_df$h_y_scaled^2)
+  } else {
+    # Only use Euclidean distance if not directional
+    chi_df$hlag <- chi_df$hnormV
+  }
+
+  # Compute variogram using the adjusted distance
+  chi_df$vario <- (2 * beta1) * (chi_df$hlag)^alpha1 +
+                 (2 * beta2) * abs(chi_df$tau)^alpha2
+
+  # Compute chi (extremal coefficient)
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+
+  # Regularize chi to prevent very small or very large values
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8) # Bound chi
 
   return(chi_df)
 }
+
+
+theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NULL,
+                            directional = TRUE) {
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  eta1 <- params[5]
+
+  # Handle advection vector with named columns
+  if (is.null(wind_vect) || all(is.na(wind_vect))) {
+    # Use params directly if no wind vector provided
+    adv <- params[5:6]
+  } else {
+    # Extract wind components and apply scaling
+    vx <- wind_vect$vx
+    vy <- wind_vect$vy
+
+    # Scale wind vector by eta1
+    adv <- c(vx, vy) * eta1
+  }
+
+  # Get anisotropy parameters
+  a_ratio <- params[6]  # Anisotropy ratio
+
+  # Use wind direction for phi if directional is TRUE and wind data available
+  # if (directional && !is.null(wind_vect) && !all(is.na(wind_vect))) {
+  #   if ("dir" %in% names(wind_vect)) {
+  #     phi <- wind_vect$dir * pi / 180 # Convert to radians
+  #   } else {
+  #     phi <- 0  # Default if wind is zero
+  #   }
+  # } else if (directional && length(params) >= 7) {
+  #   # Use provided phi if specifically provided
+  phi <- params[7]
+  # } else {
+    # Default: isotropic
+  #   phi <- 0
+  #   a_ratio <- 1.0
+  # }
+  
+  # Initialize dataframe with lags
+  chi_df <- df_lags[c("s1", "s2", "tau")]
+  
+  # Handle coordinate transformation based on latlon
+  if (latlon) {
+    # Get coordinates in lat/lon
+    chi_df$s1lon <- df_lags$s1x
+    chi_df$s1lat <- df_lags$s1y
+    chi_df$s2lon <- df_lags$s2x
+    chi_df$s2lat <- df_lags$s2y
+    
+    # Convert degrees to kilometers
+    lat_convert <- 111.32 # km per degree
+    chi_df$lon_convert_s1 <- lat_convert * cos(pi * chi_df$s1lat / 180)
+    chi_df$lon_convert_s2 <- lat_convert * cos(pi * chi_df$s2lat / 180)
+    
+    # Convert s1 coordinates
+    chi_df$s1xv <- chi_df$s1lon * chi_df$lon_convert_s1
+    chi_df$s1yv <- chi_df$s1lat * lat_convert
+    
+    # Correct s2 coordinates with advection
+    chi_df$s2xv <- chi_df$s2lon * chi_df$lon_convert_s2 - adv[1] * chi_df$tau
+    chi_df$s2yv <- chi_df$s2lat * lat_convert - adv[2] * chi_df$tau
+    
+  } else {
+    # Cartesian coordinates case
+    chi_df$s1xv <- df_lags$s1x
+    chi_df$s1yv <- df_lags$s1y
+    chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
+    chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
+  }
+  
+  # Compute spatial vector h = s2 - s1
+  chi_df$h_x <- chi_df$s2xv - chi_df$s1xv
+  chi_df$h_y <- chi_df$s2yv - chi_df$s1yv
+  
+  # Standard Euclidean distance (for reference)
+  chi_df$hnormV <- sqrt(chi_df$h_x^2 + chi_df$h_y^2)
+  
+  if (directional) {
+    # Apply rotation and anisotropy transformation
+    # Rotate vectors to align with the wind direction
+    chi_df$h_x_rotated <- chi_df$h_x * cos(phi) + chi_df$h_y * sin(phi)
+    chi_df$h_y_rotated <- -chi_df$h_x * sin(phi) + chi_df$h_y * cos(phi)
+    
+    # Scale by anisotropy ratio (stretch in wind direction)
+    chi_df$h_x_scaled <- chi_df$h_x_rotated / a_ratio
+    chi_df$h_y_scaled <- chi_df$h_y_rotated
+    
+    # Compute the adjusted distance with anisotropy
+    chi_df$hlag <- sqrt(chi_df$h_x_scaled^2 + chi_df$h_y_scaled^2)
+  } else {
+    # Only use Euclidean distance if not directional
+    chi_df$hlag <- chi_df$hnormV
+  }
+  
+  # Compute variogram using the adjusted distance
+  chi_df$vario <- (2 * beta1) * (chi_df$hlag)^alpha1 +
+                 (2 * beta2) * abs(chi_df$tau)^alpha2
+  
+  # Compute chi (extremal coefficient)
+  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+  
+  # Regularize chi to prevent very small or very large values
+  chi_df$chi <- pmax(pmin(chi_df$chi, 1 - 1e-8), 1e-8) # Bound chi
+  
+  return(chi_df)
+}
+
 
 #' get_chi_vect function
 #'
@@ -659,11 +785,11 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
                       hmax = NA,  rpar = TRUE, threshold = FALSE,
                       latlon = FALSE, quantile = NA, data = NA, 
                       directional = TRUE) {
-  if (length(params) == 4) {
-    params <- c(params, 0, 0)
-  } else if (length(params) != 6) {
-    stop("The number of initial parameters must be 4 or 6.")
-  }
+  # if (length(params) == 4) {
+  #   params <- c(params, 0, 0)
+  # } else if (length(params) != 6) {
+  #   stop("The number of initial parameters must be 4 or 6.")
+  # }
 
   if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
@@ -678,22 +804,6 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
     # number of marginal excesses
     nmarg <- get_marginal_excess(data, quantile, threshold)
     p <- nmarg / Tmax # probability of marginal excesses
-  }
-
-  # Bounds for the parameters
-  lower.bound <- c(1e-08, 1e-08, 1e-08, 1e-08)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6 && any(is.na(wind_vect))) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  } else if (length(params) == 6 && all(!is.na(wind_vect))) {
-    lower.bound <- c(lower.bound, 1e-08, 1e-08)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
   }
 
   # compute theoretical chi values
@@ -745,20 +855,6 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
 neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
                     list_excesses, hmax = NA, threshold = FALSE,
                     directional = FALSE, rpar = TRUE) {
-  # print(params)
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
-
   m <- length(list_simu) # number of replicates
   nll_composite <- 0 # composite negative log-likelihood
   for (i in 1:m) {
@@ -802,15 +898,15 @@ neg_ll_composite <- function(params, list_lags,
   }
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
-  print(params)
+  # print(params)
   for (i in 1:m) {
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
     if (!all(is.na(wind_df))) {
-      wind_vx <- wind_df$vx[i]
-      wind_vy <- wind_df$vy[i]
-      wind_vect <- c(wind_vx, wind_vy)
+      # wind_vx <- wind_df$vx[i]
+      # wind_vy <- wind_df$vy[i]
+      wind_vect <- wind_df[i,]
     }
     nll_i <- neg_ll(params, df_lags, wind_vect = wind_vect,
                     hmax = hmax, excesses = excesses, rpar = TRUE,
