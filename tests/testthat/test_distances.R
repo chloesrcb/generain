@@ -37,7 +37,7 @@ test_that("get_h_vect test", {
   hmax <- 3 # Maximum value for h
   h_vect <- get_h_vect(df_dist, hmax = hmax) # Calculate the h vector with hmax
   # Check if all values are within the range [1, hmax]
-  expect_true(all(h_vect >= 1 & h_vect <= hmax)) 
+  expect_true(all(h_vect >= 1 & h_vect <= hmax))
   expect_true(all(sort(h_vect) == h_vect)) # Check if the values are sorted
 })
 
@@ -109,10 +109,7 @@ test_that("haversine_distance_with_advection works correctly", {
 
   theta_dir <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
                         adv, tau)$theta
-  theta_deg <- theta_dir * 180 / pi
-  dir_card <- convert_to_cardinal(theta_deg)
-  theta_meteo <- (pi/2 - theta_dir) %% (2 * pi)
-  theta_meteo_deg <- theta_meteo * 180 / pi
+  theta_meteo_deg <- theta_dir * 180 / pi
   dir_card_meteo <- convert_to_cardinal(theta_meteo_deg)
   expect_equal(dir_card_meteo, "E")
 })
