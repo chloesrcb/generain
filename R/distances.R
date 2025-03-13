@@ -372,7 +372,8 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
 #' haversine_distance_with_advection function
 #'
 #' This function calculates the Haversine distance between two points 
-#' with advection applied.
+#' with advection applied and gives the direction of the vector in radians
+#' with meteorological orientation (0 degrees is North).
 #'
 #' @param lat1 Latitude of the first point.
 #' @param lon1 Longitude of the first point.
@@ -380,94 +381,42 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
 #' @param lon2 Longitude of the second point.
 #' @param adv A vector of advection values (in m/s).
 #' @param tau Temporal lag (in seconds).
-#' @return The Haversine distance between the two points with advection applied.
+#' @return The Haversine distance between the two points with advection applied
+#' and the direction of the vector in radians.
 #'
 #' @export
-haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
-                                                                          tau) {
-
-  # Radius of the Earth in meters
-  R <- 6371000
-
-  # Convert coordinates to radians
-  lat1_rad <- lat1 * pi / 180
-  lon1_rad <- lon1 * pi / 180
-  lat2_rad <- lat2 * pi / 180
-  lon2_rad <- lon2 * pi / 180
-
-  # Convert coordinates to meters (Cartesian coordinate system)
-  m_per_deg_lat <- 111132.954  # meters per degree of latitude
-  m_per_deg_lon <- 111132.954 * cos(lat1_rad)  # meters per degree of longitude
-
-  # Coordinates in meters
-  x1 <- lon1 * m_per_deg_lon
-  y1 <- lat1 * m_per_deg_lat
-  x2 <- lon2 * m_per_deg_lon
-  y2 <- lat2 * m_per_deg_lat
-
-  # Apply advection (in m/s, so multiply by tau)
-  x2_adj <- x2 + adv[1] * tau  # Apply advection to longitude
-  y2_adj <- y2 + adv[2] * tau  # Apply advection to latitude
-
-  # Reconvert adjusted coordinates to degrees
-  lon2_adj <- x2_adj / m_per_deg_lon
-  lat2_adj <- y2_adj / m_per_deg_lat
-
-  # Recalculate adjusted coordinates in radians
-  lat2_adj_rad <- lat2_adj * pi / 180
-  lon2_adj_rad <- lon2_adj * pi / 180
-
-  # Calculate the Haversine distance between (lat1, lon1)
-  # and (lat2_adj, lon2_adj)
-  delta_lat_rad <- lat2_adj_rad - lat1_rad
-  delta_lon_rad <- lon2_rad - lon1_rad
-
-  a <- sin(delta_lat_rad / 2)^2 + cos(lat1_rad) * cos(lat2_adj_rad) * 
-                                                    sin(delta_lon_rad / 2)^2
-  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-
-  # Calculate the distance in meters
-  distance <- R * c / 1000  # Convert to kilometers
-
-  # If near 0, return 0
-  distance <- ifelse(distance < 1e-06, 0, distance)
-
-  return(distance)
-}
-
-
 haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) {
-  # Effectuer le calcul de la distance Haversine classique
+  # Perform the classic Haversine distance calculation
   deltaLat <- (lat2 - lat1) * pi / 180
   deltaLon <- (lon2 - lon1) * pi / 180
   a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
   c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-  distance <- 6371000 * c  # Rayon de la Terre en mètres
+  distance <- 6371000 * c  # Radius of the Earth in meters
   
-  # Si l'advection est présente, ajustez la distance en fonction de l'advection et du temps
+  # If advection is present, adjust the distance based on advection and time
   if (length(adv) == 2) {
-    adv_x <- adv[1] * tau  # Advection en X (longitude)
-    adv_y <- adv[2] * tau  # Advection en Y (latitude)
+    adv_x <- adv[1] * tau  # Advection in X (longitude)
+    adv_y <- adv[2] * tau  # Advection in Y (latitude)
 
-    lon2_adj <- lon2 + adv_x / (111.32 * cos(lat2 * pi / 180))  # ajustement en longitude
-    lat2_adj <- lat2 + adv_y / 111.32  # ajustement en latitude
+    lon2_adj <- lon2 + adv_x / (111.32 * cos(lat2 * pi / 180))  # longitude adjustment
+    lat2_adj <- lat2 + adv_y / 111.32  # latitude adjustment
 
-    # Recalculer la distance après l'ajustement
+    # Recalculate the distance after adjustment
     deltaLat_adj <- (lat2_adj - lat1) * pi / 180
     deltaLon_adj <- (lon2_adj - lon1) * pi / 180
     a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) * cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
     c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
-    distance <- 6371000 * c_adj  # Rayon de la Terre en mètres
+    distance <- 6371000 * c_adj  # Radius of the Earth in meters
   }
 
-  # Calculer la direction (theta) en utilisant atan2
+  # Calculate the direction (theta) using atan2
   deltaLat <- (lat2 - lat1) * pi / 180
   deltaLon <- (lon2 - lon1) * pi / 180
-  theta <- atan2(deltaLat, deltaLon)  # Direction du vecteur
-  theta_meteo <- (pi/2 - theta_dir) %% (2 * pi) # Direction météorologique
-  # Si la distance est inférieure à une très petite valeur, mettre à zéro pour chaque élément
+  theta <- atan2(deltaLat, deltaLon)  # Direction of the vector
+  theta_meteo <- (pi / 2 - theta) %% (2 * pi) # Meteorological direction
+  # If the distance is less than a very small value, set to zero for each element
   distance <- ifelse(distance < 1e-06, 0, distance)
 
-  # Retourner la norme et l'angle (theta)
+  # Return the norm and angle (theta)
   return(list(distance = distance / 1000, theta = theta_meteo))
 }
