@@ -4,12 +4,12 @@
 \alias{get_lag_vectors}
 \title{get_lag_vectors function}
 \usage{
-get_lag_vectors(df_coords, tau_max = 10, latlon = FALSE)
+get_lag_vectors(df_coords, tau_vect, latlon = FALSE)
 }
 \arguments{
 \item{df_coords}{A dataframe containing the coordinates of the points.}
 
-\item{tau_max}{The maximum temporal lag. Default is 10.}
+\item{tau_vect}{A vector of temporal lags.}
 
 \item{latlon}{Logical indicating whether the coordinates are in latitude and
 longitude format. Default is FALSE.}
