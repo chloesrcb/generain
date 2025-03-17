@@ -428,8 +428,8 @@ head(df_downscaling)
 ## Install pinnEV
 
 ```{r}
-# install.packages("reticulate")
-# library(reticulate)
+install.packages("reticulate")
+library(reticulate)
 # py_version <- "3.9.18"
 # path_to_python <- reticulate::install_python(version=py_version)
 # reticulate::virtualenv_remove("pinnEV_env")
