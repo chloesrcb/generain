@@ -163,7 +163,7 @@ test_that("Test temporal_chi without lag", {
 
     # Test 1: Case without lag (no lag)
     chi_nolag <- chi_temp[,1]
-    all.equal(chi_nolag, rep(1, length(tau0_chi)))
+    all.equal(chi_nolag, rep(1, length(chi_nolag)))
 
     # Test 2: Case with lag 1
     data_pair_lag1 <- data.frame(

@@ -361,8 +361,8 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
   # Create a data frame with site IDs
   sites_coords <- data.frame(
     site_id = 1:n_sites,
-    lat = latitudes,
-    lon = longitudes
+    Latitude = latitudes,
+    Longitude = longitudes
   )
 
   return(sites_coords)
@@ -371,7 +371,7 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
 
 #' haversine_distance_with_advection function
 #'
-#' This function calculates the Haversine distance between two points 
+#' This function calculates the Haversine distance between two points
 #' with advection applied and gives the direction of the vector in radians
 #' with meteorological orientation (0 degrees is North).
 #'
@@ -401,8 +401,8 @@ haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
     adv_y <- adv[2] * tau  # Advection in Y (m)
 
     # Adjust the coordinates based on advection
-    lon2_adj <- lon2 + adv_x / (111319 * cos(lat2 * pi / 180))
-    lat2_adj <- lat2 + adv_y / 111319
+    lon2_adj <- lon2 - adv_x / (111319 * cos(lat2 * pi / 180))
+    lat2_adj <- lat2 - adv_y / 111319
 
     # Recalculate the distance after adjustment
     deltaLat_adj <- (lat2_adj - lat1) * pi / 180

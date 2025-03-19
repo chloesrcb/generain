@@ -465,36 +465,36 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
 }
 
 
-theoretical_chi <- function(params, df_lags, latlon=T, directional=T) {
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
+# theoretical_chi <- function(params, df_lags, latlon=T, directional=T) {
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   if (length(params) == 6) {
+#     adv <- params[5:6]
+#   } else {
+#     adv <- c(0, 0)
+#   }
 
-  chi_df <- df_lags[c("s1", "s2", "tau")]
-  # Get vario and chi for each lagtemp
-  chi_df$s1xv <- df_lags$s1x
-  chi_df$s1yv <- df_lags$s1y
-  chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
-  chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
-  chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                        (chi_df$s2yv - chi_df$s1yv)^2)
-  # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-  # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-  # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
-  # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
+#   chi_df <- df_lags[c("s1", "s2", "tau")]
+#   # Get vario and chi for each lagtemp
+#   chi_df$s1xv <- df_lags$s1x
+#   chi_df$s1yv <- df_lags$s1y
+#   chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
+#   chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
+#   chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+#                         (chi_df$s2yv - chi_df$s1yv)^2)
+#   # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+#   # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+#   # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+#   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
 
-  chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
-                  (2 * beta2) * abs(chi_df$tau)^alpha2
+#   chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
+#                   (2 * beta2) * abs(chi_df$tau)^alpha2
 
-  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-  return(chi_df)
-}
+#   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+#   return(chi_df)
+# }
 
 # theorical_chi <- function(params, df_lags) { # AVANT
 #   beta1 <- params[1]

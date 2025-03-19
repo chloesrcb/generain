@@ -24,7 +24,7 @@ The Haversine distance between the two points with advection applied
 and the direction of the vector in radians.
 }
 \description{
-This function calculates the Haversine distance between two points 
+This function calculates the Haversine distance between two points
 with advection applied and gives the direction of the vector in radians
 with meteorological orientation (0 degrees is North).
 }
