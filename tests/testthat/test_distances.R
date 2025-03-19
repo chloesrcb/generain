@@ -237,6 +237,6 @@ test_that("haversine_distance_with_advection  computes correct values with diffe
 
   # Check that the baseline distance is the same
   expect_false(distance_no_adv == distance1)
-  expect_false(distance_no_adv == distance2)  
+  expect_false(distance_no_adv == distance2)
   expect_false(distance1 == distance2)
 })
