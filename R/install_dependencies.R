@@ -1,9 +1,9 @@
 installDependencies <- function() {
   # Define required packages and their versions
   required_pkgs <- list(
-    # "kableExtra" = "1.3.4",
-    # "geosphere" = "1.5-10",
-    # "sp" = "1.4-5",
+    "kableExtra" = "1.3.4",
+    "geosphere" = "1.5-10",
+    "sp" = "1.4-5"
     # "RandomFieldsUtils" = "1.2.5",
     # "RandomFields" = "3.3.14"
   )
