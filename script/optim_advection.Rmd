@@ -142,7 +142,7 @@ plot(simu_df$S25)
 
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE}
 sites_coords <- generate_grid_coords(ngrid)
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect = 0:10)
 ```
 
 ```{r rparetosim3, fig.width = 5, fig.height = 5, echo=FALSE, fig.cap="Time series for 4 sites of the first realization in the advection direction"}

@@ -1,30 +1,27 @@
 # Package
-library(generain)
+# library(generain)
 
 # General
 library(plyr)
 library(dplyr)
-library(car)
-library(classInt)
-library(RStoolbox)
 library(tidyr)
 library(reshape2)
 library(data.table)
 
 # spatial
-library(raster)
-library(rasterVis)
-library(elevatr)
-library(rgeos)
-library(leaflet)
-library(RColorBrewer)
-library(rgl)
+# library(raster)
+# library(rasterVis)
+# library(elevatr)
+# library(rgeos)
+# library(leaflet)
+# library(RColorBrewer)
+# library(rgl)
 library(sf)
-library(ggspatial)
-library(stars)
+# library(ggspatial)
+# library(stars)
 library(geodist)
 library(geosphere)
-library(igraph)
+# library(igraph)
 
 # temporal
 library(datetime)
@@ -63,6 +60,13 @@ library(data.table)
 
 # Parallel
 library(parallel)
+
+# install.packages(c("reshape2", "Rcpp",
+#                     "gridExtra", "latex2exp", "ggpubr", "factoextra",
+#                     "tidyverse", "tibble", "hrbrthemes", "reshape",
+#                     "matrixStats", "fExtremes", "extRemes", "ismev", "evd",
+#                     "mev", "POT", "fields", "lmtest", "bbmle", "parallel"))
+
 
 # PERSONNALIZATION ############################################################
 # ggplot theme

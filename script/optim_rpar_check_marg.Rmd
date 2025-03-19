@@ -411,7 +411,7 @@ ggplot(grid_df, aes(x = Longitude, y = Latitude, fill = exceedance_prob)) +
 
 ```{r, fig.width = 5, fig.height = 5, echo=FALSE}
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-                                        tau_max = 10)
+                                        tau_vect = 0:10)
 u <- 1
 list_excesses <- list()
 # par(mfrow=c(5, 2))
@@ -1122,8 +1122,7 @@ within a replicate (same for all replicates).
 
 
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
-df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-                                      tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0)
 # df_lags_chi <- theorical_chi(true_param, df_lags)
 
 u <- 1
@@ -1207,8 +1206,7 @@ generate_variogram_plots(result, df_lags, true_param, tau_values, chi = TRUE)
 For $M = 50$ simulations with $m = 100$ replicates each, we have the following results:
 
 ```{r optimMsimuadv, fig.width = 5, fig.height = 5, echo=FALSE}
-df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-                                      tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0)
 
 df_result_all <- data.frame(beta1 = numeric(M),
                         beta2 = numeric(M),
@@ -1446,8 +1444,7 @@ plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
 
 
 ```{r optimMsimuadv100, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
-df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-                                      tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0)
 
 df_result_all <- data.frame(beta1 = numeric(M),
                         beta2 = numeric(M),
@@ -1593,8 +1590,7 @@ plot(simu_df$S20, main = "S25=(5,5)", xlab = "Time", ylab = "Rainfall")
 
 
 ```{r optimMsimuadv100, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
-df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0,
-                                      tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0)
 
 df_result_all <- data.frame(beta1 = numeric(M),
                         beta2 = numeric(M),

@@ -154,7 +154,7 @@ test_that("theoretical_chi computes correct variogram values", {
 
   # No advection, no wind
   params <- c(0.5, 0.3, 1.2, 0.8, 0, 0)
-  result <- theoretical_chi(params, df_lags, latlon = FALSE, wind_vect = NA, 
+  result <- theoretical_chi(params, df_lags, latlon = FALSE, wind_vect = NA,
                                 directional = FALSE)
   # Verif variogram value
   expected_vario <- 2 * params[1] * abs(df_lags$hnorm)^params[3] +
@@ -196,7 +196,7 @@ test_that("theoretical_chi", {
   adv <- c(0.5, 0.3)
   true_param <- c(true_param, adv)
 
-  df_lags <- get_conditional_lag_vectors(sites_coords, tau_max = 10,
+  df_lags <- get_conditional_lag_vectors(sites_coords, tau_vect = 0:10,
                                          s0 = s0, t0 = t0)
 
   chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
@@ -250,7 +250,7 @@ test_that("theoretical_chi computes correct chi values with complex conditions",
   adv <- c(0.4, 0.2)  # Advection in x and y
   true_param <- c(0.5, 0.25, 1.7, 1.2, adv)
 
-  df_lags <- get_conditional_lag_vectors(sites_coords, tau_max = 10,
+  df_lags <- get_conditional_lag_vectors(sites_coords, tau_vect = 0:10,
                                           s0 = s0, t0 = t0)
 
   chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
@@ -502,10 +502,108 @@ test_that("Latitude/Longitude conversion to meters is correct", {
 
   params <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # Example variogram parameters
   wind_vect <- c(10, 5)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
-  chi_df <- theoretical_chi(params, df_lags, wind_vect = wind_vect, latlon = TRUE, directional = FALSE)
+  chi_df <- theoretical_chi(params, df_lags, wind_vect = wind_vect,
+                            latlon = TRUE, directional = FALSE)
 
   # hnormV change with the wind for each tau
   expect_false(chi_df$hnormV[1] == chi_df$hnormV[2]) # tau = 0 and tau = 1 for
                                                      # the same site pair
 
 })
+
+test_that("theoretical_chi computes correct values with real lat/lon coordinates, wind_vect, directional = TRUE, and latlon = TRUE", {
+  # Sample parameters
+  params <- c(1, 1, 1, 1, 0.5, 0.5)
+
+  # Real-world lat/lon coordinates for Paris and London
+  df_lags_PL <- data.frame(
+    s1 = c(1), s2 = c(2), tau = c(0),
+    s1x = c(2.3522), s1y = c(48.8566),  # Paris (longitude, latitude)
+    s2x = c(-0.1278), s2y = c(51.5074), # London (longitude, latitude)
+    hnorm = c(343.51)  # Approx distance in km
+  )
+
+  # Wind vector
+  wind_vect <- c(0, 0)  # No wind effect for a simple test case
+
+  # Compute theoretical chi with latlon = TRUE
+  result <- theoretical_chi(params, df_lags_PL, latlon = TRUE,
+                          wind_vect = wind_vect, directional = TRUE)
+
+  # Expected values assuming haversine distance with 0° at North
+  expected_theta <- atan2(-0.1278 - 2.3522, 51.5074 - 48.8566)
+  expected_x_polar <- df_lags_PL$hnorm * cos(expected_theta)
+  expected_y_polar <- df_lags_PL$hnorm * sin(expected_theta)
+
+  # Check theta, x_polar, and y_polar values
+  expect_equal(result$theta, expected_theta, tolerance = 1e-6)
+  expect_equal(round(result$hnormV, 0), round(df_lags$hnorm, 0))
+  expect_equal(result$x_polar, expected_x_polar, tolerance = 1e-1)
+  expect_equal(result$y_polar, expected_y_polar, tolerance = 1e-1)
+
+
+  df_lags_LP <- data.frame(
+    s1 = c(1), s2 = c(2), tau = c(0),
+    s1x = c(2.3522), s1y = c(48.8566),  # Paris (longitude, latitude)
+    s2x = c(-0.1278), s2y = c(51.5074), # London (longitude, latitude)
+    hnorm = c(343.51)  # Approx distance in km
+  )
+
+  # Wind vector
+  wind_vect <- c(0, 0)  # No wind effect for a simple test case
+
+  # Compute theoretical chi with latlon = TRUE
+  result <- theoretical_chi(params, df_lags_LP, latlon = TRUE,
+                          wind_vect = wind_vect, directional = TRUE)
+
+  expected_theta <- atan2(-0.1278 - 2.3522, 51.5074 - 48.8566)
+  # Expected values assuming haversine distance with 0° at North
+  expected_theta_meteo <- (450 - atan2(51.5074 - 48.8566, -0.1278 - 2.3522) *
+                                                              180 / pi) %% 360
+  expected_x_polar <- df_lags_LP$hnorm * cos(expected_theta)
+  expected_y_polar <- df_lags_LP$hnorm * sin(expected_theta)
+
+  expect_equal(result$theta, expected_theta, tolerance = 1e-6)
+  expect_equal(round(result$hnormV, 0), round(df_lags$hnorm, 0))
+})
+
+
+
+
+test_that("theoretical_chi computes correct values with different etas", {
+  # Sample parameters
+  params <- c(1, 1, 1, 1, 0.5, 0.5)
+
+  # Real-world lat/lon coordinates for Paris and London
+  df_lags <- data.frame(
+    s1 = c(1), s2 = c(2), tau = c(0),
+    s1x = c(2.3522), s1y = c(48.8566),  # Paris (longitude, latitude)
+    s2x = c(2.3523), s2y = c(48.8566), # Close to Paris (longitude, latitude)
+    hnorm = c(0.1)  # Approx distance in km
+  )
+
+  # Create new dataframe with tau = 0 and tau = 1
+  df_lags_extended <- df_lags[rep(1, 2), ]
+  df_lags_extended$tau <- c(0, 0.2)
+
+  # Wind vector
+  wind_vect <- c(-9.8, 8)  # Wind effect for a simple test case
+
+  params_noadv <- c(1, 1, 1, 1, 0, 0)
+  result_noadv <- theoretical_chi(params_noadv, df_lags_extended, latlon = TRUE,
+                          wind_vect = NA, directional = TRUE)
+  
+  # Compute theoretical chi with latlon = TRUE
+  result_1 <- theoretical_chi(params, df_lags_extended, latlon = TRUE,
+                          wind_vect = wind_vect, directional = TRUE)
+
+  params_2 <- c(1, 1, 1, 1, 0.2, 0.1)
+  result_2 <- theoretical_chi(params_2, df_lags_extended, latlon = TRUE,
+                          wind_vect = wind_vect, directional = TRUE)
+
+  # Check that the chi values are different for different etas
+  expect_true(any(result_1$chi != result_2$chi))
+
+})
+
+

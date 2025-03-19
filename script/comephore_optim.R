@@ -6,6 +6,7 @@ cat("\014")
 
 # Load libraries and set theme
 source("./script/load_libraries.R")
+devtools::load_all() # load the last version of the package
 
 # LOAD DATA ####################################################################
 comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
@@ -24,7 +25,10 @@ dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 nsites <- nrow(loc_px)
 
-# get wind data
+# # get wind data
+# vpn connect vpn.inria.fr
+# ssh srv-sophia.inria.fr
+
 wind_mtp <- read.csv("./data/wind/data_gouv/wind_mtp.csv")
 
 # Convert datetime to POSIXct
@@ -75,7 +79,7 @@ q <- 0.96
 # uniformize the data
 n <- nrow(comephore_pair_no0)
 data_unif <- cbind(rank(comephore_pair_no0[, 1]) / (n + 1),
-                          rank(comephore_pair_no0[, 2]) / (n + 1))
+                   rank(comephore_pair_no0[, 2]) / (n + 1))
 
 count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
 print(count_excesses)
@@ -112,7 +116,7 @@ comephore_pair <- cbind(rain_nolag, rain_lag)
 comephore_pair_no0 <- comephore_pair[rowSums(comephore_pair) > 0, ]
 chiplot(comephore_pair_no0, xlim = c(0.8, 0.99), ylim1 = c(0, 1), which = 1,
         qlim = c(0.8, 0.99))
-abline(v = 0.96, col = "red", lty = 2)
+abline(v = 0.93, col = "red", lty = 2)
 
 comephore_pair <- cbind(rain_nolag, rain_lag)
 # comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
@@ -123,7 +127,7 @@ abline(v = 0.995, col = "red", lty = 2)
 # count conjoint excesses
 q_no0_spa <- 0.96
 
-q_no0_temp <- 0.94
+q_no0_temp <- 0.93
 # get the corresponding quantile in the data without 0 and with 0
 q_value_no0 <- quantile(c(comephore_pair_no0[,1], comephore_pair_no0[,2]),
                         probs = q_no0_temp, na.rm = TRUE)
@@ -146,7 +150,7 @@ chimat_dtlag <- temporal_chi(comephore, quantile = q_no0_temp, tmax = tmax,
                              mean = FALSE, zeros = FALSE)
 
 chi_df_dt <- data.frame(chimat_dtlag)
-colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
+colnames(chi_df_dt) <- c(0:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
 
 # boxplot all pixels values for chi temp
@@ -166,31 +170,34 @@ chitemp
 
 # save plot
 filename <- paste(im_folder, "WLSE/comephore/from2008_temporal_chi_boxplot_", q_no0_temp,
-                    ".png", sep = "")
+                 ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
+
 
 # Mean of chi
 chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = 0.93,
                                mean = TRUE, zeros = FALSE)
 # get h axis in minutes ie x5 minutes
-df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-chitemp_plot <- ggplot(df_chi, aes(x = lag, y = chi)) +
-  geom_point(color = btfgreen) +
-  btf_theme +
-  xlab(TeX(r"($\tau$ (hours))")) +
-  ylab(TeX(r"($\widehat{\chi}(0,\tau)$)"))
+df_chi <- data.frame(lag = c(0:tmax), chi = chimat_dt_mean)
+# chitemp_plot <- ggplot(df_chi, aes(x = lag, y = chi)) +
+#   geom_point(color = btfgreen) +
+#   btf_theme +
+#   xlab(TeX(r"($\tau$ (hours))")) +
+#   ylab(TeX(r"($\widehat{\chi}(0,\tau)$)"))
 
-chitemp_plot
+# chitemp_plot
 
 # remove the first value
 # df_chi <- df_chi[-1, ]
-wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
+df_chi_not0 <- df_chi[df_chi$lag > 0, ]
+wlse_temp <- get_estimate_variotemp(df_chi_not0, weights = "exp", summary = TRUE)
 print(wlse_temp)
 c2 <- wlse_temp[[1]]
 beta2 <- wlse_temp[[2]]
 alpha2 <- wlse_temp[[3]]
+print(beta2)
 
-dftemp <- data.frame(lag = log(df_chi$lag), chi = eta(df_chi$chi))
+dftemp <- data.frame(lag = log(df_chi_not0$lag), chi = eta(df_chi_not0$chi))
 
 # remove first row
 # dftemp <- dftemp[-1, ]
@@ -240,7 +247,7 @@ chispa_plot
 
 # save plot
 filename <- paste(im_folder, "WLSE/comephore/from2008_spatial_chi_", q,
-                    ".png", sep = "")
+                  ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # WLSE
@@ -263,7 +270,7 @@ chispa_eta_estim
 
 # save plot
 filename <- paste(im_folder, "WLSE/comephore/from2008_spatial_chi_eta_estim_", q,
-                    ".png", sep = "")
+                  ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # Result WLSE
@@ -392,7 +399,7 @@ delta <- 12 # step for the episode before and after the max value
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.997 # quantile
+q <- 0.998 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -472,7 +479,9 @@ s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
-tmax <- 10
+tau_vect <- -10:10
+q <- 0.998
+tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -482,7 +491,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   u <- u_list[i]
   ind_t0_ep <- delta + 1  # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
-                                  tau_max = tmax, latlon = TRUE)
+                                  tau_vect, latlon = TRUE)
   excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
                                   t0 = ind_t0_ep)
   list(lags = lags, excesses = excesses)
@@ -501,48 +510,11 @@ excesses <- list_excesses[[1]]
 excesses <- excesses[order(excesses$hnorm), ]
 excesses$kij
 excesses[1:20, ]
-# # Initialisation des listes pour les résultats
-# all_k_sums <- c()
-# all_binomials <- c()  # Liste pour stocker les résultats de la binomiale théorique
-# init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
-# for (i in 1:length(list_excesses)) {
-#   excesses <- list_excesses[[i]]
-#   df_lags <- list_lags[[i]]
-#   wind_vect <- c(wind_ep_df$vx[i], wind_ep_df$vy[i])
-#   chi_theorical <- theoretical_chi(init_param, df_lags, latlon = TRUE,
-#                                    wind_vect = wind_vect)
-#   tau_vect <- unique(excesses$tau)
-
-#   # Pour chaque valeur de hnorm
-#   for (hnorm in unique(df_lags$hnorm)) {
-
-#     all_kij_h_tau <- c()  # Liste pour stocker kij pour chaque hnorm et tau
-#     for (tau in tau_vect) {
-#       # Filtrer les données pertinentes
-#       kij <- excesses$kij[excesses$tau == tau & excesses$hnorm == hnorm]
-#       nij <- excesses$Tobs[excesses$tau == tau & excesses$hnorm == hnorm]
-
-#       # Ajouter les kij dans la liste
-#       all_kij_h_tau <- c(all_kij_h_tau, kij)
-#     }
-
-#     sum_k_h <- sum(all_kij_h_tau)  # Somme des kij pour hnorm et tau
-#     all_k_sums <- c(all_k_sums, sum_k_h)
-
-#     # Calcul de la probabilité théorique de la binomiale
-#     chi_h_tau <- chi_theorical$chi[chi_theorical$hnorm == hnorm]
-
-#     # Calcul de la binomiale théorique pour les essais et probabilité
-#     trials <- length(all_kij_h_tau)  # Nombre d'essais
-#     binomial_theoretical <- dbinom(sum_k_h, trials, chi_h_tau) # binomial
-#     all_binomials <- c(all_binomials, binomial_theoretical)
-#   }
-# }
 
 
 # ADD WIND DATA ################################################################
 
-
+plot(wind_ep_df$FF)
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
 
@@ -667,6 +639,7 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 # head(wind_km_h)
 
 # Compute the wind vector for each episode (-FF because it's the wind direction)
+# sin and cos are shifted because 0 degree means North
 wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
 wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
 
@@ -699,7 +672,7 @@ if (any(ind_NA > 0)) {
 # a_ratio <- 1
 # phi <- 0.5
 
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+init_param <- c(beta1, beta2, alpha1, alpha2)
 
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
@@ -715,6 +688,21 @@ result <- optim(par = init_param, fn = neg_ll_composite,
                       trace = 1),
         hessian = F)
 result
+
+
+# result <- optim(par = init_param, fn = neg_ll_composite,
+#         list_lags = lags_opt,
+#         list_excesses = excesses_opt, hmax = 7,
+#         wind_df = NA,
+#         latlon = F,
+#         directional = F,
+#         method = "L-BFGS-B",
+#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#         control = list(maxit = 10000,
+#                       trace = 1),
+#         hessian = F)
+# result
 
 
 
@@ -740,9 +728,9 @@ kable(df_result, format = "latex") %>%
 
 
 # fix parameters
-neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, a_ratio, phi, list_lags,
+neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, eta2, list_lags,
                     list_excesses, wind_df, hmax = NA, latlon = TRUE) {
-  params <- c(beta1, beta2, alpha1, alpha2, eta1, a_ratio, phi)
+  params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
   nll_composite <- neg_ll_composite(params, list_lags,
                                       list_excesses, wind_df,
                                       hmax = hmax, latlon = latlon,
@@ -750,25 +738,23 @@ neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, a_ratio,
   return(nll_composite)
 }
 
-library(bbmle)
-result <- mle2(neg_ll_composite_fixpar,
-              start = list(beta1 = init_param[1],
-                           beta2 = init_param[2],
-                           alpha1 = init_param[3],
-                           alpha2 = init_param[4],
-                           eta1 = 1,
-                           a_ratio = 1,
-                           phi=0.5),
-              data = list(list_lags = lags_opt,
-                  list_excesses = excesses_opt, hmax = 7,
-                  wind_df = wind_opt,
-                  method = "L-BFGS-B",
-                  lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
-              control = list(maxit = 10000),
-              fixed = list(beta2 = init_param[2],
-                           alpha2 = init_param[4]))
-result
+# library(bbmle)
+# result <- mle2(neg_ll_composite_fixpar,
+#               start = list(beta1 = init_param[1],
+#                            beta2 = init_param[2],
+#                            alpha1 = init_param[3],
+#                            alpha2 = init_param[4],
+#                            eta1 = 1,
+#                            eta2 = 1),
+#               data = list(list_lags = lags_opt,
+#                   list_excesses = excesses_opt, hmax = 7,
+#                   wind_df = wind_opt,
+#                   method = "L-BFGS-B",
+#                   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
+#               control = list(maxit = 10000),
+#               fixed = list(eta1 = 1))
+# result
 
 
 # Vector of test values for eta1
@@ -779,18 +765,24 @@ neg_log_likelihoods <- numeric(length(eta1_values))
 
 # Loop over different values of eta1
 for (i in seq_along(eta1_values)) {
-  params <- c(beta1, beta2, alpha1, 1, eta1_values[i], 1)
+  params <- c(beta1, 1.4, alpha1, alpha2, eta1_values[i], 1)
   neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
                               list_excesses = excesses_opt, hmax = 7,
                               wind_df = wind_opt)
   neg_log_likelihoods[i] <- neg_ll
 }
 
+end_filename <- paste(q*1000, "q_", min_spatial_dist, "_km_",
+                      tmax, "_h_delta_", delta, ".png", sep = "")
+filename <- paste(im_folder, "optim/comephore/likelihood_plot_varying_eta1_",
+                  end_filename,
+                    sep = "")
+png(filename, width = 800, height = 600)
 par(mfrow = c(1, 1))
-# Plotting the likelihood function
 plot(eta1_values, neg_log_likelihoods, type = "l", col = "blue", lwd = 2,
      xlab = expression(eta[1]), ylab = "- Log-likelihood",
      main = "Likelihood profile as a function of eta1")
+dev.off()
 
 
 eta1_values <- seq(0.001, 1.5, length.out = 30)
@@ -810,6 +802,23 @@ for (i in seq_along(eta1_values)) {
 contour(eta1_values, beta2_values, likelihood_matrix, xlab = expression(eta[1]),
         ylab = expression(beta[2]), main = "Log-likelihood contours for eta1 and beta2")
 
+
+
+eta1_values <- seq(0.1, 2, length.out = 10)
+eta2_values <- seq(0.1, 2, length.out = 10)
+
+ll_values <- matrix(nrow = length(eta1_values), ncol = length(eta2_values))
+
+for (i in seq_along(eta1_values)) {
+  for (j in seq_along(eta2_values)) {
+    params_test <- init_param
+    params_test[5] <- eta1_values[i]
+    params_test[6] <- eta2_values[j]
+    ll_values[i, j] <- neg_ll_composite(params_test, lags_opt, excesses_opt, hmax = 7, wind_df = wind_opt)
+  }
+}
+
+persp(eta1_values, eta2_values, ll_values, theta = 30, phi = 30, col = "lightblue")
 
 # GENERATE TABLE FROM TEST #####################################################
 
@@ -845,12 +854,13 @@ for (q in q_values) {
           n_episodes <- length(selected_points$s0)
           n_ep_list <- c(n_ep_list, n_episodes)
           # Get the extreme episodes
-          list_episodes_unif_points <- get_extreme_episodes(selected_points, comephore,
-                                          delta = delta, unif = TRUE)
+          list_episodes_unif_points <- get_extreme_episodes(selected_points,
+                                          comephore, delta = delta, unif = TRUE)
           list_episodes_unif <- list_episodes_unif_points$episodes
           s0_list <- selected_points$s0 # List of s0
           t0_list <- selected_points$t0 # List of t0
           u_list <- selected_points$u_s0 # List of threshold
+          tau_vect <- tau_range
           tmax <- max(tau_range)
           print("Compute the lags and excesses for each conditional point")
           # Get the lags and excesses for each conditional point
@@ -861,7 +871,7 @@ for (q in q_values) {
             # u <- u_list[i]
             ind_t0_ep <- delta  # index of t0 in the episode
             lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
-                                      ind_t0_ep, tau_max = tmax, latlon = TRUE)
+                                      ind_t0_ep, tau_vect, latlon = TRUE)
             lags$hx <- lags$hx / 1000  # in km
             lags$hy <- lags$hy / 1000  # in km
             lags$hnorm <- lags$hnorm / 1000  # in km

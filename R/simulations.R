@@ -54,7 +54,6 @@ dist_adv <- function(s1, s2, t1, t2, adv) {
 #'
 #' @return The spatio-temporal conditional variogram.
 #'
-#' @import RandomFields
 #' @export
 conditional_variogram <- function(x, y, t, s0, t0, grid, model, adv = c(0, 0)) {
   lx <- length(x)
@@ -95,7 +94,6 @@ conditional_variogram <- function(x, y, t, s0, t0, grid, model, adv = c(0, 0)) {
 #'
 #' @return An array for the spatio-temporal advected variogram.
 #'
-#' @import RandomFields
 #'
 #' @export
 advected_variogram <- function(x, y, z, grid, model, adv) {
@@ -246,7 +244,6 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
 #'
 #' @return The result of the simulation.
 #'
-#' @import RandomFields
 #' @import stats
 #'
 #' @export
@@ -359,7 +356,6 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0),
 #' 
 #' @return The result of the simulation.
 #' 
-#' @import RandomFields
 #' @import stats
 #' 
 #' @export
@@ -456,7 +452,6 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #'
 #' @return The result of the simulation.
 #'
-#' @import RandomFields
 #' @import stats
 #'
 #' @export
@@ -553,7 +548,6 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' 
 #' @return The result of the simulation.
 #' 
-#' @import RandomFields
 #' @import stats
 #' 
 #' @export

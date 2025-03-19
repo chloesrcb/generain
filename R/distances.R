@@ -188,7 +188,7 @@ get_lag_vectors <- function(df_coords, tau_vect, latlon = FALSE) {
 #' @param df_coords A dataframe containing the coordinates of the points.
 #' @param s0 Conditional spatial point coordinates.
 #' @param t0 Conditional temporal point.
-#' @param tau_max The maximum temporal lag. Default is 10.
+#' @param tau_vect A vector of temporal lags. Default is 0:10.
 #' @param latlon Logical indicating whether the coordinates are in latitude and
 #'
 #' @import utils
@@ -198,7 +198,7 @@ get_lag_vectors <- function(df_coords, tau_vect, latlon = FALSE) {
 #'
 #' @export
 get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
-                                        t0 = 0, tau_max = 10, latlon = FALSE) {
+                                    t0 = 0, tau_vect = 0:10, latlon = FALSE) {
   # Conditional point index in df_coords
   if (typeof(s0) == "list") {
     ind_s0 <- which(df_coords$Latitude == s0$Latitude &
@@ -213,7 +213,7 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
 
   # Dimensions
   n <- nrow(df_coords)
-  tau_lag <- -tau_max:tau_max
+  tau_lag <- tau_vect
   tau_len <- length(tau_lag)
 
   # Index of pairs (s0, si)
@@ -385,26 +385,30 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
 #' and the direction of the vector in radians.
 #'
 #' @export
-haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) {
+haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
+                                                                          tau) {
   # Perform the classic Haversine distance calculation
   deltaLat <- (lat2 - lat1) * pi / 180
   deltaLon <- (lon2 - lon1) * pi / 180
-  a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
+  a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) *
+                              cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
   c <- 2 * atan2(sqrt(a), sqrt(1 - a))
   distance <- 6371000 * c  # Radius of the Earth in meters
-  
+
   # If advection is present, adjust the distance based on advection and time
   if (length(adv) == 2) {
-    adv_x <- adv[1] * tau  # Advection in X (longitude)
-    adv_y <- adv[2] * tau  # Advection in Y (latitude)
+    adv_x <- adv[1] * tau  # Advection in X (m)
+    adv_y <- adv[2] * tau  # Advection in Y (m)
 
-    lon2_adj <- lon2 + adv_x / (111.32 * cos(lat2 * pi / 180))  # longitude adjustment
-    lat2_adj <- lat2 + adv_y / 111.32  # latitude adjustment
+    # Adjust the coordinates based on advection
+    lon2_adj <- lon2 + adv_x / (111319 * cos(lat2 * pi / 180))
+    lat2_adj <- lat2 + adv_y / 111319
 
     # Recalculate the distance after adjustment
     deltaLat_adj <- (lat2_adj - lat1) * pi / 180
     deltaLon_adj <- (lon2_adj - lon1) * pi / 180
-    a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) * cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
+    a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) *
+                        cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
     c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
     distance <- 6371000 * c_adj  # Radius of the Earth in meters
   }
@@ -412,11 +416,13 @@ haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) 
   # Calculate the direction (theta) using atan2
   deltaLat <- (lat2 - lat1) * pi / 180
   deltaLon <- (lon2 - lon1) * pi / 180
-  theta <- atan2(deltaLat, deltaLon)  # Direction of the vector
+  theta <- atan2(deltaLat, deltaLon)  # Direction of the vector in radians
   theta_meteo <- (pi / 2 - theta) %% (2 * pi) # Meteorological direction
-  # If the distance is less than a very small value, set to zero for each element
+  # If the distance is less than a very small value, set to zero for
+  # each element
   distance <- ifelse(distance < 1e-06, 0, distance)
 
   # Return the norm and angle (theta)
-  return(list(distance = distance / 1000, theta = theta_meteo))
+  return(list(distance = distance / 1000, theta = theta,
+                                          theta_meteo = theta_meteo))
 }

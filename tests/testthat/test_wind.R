@@ -18,24 +18,24 @@ test_that("convert_to_cardinal works correctly", {
   expect_equal(convert_to_cardinal(360), "N")  # Edge case
 
   # Boundary values
-  expect_equal(convert_to_cardinal(22.5), "N")
-  expect_equal(convert_to_cardinal(67.5), "NE")
-  expect_equal(convert_to_cardinal(112.5), "E")
-  expect_equal(convert_to_cardinal(157.5), "SE")
-  expect_equal(convert_to_cardinal(202.5), "S")
-  expect_equal(convert_to_cardinal(247.5), "SW")
-  expect_equal(convert_to_cardinal(292.5), "W")
-  expect_equal(convert_to_cardinal(337.5), "NW")
+  expect_equal(convert_to_cardinal(22.5), "NE")
+  expect_equal(convert_to_cardinal(67.5), "E")
+  expect_equal(convert_to_cardinal(112.5), "SE")
+  expect_equal(convert_to_cardinal(157.5), "S")
+  expect_equal(convert_to_cardinal(202.5), "SW")
+  expect_equal(convert_to_cardinal(247.5), "W")
+  expect_equal(convert_to_cardinal(292.5), "NW")
+  expect_equal(convert_to_cardinal(337.5), "N")
 
   # Mid-range values
-  expect_equal(convert_to_cardinal(30), "N")
-  expect_equal(convert_to_cardinal(75), "NE")
-  expect_equal(convert_to_cardinal(120), "E")
-  expect_equal(convert_to_cardinal(165), "SE")
-  expect_equal(convert_to_cardinal(210), "S")
-  expect_equal(convert_to_cardinal(255), "SW")
-  expect_equal(convert_to_cardinal(300), "W")
-  expect_equal(convert_to_cardinal(345), "NW")
+  expect_equal(convert_to_cardinal(30), "NE")
+  expect_equal(convert_to_cardinal(75), "E")
+  expect_equal(convert_to_cardinal(120), "SE")
+  expect_equal(convert_to_cardinal(165), "S")
+  expect_equal(convert_to_cardinal(210), "SW")
+  expect_equal(convert_to_cardinal(255), "W")
+  expect_equal(convert_to_cardinal(300), "NW")
+  expect_equal(convert_to_cardinal(345), "N")
 
   # Edge cases
   expect_equal(convert_to_cardinal(360), "N")
@@ -97,7 +97,7 @@ test_that("compute_wind_episode works correctly", {
   # Sample wind data
   wind_df <- data.frame(
     datetime = as.POSIXct(c("2023-01-01 12:00:00", "2023-01-01 13:00:00",
-                                    "2023-01-01 14:00:00"), tz = "UTC"),
+                            "2023-01-01 14:00:00"), tz = "UTC"),
     FF = c(10, 12, 14),
     DD = c(90, 180, 270),
     cardDir = c("E", "S", "W")
@@ -107,13 +107,13 @@ test_that("compute_wind_episode works correctly", {
   episode <- data.frame(
     location1 = c(1.2, 2.3, 0.5),
     row.names = c("2023-01-01 12:00:00", "2023-01-01 13:00:00",
-                                                "2023-01-01 14:00:00")
+                  "2023-01-01 14:00:00")
   )
 
   mode_card <- get_mode_dir(wind_df$cardDir)
   mode_deg <- cardinal_to_degree(mode_card)
   mode_deg_mean <- mean(cardinal_to_degree(wind_df$cardDir[wind_df$cardDir ==
-                                                                    mode_card]))
+                                                             mode_card]))
 
   # Test with valid input
   result <- compute_wind_episode(episode, "location1", 1, wind_df, 2)
@@ -134,7 +134,7 @@ test_that("compute_wind_episode works correctly", {
 
   # Test with a single timestamp
   single_episode <- data.frame(location1 = c(1.5),
-                                    row.names = "2023-01-01 12:00:00")
+                               row.names = "2023-01-01 12:00:00")
   result_single <- compute_wind_episode(single_episode, "location1", 1,
                                         wind_df, 0)
   expect_equal(result_single$FF, 10)  # Wind speed at t0
@@ -145,8 +145,8 @@ test_that("compute_wind_episode works correctly", {
 
   # Test with NA values with a timestamp not in the wind data
   episode_with_na <- data.frame(location1 = c(NA),
-                                    row.names = "2023-01-01 15:00:00")
+                                row.names = "2023-01-01 15:00:00")
   result_na <- compute_wind_episode(episode_with_na, "location1", 1, wind_df, 0)
   expect_true(all(is.na(result_na)))  # Should return all NAs
-  
+
 })

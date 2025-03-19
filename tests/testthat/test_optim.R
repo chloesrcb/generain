@@ -42,45 +42,7 @@ test_that("get_criterion calculates the correct values", {
 
 
 
-# Test simple pour vérifier si les excès sont bien comptés
-test_that("empirical_excesses counts excesses correctly", {
-  quantile <- 6
-  threshold <- TRUE
 
-  data_rain <- data.frame(
-    s1 = c(1, 3, 5, 7, 9, 10, 11),
-    s2 = c(2, 4, 6, 6, 10, 2, 10)
-  )
-
-  df_lags <- data.frame(
-    s1 = c(1, 1, 2),
-    s2 = c(1, 2, 2),
-    tau = c(0, 0, 0)
-  )
-
-  result <- empirical_excesses(data_rain, quantile, df_lags, threshold,
-                               type = "brownresnick")
-
-  expect_equal(result$Tobs[1], length(data_rain$s1))
-  expect_equal(result$kij[2], 2)
-  expect_equal(result$kij[1], 4)
-
-  quantile <- 0.6
-  threshold <- FALSE
-  u <- quantile(data_rain$s1, quantile)
-  nb_excesses_s1 <- sum(data_rain$s1 > u)
-  nb_excesses_s2 <- sum(data_rain$s2 > u)
-  nb_joint <- sum(data_rain$s1 > u & data_rain$s2 > u)
-
-  result <- empirical_excesses(data_rain, quantile, df_lags, threshold,
-                               type = "brownresnick")
-
-  expect_equal(result$Tobs[1], length(data_rain$s1))
-  expect_equal(result$kij[2], nb_joint)
-  expect_equal(result$kij[1], nb_excesses_s1)
-  expect_equal(result$kij[3], nb_excesses_s2)
-
-})
 
 
 test_that("neg_ll without advection", {

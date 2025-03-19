@@ -93,7 +93,7 @@ num_cores <- detectCores() - 1  # Reserve 1 core for the OS
 
 # Parallel execution
 sites_coords <- generate_grid_coords(ngrid)
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_max = 10)
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect = 0:10)
 u <- 1 # threshold corresponding to the r-pareto simulation
 result_list <- mclapply(1:M, process_simulation, M = M, m = m,
                         list_simuM = list_simuM, u = u, df_lags = df_lags,

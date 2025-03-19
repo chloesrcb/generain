@@ -8,7 +8,7 @@ get_conditional_lag_vectors(
   df_coords,
   s0 = c(1, 1),
   t0 = 0,
-  tau_max = 10,
+  tau_vect = 0:10,
   latlon = FALSE
 )
 }
@@ -19,7 +19,7 @@ get_conditional_lag_vectors(
 
 \item{t0}{Conditional temporal point.}
 
-\item{tau_max}{The maximum temporal lag. Default is 10.}
+\item{tau_vect}{A vector of temporal lags. Default is 0:10.}
 
 \item{latlon}{Logical indicating whether the coordinates are in latitude and}
 }

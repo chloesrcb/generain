@@ -290,7 +290,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       # }
 
       # shifted data
-      X_s_t <- X_s2[((t0) + t)] # X_{s,t0 + tau}
+      X_s_t <- X_s2[((t0 + 1) + t)] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
 
       # store the number of excesses and T - tau
@@ -394,7 +394,6 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #'
 #' @param params A vector of variogram parameters.
 #' @param df_lags A dataframe with spatial and temporal lag values.
-#' @param wind_vect A vector of wind values. Default is NA.
 #' @param latlon A boolean value to indicate if the locations are in latitude
 #'             and longitude. Default is FALSE.
 #' @param directional A boolean value to indicate if the variogram is
@@ -403,30 +402,23 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
-                            directional = TRUE) {
+theoretical_chi <- function(params, df_lags, latlon = FALSE,
+                                            directional = TRUE) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
-
-  if (all(is.na(wind_vect))) {
-    adv <- params[5:6]
-  } else {
-    eta1 <- params[5]
-    eta2 <- params[6]
-    wind_vect_kmh <- wind_vect * 3.6  # Convert wind to km/h
-    adv <- (abs(wind_vect_kmh)^eta1) * sign(wind_vect_kmh) * eta2  # in km/h
-    # Regularize adv to prevent it from becoming too small
-    # adv <- pmax(adv, 1e-5)  # Prevent adv from collapsing to 0
-  }
-
+  adv <- params[5:6]
   chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
 
+  # Convert tau from hours to seconds (assuming tau is in hours)
+  chi_df$tau_seconds <- chi_df$tau * 3600  # Convert tau from hours to seconds
+
   if (latlon) {
-    # Compute spatial distance in km
+    # Compute spatial distance in km (already in km in df_lags)
     haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
-                                      chi_df$s2y, chi_df$s2x, -adv, chi_df$tau)
+                                      chi_df$s2y, chi_df$s2x, adv,
+                                      chi_df$tau_seconds)  # Use tau in seconds
     chi_df$hnormV <- haversine_df$distance
 
     # Directional adjustment: compute the angle (theta) for the directional
@@ -437,8 +429,8 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
     # Cartesian coordinates case
     chi_df$s1xv <- chi_df$s1x
     chi_df$s1yv <- chi_df$s1y
-    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau
-    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
+    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau_seconds
+    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau_seconds
     if (all(adv == 0)) {
       chi_df$hnormV <- chi_df$hnorm
     } else {
@@ -446,17 +438,17 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
                             (chi_df$s2yv - chi_df$s1yv)^2)
     }
 
+    chi_df$s1xv <- df_lags$s1x
+
     # Directional adjustment: compute the angle (theta) for the directional
     # variogram
-    # TODO: Check if this is correct
-    # chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
   }
 
-  if (directional) {
-      # Apply directional distance adjustment (cos(theta)) with
-      # north as reference (ie sin and cos are swapped)
-      chi_df$x_polar <- chi_df$hnormV * sin(chi_df$theta)
-      chi_df$y_polar <- chi_df$hnormV * cos(chi_df$theta)
+  if (directional && latlon) {
+      # Apply directional distance adjustment
+      chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
+      chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
       chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
   } else {
       # Only distance lag
@@ -465,14 +457,69 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE, wind_vect = NA,
 
   # Compute variogram and chi
   chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
-                  (2 * beta2) * abs(chi_df$tau)^alpha2
+                  (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
 
-  # Regularize chi to prevent very small or very large values
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-  chi_df$chi <- pmax(pmin(chi_df$chi, 1), 1e-8)  # Bound chi TODO
 
   return(chi_df)
 }
+
+
+theoretical_chi <- function(params, df_lags, latlon=T, directional=T) {
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  if (length(params) == 6) {
+    adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
+  }
+
+  chi_df <- df_lags[c("s1", "s2", "tau")]
+  # Get vario and chi for each lagtemp
+  chi_df$s1xv <- df_lags$s1x
+  chi_df$s1yv <- df_lags$s1y
+  chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
+  chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
+  chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                        (chi_df$s2yv - chi_df$s1yv)^2)
+  # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+  # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+  # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
+
+  chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
+                  (2 * beta2) * abs(chi_df$tau)^alpha2
+
+  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+  return(chi_df)
+}
+
+# theorical_chi <- function(params, df_lags) { # AVANT
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   if (length(params) == 6) {
+#     adv <- params[5:6]
+#   } else {
+#     adv <- c(0, 0)
+#   }
+
+#   chi_df <- df_lags[c("s1", "s2", "tau")]
+#   # Get vario and chi for each lagtemp
+#   chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
+#   chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
+#   chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+#   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
+
+#   chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
+#                   (2 * beta2) * abs(chi_df$tau)^alpha2
+
+#   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+#   return(chi_df)
+# }
 
 
 #' get_chi_vect function
@@ -542,12 +589,6 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
                       hmax = NA,  rpar = TRUE, threshold = FALSE,
                       latlon = FALSE, quantile = NA, data = NA, 
                       directional = TRUE) {
-  # if (length(params) == 4) {
-  #   params <- c(params, 0, 0)
-  # } else if (length(params) != 6) {
-  #   stop("The number of initial parameters must be 4 or 6.")
-  # }
-
   if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
@@ -564,7 +605,7 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
   }
 
   # compute theoretical chi values
-  chi <- theoretical_chi(params, df_lags, latlon, wind_vect, directional)
+  chi <- theoretical_chi(params, df_lags, latlon, directional)
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
@@ -572,7 +613,7 @@ neg_ll <- function(params, df_lags, excesses, wind_vect = NA,
   ll_df$chi <- chi$chi
   ll_df$chi <- pmax(pmin(ll_df$chi, 1 - 1e-8), 1e-8)
   ll_df$pchi <- 1 - p * ll_df$chi
-  ll_df$pchi <- pmax(pmin(ll_df$pchi, 1 - 1e-8), 1e-8)
+  ll_df$pchi <- pmax(pmin(ll_df$pchi,  1 - 1e-8), 1e-8)
 
 
   # number of non-excesses
@@ -650,20 +691,33 @@ neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
 neg_ll_composite <- function(params, list_lags,
                     list_excesses, wind_df = NA, hmax = NA, latlon = TRUE,
                     directional = TRUE) {
+  if (length(params) == 4) {
+    params <- c(params, 0, 0) # No advection
+  }
+  # params[6] <- 1
+  # params[c(1, 3)] <- c(beta1, alpha1)
   if (all(is.na(wind_df))) {
-    wind_vect <- NA
+    adv <- params[5:6]
+  } else {
+    eta1 <- params[5]
+    eta2 <- params[6]
+    adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2  # in m/s
+    adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2  # in m/s
+    adv_df <- cbind(adv_x, adv_y)
   }
   m <- length(list_excesses) # number of r-pareto processes
   nll_composite <- 0 # composite negative log-likelihood
+  # print(params[5])
   print(params)
   for (i in 1:m) {
     # extract lags and excesses from i-th r-pareto process from data
     df_lags <- list_lags[[i]]
     excesses <- list_excesses[[i]]
     if (!all(is.na(wind_df))) {
-      wind_vect <- wind_df[i,]
+      adv <- as.vector(adv_df[i,])
     }
-    nll_i <- neg_ll(params, df_lags, wind_vect = wind_vect,
+    params_adv <- c(params[1:4], adv)
+    nll_i <- neg_ll(params_adv, df_lags,
                     hmax = hmax, excesses = excesses, rpar = TRUE,
                     latlon = latlon, directional = directional)
     nll_composite <- nll_composite + nll_i
@@ -856,7 +910,6 @@ evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
     df_result$adv2 <- rep(NA, n_res)
   }
 
-  # df_lags <- get_lag_vectors(locations, true_param, tau = tau_vect, hmax = hmax)
   count_cv <- 0
 
   cl <- parallel::makeCluster(parallel::detectCores() - 1)
@@ -918,51 +971,51 @@ evaluate_optim <- function(list_simu, quantile, true_param, df_lags,
 #'
 #' @export
 get_criterion <- function(df_result, true_param) {
-    # remove NA values
-    df_result <- na.omit(df_result)
-    # get the mean, RMSE and MAE values for each parameter
-    mean_beta1 <- mean(df_result$beta1)
-    mean_alpha1 <- mean(df_result$alpha1)
-    mean_beta2 <- mean(df_result$beta2)
-    mean_alpha2 <- mean(df_result$alpha2)
+  # remove NA values
+  df_result <- na.omit(df_result)
+  # get the mean, RMSE and MAE values for each parameter
+  mean_beta1 <- mean(df_result$beta1)
+  mean_alpha1 <- mean(df_result$alpha1)
+  mean_beta2 <- mean(df_result$beta2)
+  mean_alpha2 <- mean(df_result$alpha2)
 
-    rmse_beta1 <- sqrt(mean((true_param[1] - df_result$beta1)^2))
-    rmse_alpha1 <- sqrt(mean((true_param[3] - df_result$alpha1)^2))
-    rmse_beta2 <- sqrt(mean((true_param[2] - df_result$beta2)^2))
-    rmse_alpha2 <- sqrt(mean((true_param[4] - df_result$alpha2)^2))
+  rmse_beta1 <- sqrt(mean((true_param[1] - df_result$beta1)^2))
+  rmse_alpha1 <- sqrt(mean((true_param[3] - df_result$alpha1)^2))
+  rmse_beta2 <- sqrt(mean((true_param[2] - df_result$beta2)^2))
+  rmse_alpha2 <- sqrt(mean((true_param[4] - df_result$alpha2)^2))
 
-    mae_beta1 <- mean(abs(true_param[1] - df_result$beta1))
-    mae_alpha1 <- mean(abs(true_param[3] - df_result$alpha1))
-    mae_beta2 <- mean(abs(true_param[2] - df_result$beta2))
-    mae_alpha2 <- mean(abs(true_param[4] - df_result$alpha2))
+  mae_beta1 <- mean(abs(true_param[1] - df_result$beta1))
+  mae_alpha1 <- mean(abs(true_param[3] - df_result$alpha1))
+  mae_beta2 <- mean(abs(true_param[2] - df_result$beta2))
+  mae_alpha2 <- mean(abs(true_param[4] - df_result$alpha2))
 
-    if (length(true_param) == 6) {
-      mean_adv1 <- mean(df_result$adv1)
-      mean_adv2 <- mean(df_result$adv2)
+  if (length(true_param) == 6) {
+    mean_adv1 <- mean(df_result$adv1)
+    mean_adv2 <- mean(df_result$adv2)
 
-      rmse_adv1 <- sqrt(mean((true_param[5] - df_result$adv1)^2))
-      rmse_adv2 <- sqrt(mean((true_param[6] - df_result$adv2)^2))
+    rmse_adv1 <- sqrt(mean((true_param[5] - df_result$adv1)^2))
+    rmse_adv2 <- sqrt(mean((true_param[6] - df_result$adv2)^2))
 
-      mae_adv1 <- mean(abs(true_param[5] - df_result$adv1))
-      mae_adv2 <- mean(abs(true_param[6] - df_result$adv2))
+    mae_adv1 <- mean(abs(true_param[5] - df_result$adv1))
+    mae_adv2 <- mean(abs(true_param[6] - df_result$adv2))
 
-      df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
-                                  mean_alpha2, mean_adv1, mean_adv2),
-                          rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
-                                  rmse_alpha2, rmse_adv1, rmse_adv2),
-                          mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2,
-                                  mae_adv1, mae_adv2),
-                          row.names = c("beta1", "beta2", "alpha1", "alpha2",
-                                        "adv1", "adv2"))
-    } else {
-      df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
-                                  mean_alpha2),
-                          rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
-                                  rmse_alpha2),
-                          mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2),
-                          row.names = c("beta1", "beta2", "alpha1", "alpha2"))
-    }
-    return(df_valid)
+    df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
+                                mean_alpha2, mean_adv1, mean_adv2),
+                        rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
+                                rmse_alpha2, rmse_adv1, rmse_adv2),
+                        mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2,
+                                mae_adv1, mae_adv2),
+                        row.names = c("beta1", "beta2", "alpha1", "alpha2",
+                                      "adv1", "adv2"))
+  } else {
+    df_valid <- data.frame(mean = c(mean_beta1, mean_beta2, mean_alpha1,
+                                mean_alpha2),
+                        rmse = c(rmse_beta1, rmse_beta2, rmse_alpha1,
+                                rmse_alpha2),
+                        mae = c(mae_beta1, mae_beta2, mae_alpha1, mae_alpha2),
+                        row.names = c("beta1", "beta2", "alpha1", "alpha2"))
+  }
+  return(df_valid)
 }
 
 
@@ -975,7 +1028,7 @@ get_criterion <- function(df_result, true_param) {
 #' @param filename The name of the file to save the results.
 #'
 #' @import utils
-#' 
+#'
 #' @export
 save_results_optim <- function(result, true_param, filename) {
   if (result$convergence == 0) {

@@ -113,8 +113,9 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   # number of stations
   nsites <- ncol(data_rain)
   Tmax <- nrow(data_rain)
+  tau_vect <- 0:tmax
   # get maximum number of observations
-  chi_s_temp <- matrix(1, nrow = nsites, ncol = tmax)
+  chi_s_temp <- matrix(1, nrow = nsites, ncol = length(tau_vect))
   q <- quantile
   for (s in 1:nsites) {
     rain_Xs <- drop_na(data_rain[s]) # for one fixed station
@@ -123,30 +124,33 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     } else {
       Xs <- rain_Xs
     }
-    Xs_unif <- data.frame(rank(Xs) / (nrow(Xs) + 1))
+    # get quantile for each site if matrix
     if (is.matrix(quantile)) {
-          q <- quantile[s, s]
+      q <- quantile[s, s]
     }
-    mean_excess_Xs <- mean(Xs_unif > q)
-    for (t in 1:tmax){
-      rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (in t_k)
-      rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (in t_k + t)
+    Xs_unif <- data.frame(rank(Xs) / (nrow(Xs) + 1))
+    mean_excess_Xs <- sum(Xs_unif > q) # mean excess for each site
+    for (t in tau_vect) {
+      rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (t_k)
+      rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (t_k + t)
       data_cp <- cbind(rain_nolag, rain_lag) # get couple
+
       if (!zeros) {
         # remove zeros
         Xs_cp <- data_cp[rowSums(data_cp) > 0, ]
-        # remove simultaneous zeros
-        # Xs_cp <- data.frame("site" = data_cp[rowSums(data_cp != 0, na.rm = TRUE) > 0, ])
       } else {
         Xs_cp <- data_cp
       }
+
       n <- nrow(Xs_cp)
-      rain_unif <- cbind(rank(Xs_cp[, 1]) / (n + 1),
-                        rank(Xs_cp[, 2]) / (n + 1))
-      # check excess above a threshold q
-      excess_t <- mean(rain_unif[, 1] > q & rain_unif[, 2] > q)
+      # Transform data into uniform ranks
+      rain_unif <- cbind(rank(Xs_cp[, 1]) / (n + 1), rank(Xs_cp[, 2]) / (n + 1))
+
+      # check excess above threshold q
+      # P(Xs,t > q | Xs,t+tau > q) / P(Xs,t > q)
+      excess_t <- sum(rain_unif[, 1] > q & rain_unif[, 2] > q)
       chival <- excess_t / mean_excess_Xs
-      chi_s_temp[s, t] <- chival
+      chi_s_temp[s, t + 1] <- chival
     }
     # print(paste0(s, "/", nsites)) # print progress
   }
@@ -155,8 +159,8 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   } else { # return all values
     chi_temp <- chi_s_temp
   }
-  chi_temp[chi_temp <= 0] <- 1e-6
-  chi_temp[chi_temp == 1] <- 1 - 1e-6
+  chi_temp[chi_temp <= 0] <- 1e-8
+  chi_temp[chi_temp >= 1] <- 1 - 1e-8
   return(chi_temp)
 }
 
@@ -224,12 +228,15 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #'
 #' @export
 get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
-  # regression on temporal chi
+  # regression on temporal chi without 0 lag
+  if (0 %in% df_chi$lag) {
+    # remove line with 0 lag
+    df_chi <- df_chi[df_chi$lag != 0, ]
+      # df_chi$lag <- df_chi$lag + 0.0001
+  }
+
   chitemp <- df_chi$chi
   lagtemp <- df_chi$lag
-  if (0 %in% lagtemp) {
-    stop("Lag cannot be 0.")
-  }
 
   # need to add a eta continuous function for the WLSE with log
   dftemp <- data.frame(tchi = eta(chitemp), lagtemp = log(lagtemp))
@@ -400,8 +407,8 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
       }
       chi_val <- c(chi_val, get_chiq(rain_cp, q))
     }
-    chi_val[chi_val <= 0] <- 0.0000001
-    chi_val[chi_val == 1] <- 0.9999999
+    chi_val[chi_val <= 0] <- 1e-8
+    chi_val[chi_val == 1] <- 1 - 1e-8
     chi_slag <- c(chi_slag, mean(na.omit(chi_val)))
   }
 
@@ -533,7 +540,7 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
 #'
 #' @export
 eta <- function(chi) {
-  chi[chi <= 0] <- 0.000001 # to avoid log(0)
+  chi[chi <= 0] <- 1e-6 # to avoid log(0)
   stdnorm <- qnorm(1 - 0.5 * chi)
   chi <- 2 * log(stdnorm)
   return(chi)

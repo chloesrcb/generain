@@ -4,13 +4,7 @@
 \alias{theoretical_chi}
 \title{Compute the theoretical chi dataframe.}
 \usage{
-theoretical_chi(
-  params,
-  df_lags,
-  latlon = FALSE,
-  wind_vect = NA,
-  directional = TRUE
-)
+theoretical_chi(params, df_lags, latlon = T, directional = T)
 }
 \arguments{
 \item{params}{A vector of variogram parameters.}
@@ -19,8 +13,6 @@ theoretical_chi(
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
-
-\item{wind_vect}{A vector of wind values. Default is NA.}
 
 \item{directional}{A boolean value to indicate if the variogram is
 directional. Default is TRUE.}

@@ -704,6 +704,7 @@ We have `r length(s0_list)` conditional points. We compute the lags and excesses
 ```{r, echo=FALSE}
 library(parallel)
 
+tau_vect <- 0:tmax
 threshold <- quantile(comephore$p102, probs = q, na.rm = T)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
@@ -712,7 +713,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   t0 <- t0_list[i]
   episode <- list_episodes[[i]]
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0, 
-                                  tau_max = tmax, latlon = TRUE)
+                                  tau_vect, latlon = TRUE)
   lags$hx <- lags$hx / 1000  # in km
   lags$hy <- lags$hy / 1000  # in km
   lags$hnorm <- lags$hnorm / 1000  # in km
