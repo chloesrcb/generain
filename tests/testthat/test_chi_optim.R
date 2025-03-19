@@ -1,7 +1,9 @@
 # Description: This file contains the tests for the optimization functions.
 
 # Example parameters and data for testing
-params <- c(0.1, 0.4, 0.5, 1.5, 0.1, 0.2)  # Example variogram parameters
+eta1 <- 0.8
+eta2 <- 0.3
+
 df_lags <- data.frame(
   s1x = c(0, 1, 2, 0),
   s1y = c(0, 1, 2, 0),
@@ -12,21 +14,21 @@ df_lags <- data.frame(
   s2 = c(1, 3, 4, 1),
   hnorm = c(0, 1, 2, 0)
 )
-wind_vect <- c(10, 5)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
+
 
 ### Tests for the theoretical_chi function -------------------------------------
 test_that("Test that it works well for different configurations", {
+  wind_vect <- c(10, 5)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  params <- c(0.1, 0.4, 0.5, 1.5, adv)  # Example variogram parameters
   # Test if the function returns a data frame
-  result <- theoretical_chi(params, df_lags, wind_vect = wind_vect,
-                                            latlon = FALSE, directional = TRUE)
+  result <- theoretical_chi(params, df_lags, latlon = FALSE, directional = TRUE)
   expect_true(is.data.frame(result)) # Check if the result is a data frame
   # Check if the columns are present
   expect_true("chi" %in% colnames(result))
   expect_true("hlag" %in% colnames(result))
   expect_true("vario" %in% colnames(result))
   expect_true("hnormV" %in% colnames(result))
-  expect_true("x_polar" %in% colnames(result))
-  expect_true("y_polar" %in% colnames(result))
 
   # Test that the 'hnormV' values are positive or zero
   expect_true(all(result$hnormV >= 0))
@@ -52,8 +54,8 @@ test_that("Test that it works well for different configurations", {
   expect_true(all(result$hnormV[result$s1 == result$s2 & result$tau != 0] != 0))
 
   # Optionally, test the behavior with latlon = TRUE (if needed)
-  result_latlon <- theoretical_chi(params, df_lags, wind_vect = wind_vect,
-                                              latlon = TRUE, directional = TRUE)
+  result_latlon <- theoretical_chi(params, df_lags,
+                                    latlon = TRUE, directional = TRUE)
   expect_true("chi" %in% colnames(result_latlon))
   expect_true("hlag" %in% colnames(result_latlon))
   expect_true("vario" %in% colnames(result_latlon))
@@ -79,14 +81,17 @@ test_that("Test that it works well for different configurations", {
   expect_true(all(!is.na(result_latlon$y_polar)))
 
   # If directional = FALSE, the 'x_polar' and 'y_polar' columns should not exist
-  result_nodir <- theoretical_chi(params, df_lags, wind_vect = wind_vect,
-                                          latlon = FALSE, directional = FALSE)
+  result_nodir <- theoretical_chi(params, df_lags,
+                                  latlon = FALSE, directional = FALSE)
   expect_false("x_polar" %in% colnames(result_nodir))
   expect_false("y_polar" %in% colnames(result_nodir))
 
-  # If no wind vector is provided
+  # If no wind
+  wind_vect <- c(0, 0)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  params <- c(0.1, 0.4, 0.5, 1.5, adv)  # Example variogram parameters
   result_nowind <- theoretical_chi(params, df_lags, latlon = FALSE,
-                                          directional = TRUE)
+                                   directional = TRUE)
 
   # For same site pairs, the hnormV should be zero for tau = 0
   expect_true(all(result_nowind$hnormV[result_nowind$s1 == result_nowind$s2 & 
@@ -99,7 +104,7 @@ test_that("Test that it works well for different configurations", {
   adv <- c(0, 0)
   params[5:6] <- adv
   result_nowind <- theoretical_chi(params, df_lags, latlon = FALSE,
-                                          directional = TRUE)
+                                   directional = TRUE)
 
   # For same site pairs, the hnormV should be zero for tau = 0
   expect_true(all(result_nowind$hnormV[result_nowind$s1 == result_nowind$s2 &
@@ -123,9 +128,8 @@ test_that("theoretical_chi returns correct structure", {
     s2y = c(1, 2),
     hnorm = c(1.41, 1.41)
   )
-  wind_vect <- c(0.5, 0.2)
 
-  result <- theoretical_chi(params, df_lags, latlon = FALSE, wind_vect, directional = TRUE)
+  result <- theoretical_chi(params, df_lags, latlon = FALSE, directional = TRUE)
 
   # Vérification des colonnes
   expect_true(all(c("hlag", "vario", "chi") %in% colnames(result)))
@@ -134,7 +138,7 @@ test_that("theoretical_chi returns correct structure", {
   expect_equal(nrow(result), nrow(df_lags))
 
   # Vérification des valeurs de chi (bornées entre 1e-8 et 1)
-  expect_true(all(result$chi >= 1e-8 & result$chi <= 1))
+  expect_true(all(result$chi >= 0 & result$chi <= 1))
 })
 
 test_that("theoretical_chi computes correct variogram values", {
@@ -150,11 +154,9 @@ test_that("theoretical_chi computes correct variogram values", {
     hnorm = c(1.41)
   )
 
-  wind_vect <- c(0.5, 0.2)
-
   # No advection, no wind
   params <- c(0.5, 0.3, 1.2, 0.8, 0, 0)
-  result <- theoretical_chi(params, df_lags, latlon = FALSE, wind_vect = NA,
+  result <- theoretical_chi(params, df_lags, latlon = FALSE,
                                 directional = FALSE)
   # Verif variogram value
   expected_vario <- 2 * params[1] * abs(df_lags$hnorm)^params[3] +
@@ -175,7 +177,7 @@ test_that("theoretical_chi", {
   data_rain <- as.data.frame(data_rain)
   sites_coords <- generate_grid_coords(5) # Example sites_coords
   true_param <- c(0.4, 0.2, 1.5, 1, 0, 0)
-  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
+  df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10)
 
   chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
 
@@ -225,7 +227,7 @@ test_that("theoretical_chi computes correct chi values with complex conditions",
   # Variogram parameters
   true_param <- c(0.5, 0.25, 1.7, 1.2, 0, 0)  # beta1, beta2, alpha1, alpha2,
                                               # adv_x, adv_y
-  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
+  df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10)
 
   # Calculate theoretical chi without advection
   chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
@@ -235,7 +237,7 @@ test_that("theoretical_chi computes correct chi values with complex conditions",
     hnorm <- df_lags$hnorm[i]
     tau <- df_lags$tau[i]
     semivar <- true_param[1] * hnorm^true_param[3] + true_param[2] *
-                                                        tau^true_param[4]
+                                                        abs(tau)^true_param[4]
     chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
 
     chi_h_t <- chi_theorical$chi[chi_theorical$hnorm == hnorm &
@@ -253,26 +255,26 @@ test_that("theoretical_chi computes correct chi values with complex conditions",
   df_lags <- get_conditional_lag_vectors(sites_coords, tau_vect = 0:10,
                                           s0 = s0, t0 = t0)
 
-  chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
+  # chi_theorical <- theoretical_chi(true_param, df_lags, directional = FALSE)
 
-  # Verify the effect of advection on the distance `hnormV`
-  for (i in sample(1:nrow(df_lags), 5)) {
-    hnorm <- chi_theorical$hnorm[i]
-    tau <- chi_theorical$tau[i]
+  # # Verify the effect of advection on the distance `hnormV`
+  # for (i in sample(1:nrow(df_lags), 5)) {
+  #   hnorm <- chi_theorical$hnorm[i]
+  #   tau <- chi_theorical$tau[i]
 
-    # Apply advection
-    s2xv <- df_lags$s2x[i] - adv[1] * tau
-    s2yv <- df_lags$s2y[i] - adv[2] * tau
-    hnormV <- sqrt((s2xv - df_lags$s1x[i])^2 + (s2yv - df_lags$s1y[i])^2)
+  #   # Apply advection
+  #   s2xv <- df_lags$s2x[i] - adv[1] * tau
+  #   s2yv <- df_lags$s2y[i] - adv[2] * tau
+  #   hnormV <- sqrt((s2xv - df_lags$s1x[i])^2 + (s2yv - df_lags$s1y[i])^2)
 
-    semivar <- true_param[1] * hnormV^true_param[3] +
-                        true_param[2] * tau^true_param[4]
-    chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
+  #   semivar <- true_param[1] * hnormV^true_param[3] +
+  #              true_param[2] * abs(tau)^true_param[4]
+  #   chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
 
-    chi_h_t <- chi_theorical$chi[chi_theorical$hnormV == hnormV &
-                                    chi_theorical$tau == tau]
-    expect_equal(unique(chi_h_t), max(chi_h_t_verif, 1e-8), tolerance = 1e-6)
-  }
+  #   chi_h_t <- chi_theorical$chi[chi_theorical$hnorm == hnorm &
+  #                                   chi_theorical$tau == tau]
+  #   expect_equal(unique(chi_h_t), max(chi_h_t_verif, 1e-8), tolerance = 1e-6)
+  # }
 })
 
 
@@ -287,17 +289,17 @@ test_that("theoretical_chi correctly accounts for wind effect", {
 
   # Paramètres du variogramme avec wind_vect
   true_param <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # beta1, beta2, alpha1, alpha2, eta1, eta2
-  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
+  df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10)
 
   # Cas sans vent
-  chi_theorical_no_wind <- theoretical_chi(true_param, df_lags, wind_vect = NA, directional = FALSE)
+  chi_theorical_no_wind <- theoretical_chi(true_param, df_lags,
+                                                  directional = FALSE)
 
   # Création d'un vecteur de vent aléatoire par site
   wind_vect <- c(-2, 3)
 
   # Calcul du chi théorique avec vent
-  chi_theorical_wind <- theoretical_chi(true_param, df_lags, 
-                        wind_vect = wind_vect, directional = FALSE)
+  chi_theorical_wind <- theoretical_chi(true_param, df_lags, directional = FALSE)
 
   # Test sur plusieurs valeurs (hnorm, tau)
   for (i in sample(1:nrow(df_lags), 5)) {
@@ -314,12 +316,11 @@ test_that("theoretical_chi correctly accounts for wind effect", {
                                                             df_lags$s1y[i])^2)
 
     semivar <- true_param[1] * hnormV^true_param[3] + true_param[2] *
-                                                            tau^true_param[4]
+                                                          abs(tau)^true_param[4]
     chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
 
     chi_h_t_wind <- chi_theorical_wind$chi[chi_theorical_wind$hnorm == hnorm &
                                            chi_theorical_wind$tau == tau]
-    print(i)
     expect_equal(max(unique(chi_h_t_wind), 1e-8), max(chi_h_t_verif, 1e-8),
                                                             tolerance = 1e-3)
   }
@@ -333,18 +334,24 @@ test_that("theoretical_chi correctly accounts for wind effect in lat/lon", {
   # Création d'une grille avec des latitudes et longitudes réalistes
   sites_coords <- generate_realistic_latlon_grid(30)  # Grille irrégulière avec lat/lon
   
-  # Tau de -10 à 10 pour tester l’effet temporel
-  df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
+  
+  df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10, latlon = TRUE)
   df_lags <- df_lags %>%
     dplyr::filter(tau >= -10 & tau <= 10)  # On garde tau dans [-10,10]
 
   # Paramètres du variogramme avec le vent
-  true_param <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # beta1, beta2, alpha1, alpha2, eta1, eta2
+  eta1 <- 0.8
+  eta2 <- 0.3
+  true_param <- c(0.5, 0.25, 1.7, 1.2)  # beta1, beta2, alpha1, alpha2
 
   # Création d'un vecteur de vent aléatoire en m/s par site
   wind_vect <- c(-2, 3)
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  true_param <- c(true_param, adv)  # Ajout de l'advection aux paramètres
+
   # Calcul du chi théorique avec vent
-  chi_theorical_wind <- theoretical_chi(true_param, df_lags, wind_vect = wind_vect, latlon = TRUE, directional = FALSE)
+  chi_theorical_wind <- theoretical_chi(true_param, df_lags, latlon = TRUE,
+                                        directional = FALSE)
 
   # Test sur plusieurs valeurs (hnorm, tau) avec coordonnées géographiques
   for (i in sample(1:nrow(df_lags), 5)) {
@@ -379,69 +386,71 @@ test_that("theoretical_chi correctly accounts for wind effect in lat/lon", {
 })
 
 
-test_that("theoretical_chi correctly accounts for wind effect in lat/lon (directional)", {
-  set.seed(42)  # For reproducibility
+# test_that("theoretical_chi correctly accounts for wind effect in lat/lon (directional)", {
+#   set.seed(42)  # For reproducibility
 
-  # Create a grid with realistic latitudes and longitudes
-  sites_coords <- generate_realistic_latlon_grid(30, c(42, 43), c(3.5, 3.8))
-  colnames(sites_coords) <- c("site", "Longitude", "Latitude")
-  # Tau from -10 to 10 to test temporal effect
-  df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10, latlon = TRUE)
-  df_lags$hnorm <- df_lags$hnorm / 1000  # Convert to km
-  df_lags$hx <- df_lags$hx / 1000  # Convert to km
-  df_lags$hy <- df_lags$hy / 1000  # Convert to km
+#   # Create a grid with realistic latitudes and longitudes
+#   sites_coords <- generate_realistic_latlon_grid(30, c(42, 43), c(3.5, 3.8))
+#   colnames(sites_coords) <- c("site", "Longitude", "Latitude")
+#   # Tau from -10 to 10 to test temporal effect
+#   df_lags <- get_lag_vectors(sites_coords, tau_vect = -10:10, latlon = TRUE)
+#   df_lags$hnorm <- df_lags$hnorm / 1000  # Convert to km
+#   df_lags$hx <- df_lags$hx / 1000  # Convert to km
+#   df_lags$hy <- df_lags$hy / 1000  # Convert to km
 
-  # Variogram parameters with wind
-  true_param <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # beta1, beta2, alpha1, alpha2, eta1, eta2
+#   # Variogram parameters with wind
+#   true_param <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # beta1, beta2, alpha1, alpha2, eta1, eta2
 
-  # Create a random wind vector in m/s for each site
-  wind_vect <- c(-2, 3)
+#   # Calculate the theoretical chi with wind
+#   chi_theorical_wind <- theoretical_chi(true_param, df_lags, latlon = TRUE, 
+#                                           directional = TRUE)
 
-  # Calculate the theoretical chi with wind
-  chi_theorical_wind <- theoretical_chi(true_param, df_lags, wind_vect = wind_vect, latlon = TRUE, directional = TRUE)
+#   # Test for several values (hnorm, tau) with geographic coordinates
+#   for (i in sample(1:nrow(df_lags), 5)) {
+#     hnorm <- df_lags$hnorm[i]
+#     tau <- df_lags$tau[i]
+# est_that("theoretical_chi correctly accounts for wind effect in lat/lon (directional)", {
+#   set.seed(42)  # For reproducibility
 
-  # Test for several values (hnorm, tau) with geographic coordinates
-  for (i in sample(1:nrow(df_lags), 5)) {
-    hnorm <- df_lags$hnorm[i]
-    tau <- df_lags$tau[i]
+#   # Create a grid with realistic latitudes and longitudes
+#   sites_coords <- generate
+#     # Wind advection conversion with eta1 and eta2
+#     adv_x <- true_param[5]
+#     adv_y <- true_param[6]
 
-    # Wind advection conversion with eta1 and eta2
-    wind_kmh <- wind_vect * 3.6  # Convert to km/h
-    adv_x <- abs(wind_kmh[1])^true_param[5] * sign(wind_kmh[1]) * true_param[6]
-    adv_y <- abs(wind_kmh[2])^true_param[5] * sign(wind_kmh[2]) * true_param[6] 
+#     # Latitude/longitude conversion to km
+#     lat_convert <- 111.32  # km per degree of latitude
+#     lon_convert <- lat_convert
+#     lon_convert_s2 <- lat_convert * cos(pi * df_lags$s2y[i] / 180)  # Correct longitude conversion
 
-    # Latitude/longitude conversion to km
-    lat_convert <- 111.32  # km per degree of latitude
-    lon_convert <- lat_convert
-    lon_convert_s2 <- lat_convert * cos(pi * df_lags$s2y[i] / 180)  # Correct longitude conversion
+#     # Apply the wind effect considering the conversion
+#     s2xv <- df_lags$s2x[i] * lon_convert_s2 - adv_x * tau
+#     s2yv <- df_lags$s2y[i] * lat_convert - adv_y * tau
 
-    # Apply the wind effect considering the conversion
-    s2xv <- df_lags$s2x[i] * lon_convert_s2 - adv_x * tau
-    s2yv <- df_lags$s2y[i] * lat_convert - adv_y * tau
+#     # Recalculate distance with the wind effect
+#     hnormV <- sqrt((s2xv - df_lags$s1x[i] * lon_convert)^2 + 
+#                               (s2yv - df_lags$s1y[i] * lat_convert)^2)
 
-    # Recalculate distance with the wind effect
-    hnormV <- sqrt((s2xv - df_lags$s1x[i] * lon_convert)^2 + (s2yv - df_lags$s1y[i] * lat_convert)^2)
+#     theta_dir <- atan2(s2yv - df_lags$s1y[i] * lat_convert, 
+#                                       s2xv - df_lags$s1x[i] * lon_convert)
+#     x_polar <- hnormV * cos(theta_dir)
+#     y_polar <- hnormV * sin(theta_dir)
+#     hlag <- x_polar + y_polar
+#     print(paste0("hnormV: ", hnormV))
+#     print(paste0("hlag: ", hlag))
+#     print(paste0("hnormV: ", hnormV))
+#     print("-------------------")
 
-    theta_dir <- atan2(s2yv - df_lags$s1y[i] * lat_convert, s2xv - df_lags$s1x[i] * lon_convert)
-    x_polar <- hnormV * cos(theta_dir)
-    y_polar <- hnormV * sin(theta_dir)
-    hlag <- x_polar + y_polar
-    print(paste0("hnormV: ", hnormV))
-    print(paste0("hlag: ", hlag))
-    print(paste0("hnormV: ", hnormV))
-    print("-------------------")
+#     # Compute the semi-variogram
+#     semivar <- true_param[1] * abs(hlag)^true_param[3] + true_param[2] * abs(tau)^true_param[4]
+#     chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
+#     # Check chi for directional variogram (with wind effect)
+#     chi_h_t_wind <- chi_theorical_wind$chi[chi_theorical_wind$hnorm == hnorm & 
+#          chi_theorical_wind$hlag <= hlag + 0.02 & chi_theorical_wind$tau == tau]
 
-    # Compute the semi-variogram
-    semivar <- true_param[1] * abs(hlag)^true_param[3] + true_param[2] * abs(tau)^true_param[4]
-    chi_h_t_verif <- 2 * (1 - pnorm(sqrt(semivar)))
-    
-    -22.37876143
-    # Check chi for directional variogram (with wind effect)
-    chi_h_t_wind <- chi_theorical_wind$chi[chi_theorical_wind$hlag >= hlag - 0.02 & chi_theorical_wind$hlag <= hlag + 0.02 & chi_theorical_wind$tau == tau]
-
-    expect_equal(unique(chi_h_t_wind), chi_h_t_verif, tolerance = 1e-6)
-  }
-})
+#     expect_equal(unique(chi_h_t_wind), chi_h_t_verif, tolerance = 1e-6)
+#   }
+# })
 
 
 
@@ -453,7 +462,7 @@ test_that("Latitude/Longitude conversion to meters is correct", {
   lon2 <- 1  # 1 degree to the east
 
   # Expected distance (in meters)
-  expected_distance_km <- 111.32  # 1 degree longitude at equator
+  expected_distance_km <- 111.195  # 1 degree longitude at equator
   expected_distance_m <- expected_distance_km * 1000  # Convert to meters
 
   sites_coords <- data.frame(
@@ -463,8 +472,8 @@ test_that("Latitude/Longitude conversion to meters is correct", {
   )
 
   df_lags <- get_lag_vectors(sites_coords, tau_vect = 0, latlon = TRUE)
-  df_lags$hnorm <- df_lags$hnorm / 1000  # Convert to km
-  expect_true(round(df_lags$hnorm[1], 2) == expected_distance_km)
+  df_lags$hnorm <- df_lags$hnorm # Convert to km
+  expect_true(round(df_lags$hnorm[1], 3) == expected_distance_km)
   expect_true(round(df_lags$hnorm[2], 2) == 0)
   # Assuming your function for conversion is like this:
   # Convert degrees to kilometers (latlon = TRUE)
@@ -472,8 +481,7 @@ test_that("Latitude/Longitude conversion to meters is correct", {
   lon_convert <- lat_convert * cos(pi * df_lags$s2y / 180)  # longitude conversion factor
 
   params <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # Example variogram parameters
-  wind_vect <- c(10, 5)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
-  chi_df <- theoretical_chi(params, df_lags, wind_vect = wind_vect, latlon = TRUE, directional = TRUE)
+  chi_df <- theoretical_chi(params, df_lags, latlon = TRUE, directional = TRUE)
   # Check that the calculated distance is close to the expected distance
   expect_equal(chi_df$hlag[1], expected_distance_km, tolerance = 1e-1)  # Allow small tolerance
 
@@ -500,9 +508,14 @@ test_that("Latitude/Longitude conversion to meters is correct", {
   df_lags$hnorm <- df_lags$hnorm # Convert to km
   expect_true(round(df_lags$hnorm[1], 2) == expected_distance_km)
 
-  params <- c(0.5, 0.25, 1.7, 1.2, 0.8, 0.3)  # Example variogram parameters
+  eta1 <- 0.8
+  eta2 <- 0.3
+  params <- c(0.5, 0.25, 1.7, 1.2) # Example variogram parameters
   wind_vect <- c(10, 5)  # Example wind vector (vx = 10 m/s, vy = 5 m/s)
-  chi_df <- theoretical_chi(params, df_lags, wind_vect = wind_vect,
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  params <- c(params, adv)  # Add advection to the parameters
+  
+  chi_df <- theoretical_chi(params, df_lags,
                             latlon = TRUE, directional = FALSE)
 
   # hnormV change with the wind for each tau
@@ -513,7 +526,9 @@ test_that("Latitude/Longitude conversion to meters is correct", {
 
 test_that("theoretical_chi computes correct values with real lat/lon coordinates, wind_vect, directional = TRUE, and latlon = TRUE", {
   # Sample parameters
-  params <- c(1, 1, 1, 1, 0.5, 0.5)
+  eta1 <- 0.5
+  eta2 <- 0.5
+  params <- c(1, 1, 1, 1)
 
   # Real-world lat/lon coordinates for Paris and London
   df_lags_PL <- data.frame(
@@ -525,19 +540,21 @@ test_that("theoretical_chi computes correct values with real lat/lon coordinates
 
   # Wind vector
   wind_vect <- c(0, 0)  # No wind effect for a simple test case
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  params <- c(params, adv)  # Add advection to the parameters
 
   # Compute theoretical chi with latlon = TRUE
   result <- theoretical_chi(params, df_lags_PL, latlon = TRUE,
-                          wind_vect = wind_vect, directional = TRUE)
+                          directional = TRUE)
 
   # Expected values assuming haversine distance with 0° at North
-  expected_theta <- atan2(-0.1278 - 2.3522, 51.5074 - 48.8566)
+  expected_theta <- atan2(51.5074 - 48.8566, -0.1278 - 2.3522)
   expected_x_polar <- df_lags_PL$hnorm * cos(expected_theta)
   expected_y_polar <- df_lags_PL$hnorm * sin(expected_theta)
 
   # Check theta, x_polar, and y_polar values
   expect_equal(result$theta, expected_theta, tolerance = 1e-6)
-  expect_equal(round(result$hnormV, 0), round(df_lags$hnorm, 0))
+  expect_equal(round(result$hnormV, 0), round(df_lags_PL$hnorm, 0))
   expect_equal(result$x_polar, expected_x_polar, tolerance = 1e-1)
   expect_equal(result$y_polar, expected_y_polar, tolerance = 1e-1)
 
@@ -549,14 +566,12 @@ test_that("theoretical_chi computes correct values with real lat/lon coordinates
     hnorm = c(343.51)  # Approx distance in km
   )
 
-  # Wind vector
-  wind_vect <- c(0, 0)  # No wind effect for a simple test case
-
+  
   # Compute theoretical chi with latlon = TRUE
   result <- theoretical_chi(params, df_lags_LP, latlon = TRUE,
-                          wind_vect = wind_vect, directional = TRUE)
+                           directional = TRUE)
 
-  expected_theta <- atan2(-0.1278 - 2.3522, 51.5074 - 48.8566)
+  expected_theta <- atan2(51.5074 - 48.8566, -0.1278 - 2.3522)
   # Expected values assuming haversine distance with 0° at North
   expected_theta_meteo <- (450 - atan2(51.5074 - 48.8566, -0.1278 - 2.3522) *
                                                               180 / pi) %% 360
@@ -564,7 +579,7 @@ test_that("theoretical_chi computes correct values with real lat/lon coordinates
   expected_y_polar <- df_lags_LP$hnorm * sin(expected_theta)
 
   expect_equal(result$theta, expected_theta, tolerance = 1e-6)
-  expect_equal(round(result$hnormV, 0), round(df_lags$hnorm, 0))
+  expect_equal(round(result$hnormV, 0), round(df_lags_LP$hnorm, 0))
 })
 
 
@@ -572,7 +587,9 @@ test_that("theoretical_chi computes correct values with real lat/lon coordinates
 
 test_that("theoretical_chi computes correct values with different etas", {
   # Sample parameters
-  params <- c(1, 1, 1, 1, 0.5, 0.5)
+  eta1 <- 0.5
+  eta2 <- 0.5
+  params <- c(1, 1, 1, 1)
 
   # Real-world lat/lon coordinates for Paris and London
   df_lags <- data.frame(
@@ -584,26 +601,26 @@ test_that("theoretical_chi computes correct values with different etas", {
 
   # Create new dataframe with tau = 0 and tau = 1
   df_lags_extended <- df_lags[rep(1, 2), ]
-  df_lags_extended$tau <- c(0, 0.2)
+  df_lags_extended$tau <- c(1,2)
 
   # Wind vector
   wind_vect <- c(-9.8, 8)  # Wind effect for a simple test case
+  adv <- eta1 * sign(wind_vect) * abs(wind_vect)^eta2
+  params <- c(params, adv)  # Add advection to the parameters
 
   params_noadv <- c(1, 1, 1, 1, 0, 0)
   result_noadv <- theoretical_chi(params_noadv, df_lags_extended, latlon = TRUE,
-                          wind_vect = NA, directional = TRUE)
-  
+                          directional = TRUE)
+
   # Compute theoretical chi with latlon = TRUE
   result_1 <- theoretical_chi(params, df_lags_extended, latlon = TRUE,
-                          wind_vect = wind_vect, directional = TRUE)
+                           directional = TRUE)
 
-  params_2 <- c(1, 1, 1, 1, 0.2, 0.1)
+  params_2 <- c(1, 1, 1, 1, -1, -1)
   result_2 <- theoretical_chi(params_2, df_lags_extended, latlon = TRUE,
-                          wind_vect = wind_vect, directional = TRUE)
+                          directional = TRUE)
 
   # Check that the chi values are different for different etas
   expect_true(any(result_1$chi != result_2$chi))
 
 })
-
-

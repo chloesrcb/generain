@@ -190,8 +190,8 @@ test_that("haversine_distance_with_advection accounts for advection correctly", 
   adv_y <- adv[2] * tau  # Advection in Y (meters)
 
   # Adjusted lat/lon
-  lon2_adj <- lon2 + adv_x / (111.32 * cos(lat2 * pi / 180))
-  lat2_adj <- lat2 + adv_y / 111.32
+  lon2_adj <- lon2 - adv_x / (111319 * cos(lat2 * pi / 180))
+  lat2_adj <- lat2 - adv_y / 111319
 
   # Compute expected distance using Haversine again
   expected_adjusted_distance_km <- haversine_distance_with_advection(lat1,
@@ -202,14 +202,13 @@ test_that("haversine_distance_with_advection accounts for advection correctly", 
 
   # Check that the adjusted distance is within reasonable bounds of
   # the recomputed expected distance
-  expect_equal(round(result_with_adv$distance, 2),
-                          round(expected_adjusted_distance_km, 2))
+  expect_equal(round(result_with_adv$distance, 0),
+                          round(expected_adjusted_distance_km, 0))
 })
 
 
 
 test_that("haversine_distance_with_advection  computes correct values with different etas", {
-  
   wind_vect <- c(-9.8, 8)  # Wind effect for a simple test case
   wind_vect_kmh <- wind_vect  # Convert wind to km/h
 

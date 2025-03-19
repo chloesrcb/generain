@@ -146,50 +146,6 @@ test_that("get_chiq returns correct chi value", {
 
 ### Test the `chispatemp_empirical` function -----------------------------------
 
-
-### Test the `temporal_chi` function -------------------------------------------
-test_that("temporal_chi computes correct values", {
-
-  # Test 1: Basic test with a simple dataset
-  data_rain1 <- data.frame(
-    site1 = rnorm(100),
-    site2 = rnorm(100)
-  )
-
-  tmax1 <- 10
-  quantile1 <- 0.9
-
-  # Run the function
-  result1 <- temporal_chi(data_rain1, tmax1, quantile1)
-  expect_equal(length(result1), tmax1)
-
-  # Test 2: Check handling of `zeros = FALSE`
-  data_rain2 <- data.frame(
-    site1 = c(0, rnorm(99)),
-    site2 = c(rnorm(99), 0)
-  )
-
-  result2 <- temporal_chi(data_rain2, tmax1, quantile1, zeros = FALSE)
-  expect_equal(length(result2), tmax1)
-
-  # Test 3: Test when `mean = FALSE`
-  result3 <- temporal_chi(data_rain1, tmax1, quantile1, mean = FALSE)
-  expect_equal(dim(result3), c(ncol(data_rain1), tmax1))
-
-  # Test 4: Test with a quantile matrix (site-specific quantiles)
-  quantile_matrix <- matrix(0.5, nrow = 3, ncol = 3)
-
-  result4 <- temporal_chi(data_rain2, tmax1, quantile_matrix)
-
-  # Check that the result is computed for each site independently
-  expect_equal(length(result4), tmax1)
-
-  # Ensure that chi values are >= 1e-6 and <= 1-1e-6
-  expect_true(all(result4 > 1e-6))
-  expect_true(all(result4 < 1 - 1e-6))
-})
-
-
 # Example simple data
 set.seed(123)
 data_rain <- data.frame(

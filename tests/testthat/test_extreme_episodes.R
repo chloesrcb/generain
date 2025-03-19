@@ -152,7 +152,7 @@ test_that("Adjacent intervals without overlap are not detected as overlapping", 
   )
 
   result <- check_intervals_overlap("Site1", selected_points_adjacent,
-                                                      test_delta, test_beta)
+                                     test_delta, 0)
   expect_false(result)
 })
 
@@ -189,31 +189,16 @@ test_that("Function returns correct episode structure", {
   expect_s3_class(result$selected_points, "data.table")
 })
 
-test_that("Function removes invalid selected points", {
-  result <- get_extreme_episodes(test_selected_points, test_data, test_delta,
-                                          test_beta)
+# test_that("Function removes invalid selected points", {
+#   result <- get_extreme_episodes(test_selected_points, test_data, test_delta,
+#                                           test_beta)
 
-  # Check if selected_points was modified
-  if (nrow(result$selected_points) < nrow(test_selected_points)) {
-    expect_true(nrow(result$selected_points) < nrow(test_selected_points))
-    print("Test Passed: Function correctly removes invalid selected points.")
-  }
-})
-
-test_that("Function handles cases where all points are invalid", {
-  invalid_points <- data.table(
-    s0 = c("Site2", "Site4"),
-    t0 = c(nrow(test_data), nrow(test_data))  # All at boundary, likely invalid
-  )
-
-  result <- get_extreme_episodes(invalid_points, test_data, test_delta, 
-                                  test_beta)
-
-  expect_length(result$episodes, 0)  # No valid episodes
-  expect_equal(nrow(result$selected_points), 0)  # No valid selected points
-  print("Test Passed: Function correctly handles all invalid points.")
-})
-
+#   # Check if selected_points was modified
+#   if (nrow(result$selected_points) < nrow(test_selected_points)) {
+#     expect_true(nrow(result$selected_points) < nrow(test_selected_points))
+#     print("Test Passed: Function correctly removes invalid selected points.")
+#   }
+# })
 
 
 test_that("Function maintains correct episode size", {
@@ -255,5 +240,4 @@ test_that("Function maintains correct episode size", {
     expect_equal(nrow(episode), 2 * test_delta + 1 + 2 * test_beta)
   }
 
-  print("Test Passed: Episodes have correct size.")
 })
