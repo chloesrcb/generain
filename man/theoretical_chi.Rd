@@ -4,7 +4,7 @@
 \alias{theoretical_chi}
 \title{Compute the theoretical chi dataframe.}
 \usage{
-theoretical_chi(params, df_lags, latlon = T, directional = T)
+theoretical_chi(params, df_lags, latlon = FALSE, directional = TRUE)
 }
 \arguments{
 \item{params}{A vector of variogram parameters.}
