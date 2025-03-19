@@ -19,6 +19,8 @@ Imports:
   reshape2,
   geodist,
   geosphere,
+  data.table,
+  kableExtra,
   ismev,
   evd,
   mev,
