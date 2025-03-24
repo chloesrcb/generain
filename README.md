@@ -35,3 +35,11 @@ Rscript -e "install.packages(pkgs = './inst/archives/RandomFields_3.3.14.tar.gz'
 Rscript -e "install.packages(pkgs = './inst/archives/RandomFieldsUtils_1.2.5.tar.gz', type='source', repos=NULL)"
 Rscript -e "remotes::install_github('chloesrcb/generain', force=TRUE)"
 ```
+
+RandomFields error fixed for last R version:
+
+```
+devtools::install_github("iflint1/RandomFieldsUtils")
+devtools::install_github("iflint1/RandomFields")
+remotes::install_github('iflint1/RandomFields', force=TRUE)
+```

@@ -12,9 +12,14 @@ devtools::load_all() # load the last version of the package
 comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
 loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
 
+comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")
+
 df_comephore <- comephore_raw
+head(df_comephore)
 
 # Take only data after 2007
+colnames(df_comephore)[1] <- "date"
 df_comephore <- df_comephore[df_comephore$date >= "2008-01-01", ]
 
 # put date in index
@@ -60,6 +65,8 @@ head(wind_mtp$cardDir)
 #                                     count_min = 150) # with removing zeros
 # quant_mat <- list_count_quant[1][[1]]
 # count_mat <- list_count_quant[2]
+colnames(comephore)
+head(comephore)
 library(ggplot2)
 par(mfrow = c(1, 2))
 comephore_pair <- comephore[, c(12, 2)]
@@ -75,7 +82,7 @@ chiplot(comephore_pair, xlim = c(0.99, 1), ylim1 = c(0.5, 1), which = 1,
 abline(v = 0.998, col = "red", lty = 2)
 
 # count conjoint excesses
-q <- 0.96
+q <- 0.97
 # uniformize the data
 n <- nrow(comephore_pair_no0)
 data_unif <- cbind(rank(comephore_pair_no0[, 1]) / (n + 1),
@@ -94,7 +101,7 @@ data_unif <- cbind(rank(comephore_pair[, 1]) / (n + 1),
 count_excesses <- sum(data_unif[, 1] > q & data_unif[, 2] > q)
 print(count_excesses)
 
-q_no0_spa <- 0.96
+q_no0_spa <- 0.97
 # get the corresponding quantile in the data without 0 and with 0
 q_value_no0 <- quantile(c(comephore_pair_no0[,1], comephore_pair_no0[,2]), 
                         probs = q_no0_spa, na.rm = TRUE)
@@ -125,7 +132,7 @@ chiplot(comephore_pair, xlim = c(0.98, 1), ylim1 = c(0, 1), which = 1,
 abline(v = 0.995, col = "red", lty = 2)
 
 # count conjoint excesses
-q_no0_spa <- 0.96
+q_no0_spa <- 0.97
 
 q_no0_temp <- 0.93
 # get the corresponding quantile in the data without 0 and with 0
@@ -169,15 +176,14 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 chitemp
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/from2008_temporal_chi_boxplot_", q_no0_temp,
+filename <- paste(im_folder, "WLSE/comephore/full_from2008_temporal_chi_boxplot_", q_no0_temp,
                  ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 
 # Mean of chi
-chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = 0.93,
+chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q_no0_temp,
                                mean = TRUE, zeros = FALSE)
-# get h axis in minutes ie x5 minutes
 df_chi <- data.frame(lag = c(0:tmax), chi = chimat_dt_mean)
 # chitemp_plot <- ggplot(df_chi, aes(x = lag, y = chi)) +
 #   geom_point(color = btfgreen) +
@@ -187,8 +193,6 @@ df_chi <- data.frame(lag = c(0:tmax), chi = chimat_dt_mean)
 
 # chitemp_plot
 
-# remove the first value
-# df_chi <- df_chi[-1, ]
 df_chi_not0 <- df_chi[df_chi$lag > 0, ]
 wlse_temp <- get_estimate_variotemp(df_chi_not0, weights = "exp", summary = TRUE)
 print(wlse_temp)
@@ -213,7 +217,7 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 chitemp_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/from2008_temporal_chi_eta_estim_",
+filename <- paste(im_folder, "WLSE/comephore/full_from2008_temporal_chi_eta_estim_",
                 q_no0_temp, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -246,7 +250,7 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
 chispa_plot
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/from2008_spatial_chi_", q,
+filename <- paste(im_folder, "WLSE/comephore/full_from2008_spatial_chi_", q,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -269,7 +273,7 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
 chispa_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/from2008_spatial_chi_eta_estim_", q,
+filename <- paste(im_folder, "WLSE/comephore/full_from2008_spatial_chi_eta_estim_", q,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -479,7 +483,7 @@ s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
-tau_vect <- -10:10
+tau_vect <- -5:5
 q <- 0.998
 tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
@@ -514,7 +518,6 @@ excesses[1:20, ]
 
 # ADD WIND DATA ################################################################
 
-plot(wind_ep_df$FF)
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
 
@@ -672,7 +675,7 @@ if (any(ind_NA > 0)) {
 # a_ratio <- 1
 # phi <- 0.5
 
-init_param <- c(beta1, beta2, alpha1, alpha2)
+init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,

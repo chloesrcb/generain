@@ -49,12 +49,10 @@ get_egpd_estimates <- function(rain_df, left_censoring = 0) {
     } else {
       censore <- left_censoring
     }
-    # png("egpd_fit_cnrs.png", width = 700, height = 400)
     egpd.fit <- fit.extgp(y, model = 1, method = "mle",
                           init = c(kappa_0, sigma_0, xi_0),
-                          censoring = c(censore, Inf), plots = FALSE,
-                          confint = FALSE, ncpus = 7, R = 1000)
-    # dev.off()
+                          censoring = c(censore, Inf), plots = F,
+                          confint = F, ncpus = 7, R = 1000)
     param <- egpd.fit$fit$mle
     kappa <- c(kappa, param[1])
     sigma <- c(sigma, param[2])
@@ -134,55 +132,190 @@ dgpdExt1 <- function(x, kappa, sigma, gamma) {
 choose_censore <- function(rain_df, censores, n_samples = 100) {
   df_score <- data.frame(locations = seq_along(rain_df))
   df_score$RMSE <- Inf
-  df_score$CRPS <- Inf
   df_score$censoreRMSE <- NA
-  df_score$censoreCRPS <- NA
 
+  # Boucle pour chaque censore à tester
   for (c in seq_along(censores)) {
     censore <- censores[c]
-    params <- as.data.frame(get_egpd_estimates(rain_df,
-                            left_censoring = censore))
-    # RMSEs <- c()
-    for (i in seq_along(rain_df)){
+    params <- as.data.frame(get_egpd_estimates(rain_df, left_censoring = censore))
+
+    # Une variable pour suivre l'RMSE précédent afin de savoir si ça augmente
+    prev_rmse <- Inf
+    
+    # Boucle pour chaque emplacement (location)
+    for (i in seq_along(rain_df)) {
       y <- na.omit(rain_df[, i])
-      y <- y[y > 0]
+      y <- y[y > 0]  # Conserver que les valeurs positives
       y.sort <- sort(y)
-
-      # y <- y[y > censore]
-      # Quantile
+      print(i)
+      # Quantiles
       p <- (1:length(y)) / (length(y) + 1)
-      qextgp <- qextgp(p = p, type = 1,
-                    kappa = params$kappa[i], sigma = params$sigma[i],
-                    xi = params$xi[i])
+      qextgp <- qextgp(p = p, type = 1, kappa = params$kappa[i], sigma = params$sigma[i], xi = params$xi[i])
 
-      # qqplot(y.sort, qextgp, asp=1)
-      # abline(0, 1)
-
-      # sort values
-      # RMSE
+      # Calculer l'RMSE
       RMSE <- sqrt(mean((y.sort - qextgp)^2))
-      # RMSEs <- c(RMSEs, RMSE)
-      if (RMSE <= df_score$RMSE[i]) {
+      print(RMSE)
+      # Si l'RMSE augmente, on arrête de chercher plus loin
+      # if (RMSE > prev_rmse & RMSE != Inf) {
+      #   # Si RMSE augmente, on arrête la boucle pour ce censore et on passe au suivant
+      #   next
+      # }
+
+      # Si l'RMSE est meilleur (plus petit), on le garde
+      if (RMSE < df_score$RMSE[i]) {
         df_score$RMSE[i] <- RMSE
-        df_score$censoreRMSE[i] <- censores[c]
+        df_score$censoreRMSE[i] <- censore
       }
 
-      # Generate the samples
-      samples <- rextgp(n_samples, kappa = params$kappa[i],
-                        sigma = params$sigma[i], xi = params$xi[i])
-
-      # Compute the CRPS for each observation
-      crps_values <- sapply(y, function(obs) {
-          crps_sample(y = obs, dat = samples)
-      })
-
-      mean_crps <- mean(crps_values)
-      if (mean_crps <= df_score$CRPS[i]) {
-         df_score$CRPS[i] <- mean_crps
-         df_score$censoreCRPS[i] <- censores[c]
-      }
-
+      # Mettre à jour le précédent RMSE pour la prochaine itération
+      prev_rmse <- RMSE
     }
   }
+  return(df_score)
+}
+
+
+
+choose_censore <- function(rain_df, censores, n_samples = 100) {
+  df_score <- data.frame(locations = seq_along(rain_df))
+  df_score$RMSE <- Inf
+  df_score$censoreRMSE <- NA
+  df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
+
+  # Boucle pour chaque censore à tester
+  for (c in seq_along(censores)) {
+    censore <- censores[c]
+    params <- as.data.frame(get_egpd_estimates(rain_df, left_censoring = censore))
+
+    # Une variable pour suivre l'RMSE précédent afin de savoir si ça augmente
+    prev_rmse <- Inf
+    prev_flag <- FALSE  # Suivi d'une fluctuation précédente
+    
+    # Boucle pour chaque emplacement (location)
+    for (i in seq_along(rain_df)) {
+      y <- na.omit(rain_df[, i])
+      y <- y[y > 0]  # Conserver que les valeurs positives
+      y.sort <- sort(y)
+
+      # Vérifier si les paramètres sont valides
+      if (any(is.na(params$kappa[i]), is.na(params$sigma[i]), is.na(params$xi[i]))) {
+        next  # Passer à la prochaine itération si les paramètres sont invalides
+      }
+
+      # Quantiles
+      p <- (1:length(y)) / (length(y) + 1)
+      qextgp <- qextgp(p = p, type = 1, kappa = params$kappa[i], sigma = params$sigma[i], xi = params$xi[i])
+
+      # Vérifier si les quantiles sont valides
+      if (any(is.na(qextgp), is.infinite(qextgp))) {
+        next  # Passer à la prochaine itération si les quantiles sont invalides
+      }
+
+      # Calculer l'RMSE
+      RMSE <- sqrt(mean((y.sort - qextgp)^2))
+
+      # Vérifier si l'RMSE est Inf
+      if (RMSE == Inf) {
+        next  # Passer à la prochaine itération si RMSE est Inf
+      }
+
+      # Flag pour savoir si l'RMSE a augmenté puis diminué
+      fluctuation_flag <- FALSE
+      if (prev_rmse != Inf && RMSE > prev_rmse) {
+        # Si l'RMSE a augmenté après avoir diminué, on marque cela
+        fluctuation_flag <- TRUE
+      }
+
+      # Si l'RMSE a augmenté et est maintenant plus petit à la censure suivante, on le marque
+      if (fluctuation_flag) {
+        df_score$flag[i] <- TRUE
+      }
+
+      # Si l'RMSE augmente, on garde le précédent et on ne met pas à jour
+      if (RMSE > prev_rmse) {
+        next  # Ne pas mettre à jour df_score et passer à la prochaine censure
+      }
+
+      # Si l'RMSE est plus petit que celui enregistré, on le garde
+      if (RMSE < df_score$RMSE[i]) {
+        df_score$RMSE[i] <- RMSE
+        df_score$censoreRMSE[i] <- censore
+      }
+
+      # Mettre à jour le précédent RMSE pour la prochaine itération
+      prev_rmse <- RMSE
+    }
+  }
+  return(df_score)
+}
+
+
+choose_censore <- function(rain_df, censores, n_samples = 100) {
+  df_score <- data.frame(locations = seq_along(rain_df))
+  df_score$RMSE <- Inf
+  df_score$censoreRMSE <- NA
+  df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
+
+  # Boucle pour chaque emplacement (site)
+  for (i in seq_along(rain_df)) {
+    rain_site <- as.data.frame(rain_df[, i])
+    y <- na.omit(rain_site)
+    y <- y[y > 0]  # Conserver que les valeurs positives
+    y.sort <- sort(y)
+
+    # Initialiser les variables pour suivre l'RMSE minimum pour ce site
+    prev_rmse <- Inf
+    best_rmse <- Inf
+    best_censore <- NA
+    prev_flag <- FALSE  # Suivi d'une fluctuation précédente pour ce site
+
+    # Boucle pour chaque censore à tester
+    for (c in seq_along(censores)) {
+      censore <- censores[c]
+      params <- as.data.frame(get_egpd_estimates(rain_site, left_censoring = censore))
+
+      # Quantiles
+      p <- (1:length(y)) / (length(y) + 1)
+      qextgp <- qextgp(p = p, type = 1, kappa = params$kappa, sigma = params$sigma, xi = params$xi)
+
+      # Vérifier si les quantiles sont valides
+      if (any(is.na(qextgp), is.infinite(qextgp))) {
+        next  # Passer à la prochaine itération si les quantiles sont invalides
+      }
+
+      # Calculer l'RMSE
+      RMSE <- sqrt(mean((y.sort - qextgp)^2))
+
+      # Vérifier si l'RMSE est valide
+      if (is.na(RMSE) || is.infinite(RMSE)) {
+        next  # Passer à la prochaine itération si l'RMSE est invalide
+      }
+
+      # Si l'RMSE a augmenté après avoir diminué, on marque cela
+      fluctuation_flag <- FALSE
+      if (prev_rmse != Inf && RMSE > prev_rmse) {
+        fluctuation_flag <- TRUE
+      }
+
+      # Si l'RMSE augmente et a fluctué, on marque le flag pour ce site
+      if (fluctuation_flag) {
+        df_score$flag[i] <- TRUE
+      }
+
+      # Si l'RMSE est plus petit que le précédent, on met à jour
+      if (RMSE < best_rmse) {
+        best_rmse <- RMSE
+        best_censore <- censore
+      }
+
+      # Mettre à jour le précédent RMSE pour la prochaine itération
+      prev_rmse <- RMSE
+    }
+
+    # Enregistrer le meilleur RMSE et la censure associée pour ce site
+    df_score$RMSE[i] <- best_rmse
+    df_score$censoreRMSE[i] <- best_censore
+  }
+
   return(df_score)
 }

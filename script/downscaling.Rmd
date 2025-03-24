@@ -428,25 +428,25 @@ head(df_downscaling)
 ## Install pinnEV
 
 ```{r}
-install.packages("reticulate")
+# install.packages("reticulate")
 library(reticulate)
-# py_version <- "3.9.18"
-# path_to_python <- reticulate::install_python(version=py_version)
-# reticulate::virtualenv_remove("pinnEV_env")
+py_version <- "3.9.18"
+path_to_python <- reticulate::install_python(version=py_version)
+reticulate::virtualenv_remove("pinnEV_env")
 # # Create a virtual envionment 'pinnEV_env' with Python 3.9.18. Install tensorflow
 # # within this environment.
-# reticulate::virtualenv_create(envname = 'pinnEV_env',
-#                               python=path_to_python,
-#                               version=py_version)
+reticulate::virtualenv_create(envname = 'pinnEV_env',
+                              python=path_to_python,
+                              version=py_version)
 
-# path<- paste0(reticulate::virtualenv_root(),"/pinnEV_env/bin/python")
-# Sys.setenv(RETICULATE_PYTHON = path) # Set Python interpreter
-# Sys.setenv(RETICULATE_LOG_LEVEL = "DEBUG")
-# tf_version="2.13.1"
-# reticulate::use_virtualenv("pinnEV_env", required = T)
-# tensorflow::install_tensorflow(method="virtualenv", envname="pinnEV_env",
-#                                version=tf_version) #Install version of tensorflow in virtual environment
-# keras::install_keras(method = c("virtualenv"), envname = "pinnEV_env",version=tf_version)
+path<- paste0(reticulate::virtualenv_root(),"/pinnEV_env/bin/python")
+Sys.setenv(RETICULATE_PYTHON = path) # Set Python interpreter
+Sys.setenv(RETICULATE_LOG_LEVEL = "DEBUG")
+tf_version="2.13.1"
+reticulate::use_virtualenv("pinnEV_env", required = T)
+tensorflow::install_tensorflow(method="virtualenv", envname="pinnEV_env",
+                               version=tf_version) #Install version of tensorflow in virtual environment
+keras::install_keras(method = c("virtualenv"), envname = "pinnEV_env",version=tf_version)
 
 # keras::is_keras_available() #Check if keras is available
 
@@ -729,81 +729,4 @@ for(i in 1:n.add.preds_k){
   #Adds red triangles that denote knot locations
 }
 
-```
-
-## Application to our data
-
-
-```{r}
-library(lubridate)
-df_downscaled <- df_Y_X
-# get hour, min, d, m, y from date
-df_downscaled$hour <- hour(df_downscaled$date)
-df_downscaled$minute <- minute(df_downscaled$date)
-df_downscaled$day <- day(df_downscaled$date)
-df_downscaled$month <- month(df_downscaled$date, label = FALSE)
-df_downscaled$year <- year(df_downscaled$date)
-
-# get coords of each site and put it in the df_downscaled
-df_downscaled$coord_x_s <- location_gauges$Longitude[match(df_downscaled$site, location_gauges$codestation)]
-df_downscaled$coord_y_s <- location_gauges$Latitude[match(df_downscaled$site, location_gauges$codestation)]
-
-# rearrange columns
-df_downscaled <- df_downscaled[, c(2, 3, 33, 34, 35, 36, 37, 38, 39, 4, 5, 6:32)]
-head(df_downscaled)
-
-# Diviser les données par site
-site_data <- split(df_downscaled, df_downscaled$site)
-length(site_data) == length(unique(df_downscaled$site))
-
-site_predictors <- lapply(site_data, function(site_df) {
-    site_df[-1] # Supposons que les prédicteurs sont nommés "X1", "X2", etc.
-})
-
-my_array <- array(unlist(site_predictors), dim = c(nrow(df_downscaled), ncol(df_downscaled) - 1, length(site_predictors)))
-dim(my_array)
-tail(my_array)
-
-head_df <- head(df_downscaled)
-
-# Print latex table
-kable(head_df, format = "latex", booktabs = TRUE) %>%
-  kable_styling(latex_options = "hold_position") %>%
-  column_spec(1, bold = TRUE) %>%
-  column_spec(2:9, bold = TRUE) %>%
-  column_spec(10:35, bold = TRUE)
-```
-
-
-
-```{r}
-# Get predictors from df_Y_X
-preds<-df_downscaled[, 2:ncol(df_downscaled)]
-head(preds)
-dim(preds)
-
-n_obs <- nrow(preds)
-n_sites <- 17
-n_components <- ncol(preds) / n_sites
-
-# Reshape en 3D
-dim(preds) <- c(n_obs, n_sites, n_components)
-
-Y <- df_downscaled$Y_obs
-mask_inds=sample(1:length(Y),size=length(Y)*0.8)
-
-Y.train <- Y.valid <- Y
-Y.train[-mask_inds]=-1e10
-Y.valid[mask_inds]=-1e10
-
-#Split predictors into linear, additive and nn. Different for kappa and scale parameters.
-X.nn.k=preds[,,1:4] #Four nn predictors for kappa
-X.lin.k=preds[,,5:6] #Two additive predictors for kappa
-X.add.k=preds[,,7:8] #Two additive predictors for kappa
-
-X.nn.s=preds[,,1:2] #Two nn predictors for sigma
-X.lin.s=preds[,,3] #One linear predictor for sigma
-dim(X.lin.s)=c(dim(X.lin.s),1) #Change dimension so consistent
-X.add.s=preds[,,4] #One additive predictor for sigma
-dim(X.add.s)=c(dim(X.add.s),1) #Change dimension so consistent
 ```

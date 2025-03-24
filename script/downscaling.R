@@ -244,24 +244,6 @@ if (length(chunk_list) > 0) {
 
 output_file <- "./data/downscaling_table.csv"
 
-# lines <- readLines(output_file)
-# first_line <- lines[1]
-# print(first_line)
-
-# # Replace the double quotes
-# cleaned_first_line <- gsub('\"', '', first_line)
-
-# print(cleaned_first_line)
-
-
-# lines[1] <- cleaned_first_line
-
-# corrected_file <- "./data/downscaling_table_corrected.csv"
-
-# lines <- readLines(corrected_file)
-# writeLines(lines, corrected_file)
-
-
 df_Y_X_raw <- read.csv(output_file, sep = ";", header = TRUE)
 head(df_Y_X_raw)
 # colnames(df_Y_X_raw) <- c("time", "lon_Y", "lat_Y", "lon_X", "lat_X", "Y_obs",
@@ -284,13 +266,264 @@ library(lubridate)
 df_Y_X$hour <- hour(df_Y_X$time)
 df_Y_X$minute <- minute(df_Y_X$time)
 df_Y_X$day <- day(df_Y_X$time)
-df_Y_X$month <- month(df_Y_X$time, label = FALSE)
+df_Y_X$month <- month(df_Y_X$time)
 df_Y_X$year <- year(df_Y_X$time)
 head(df_Y_X)
 
 
 library(keras)
 library(tensorflow)
+library(reticulate)
+py_version <- "3.9.18"
+# path_to_python <- reticulate::install_python(version=py_version)
+# path_to_python <- "/home/cserreco/.pyenv/versions/3.9.18/bin/python3.9"
+# reticulate::virtualenv_remove("pinnEV_env")
+# Create a virtual envionment 'pinnEV_env' with Python 3.9.18. Install tensorflow
+# within this environment.
+# reticulate::virtualenv_create(envname = 'pinnEV_env',
+#                               python=path_to_python,
+#                               version=py_version)
 
-df_downscaling_all <- df_downscaling
+path<- paste0(reticulate::virtualenv_root(),"/pinnEV_env/bin/python")
+Sys.setenv(RETICULATE_PYTHON = "/home/cserreco/.virtualenvs/pinnEV_env/bin/python")
+# Sys.setenv(RETICULATE_PYTHON = path) # Set Python interpreter
+Sys.setenv(RETICULATE_LOG_LEVEL = "DEBUG")
+tf_version="2.13.1"
+reticulate::use_virtualenv("pinnEV_env", required = T)
+# tensorflow::install_tensorflow(method="virtualenv", envname="pinnEV_env",
+#                                version=tf_version) #Install version of tensorflow in virtual environment
+# keras::install_keras(method = c("virtualenv"), envname = "pinnEV_env",version=tf_version)
+
+# keras::is_keras_available() #Check if keras is available
+
+# tf$constant("Hello TensorFlow!")
+# py_run_string("import tensorflow as tf; print(tf.__version__)")
+#Install spektral 1.3.0 - this is for the graph convolutional neural networks. Remove all code hereafter if not necessary.
+# reticulate::virtualenv_install("pinnEV_env",
+#                                packages = "spektral", version="1.3.0")
+
+
+
+df_downscaling_all <- df_Y_X
+# Remove rows with Y_obs = 0 for model EGPD of positive rainfall
 df_downscaling_nn <- df_downscaling_all[df_downscaling_all$Y_obs > 0, ]
+nrow(df_downscaling_nn)
+
+n_observations <- nrow(df_downscaling_nn)
+n_sites <- 17
+n_predictors <- ncol(df_downscaling_nn) - 2
+
+X_all <- df_downscaling_nn[, -c(which(names(df_downscaling_nn) == "Y_obs"),
+                           which(names(df_downscaling_nn) == "time"))]
+# Convert into a 3D array
+X_all <- array(unlist(X_all), dim = c(n_observations, n_sites, n_predictors))
+Y_obs <- df_downscaling_nn$Y_obs
+
+# Check for missing values
+sum(is.na(X_all))
+# sum(is.na(Y_obs))
+
+# Identify rows with missing values in X_all
+rows_with_na <- apply(X_all, 1, function(row) any(is.na(row)))
+
+# Remove corresponding rows from X_all and Y_obs
+X_all_clean <- X_all[!rows_with_na, , , drop = FALSE]  # Keep the same dimensions as the original array
+Y_obs_clean <- Y_obs[!rows_with_na]
+n_obs <- length(Y_obs_clean)
+dim(X_all_clean)
+
+X_all_clean <- scale(X_all_clean)
+
+
+# Flatten X_all_clean into a 2D array for glmnet
+X_all_clean_flat <- array(X_all_clean, dim = c(n_obs, n_sites * n_predictors))
+dim(X_all_clean_flat)
+
+# Fit a LASSO model to select the most important predictors
+library(glmnet)
+fit_lasso <- cv.glmnet(as.matrix(X_all_clean_flat), Y_obs_clean, alpha = 1)
+
+
+# Coefficients pour lambda.min (le meilleur lambda)
+coef_lambda_min <- coef(fit_lasso, s = "lambda.min")
+print(coef_lambda_min)
+# Coefficients pour lambda.1se (le lambda à 1 écart-type)
+coef(fit_lasso, s = "lambda.1se")
+
+selected_predictors <- which(coef(fit_lasso, s = "lambda.min") != 0)
+# Exclude intercept (index 1)
+selected_predictors <- selected_predictors[selected_predictors > 1] - 1
+X_all_clean_selected_flat <- X_all_clean_flat[, selected_predictors]
+
+
+# Retransform the selected predictors into a 3D array
+X_all_clean_selected <- array(X_all_clean_selected_flat, dim = c(n_obs, n_sites, length(selected_predictors)))
+head(X_all_clean_selected)
+
+
+# # Hyperparameter tuning for the neural network
+# library(caret)
+
+# grid <- expand.grid(
+#   batch.size = c(10, 20),
+#   widths = list(c(4, 2), c(8, 4, 2)),
+#   n.ep = c(100, 200)
+# )
+
+# results <- apply(grid, 1, function(params) {
+#   fit <- eGPD.NN.train(
+#     Y.train, Y.valid, X.s, X.k, type = "MLP",
+#     n.ep = params$n.ep, batch.size = params$batch.size,
+#     widths = params$widths, seed = 1
+#   )
+#   return(fit$val_loss)  # Retourne la perte de validation
+# })
+
+# best_params <- grid[which.min(results), ]
+
+
+
+X.nn.k <- X_all_clean # Nn predictors for kappa
+X.nn.s <- X_all_clean # Nn predictors for sigma
+length(Y_obs_clean)
+sum(is.na(Y_obs_clean))
+
+set.seed(123)
+n_obs <- length(Y_obs_clean)
+train_idx <- sample(seq_len(n_obs), size = 0.8 * n_obs)
+Y.train <- Y_obs_clean
+Y.valid <- Y_obs_clean
+Y.train[-train_idx] <- -1e10
+Y.valid[train_idx] <- -1e10
+Y.train <- array(Y.train, dim = c(length(Y.train), 1))
+Y.valid <- array(Y.valid, dim = c(length(Y.valid), 1))
+
+# # NEW
+# train_idx <- sample(seq_len(n_obs), size = 0.8 * n_obs)
+# X.train <- X_all_clean_selected[train_idx, , ]
+# X.valid <- X_all_clean_selected[-train_idx, , ]
+# Y.train <- Y_obs_clean[train_idx]
+# Y.valid <- Y_obs_clean[-train_idx]
+# Y.train <- array(Y.train, dim = c(length(Y.train), 1))
+# Y.valid <- array(Y.valid, dim = c(length(Y.valid), 1))
+
+# X.nn.k <- X_all_clean_selected  # Nn predictors for kappa
+# X.nn.s <- X_all_clean_selected # Nn predictors for sigma
+# List of predictors
+X.s <- list("X.nn.s" = X.nn.s)
+X.k <- list("X.nn.k" = X.nn.k)
+
+
+
+# initialize the neural network model EGPD fitting
+# get censoring
+censores <- seq(0.25, 0.35, 0.001)
+rain_new <- rain_hsm[-1] # remove the first column date
+# rain_cp <- rain_new[, c(5,6)]
+df_score_ohsm <- choose_censore(rain_new, censores, n_samples = 100)
+
+params_subrain <- get_egpd_estimates(rain_new,
+                      left_censoring = df_score_ohsm$censoreRMSE)
+
+
+
+y <- as.data.frame(na.omit(rain_df[, 1]))
+y <- y[y > 0]
+kappa_0 <- 2
+inits <- init_values(y, 0)
+sigma_0 <- inits[1]
+xi_0 <- inits[2]
+
+c <- 0.251
+egpd.fit <- fit.extgp(y, model = 1, method = "mle",
+                          init = c(kappa_0, sigma_0, xi_0),
+                          censoring = c(c, Inf), plots = F,
+                          confint = F, ncpus = 7, R = 1000)
+param <- egpd.fit$fit$mle
+kappa <- param[1]
+sigma <- param[2]
+xi <- param[3]
+
+
+y <- as.data.frame(na.omit(rain_df[, 1]))
+y <- y[y > 0]
+y.sort <- sort(y)
+
+# Quantile
+p <- (1:length(y)) / (length(y) + 1)
+qextgp <- qextgp(p = p, type = 1,
+          kappa = kappa, sigma = sigma,
+          xi = xi)
+qqplot(y.sort, qextgp, asp=1)
+abline(0, 1)
+RMSE <- sqrt(mean((y.sort - qextgp)^2))
+print(RMSE)
+
+# 0.32 c0.27
+# y <- as.data.frame(na.omit(rain_df[, 1]))
+# y <- y[y > 0.3]
+# y.sort <- sort(y)
+
+# # Quantile
+# p <- (1:length(y)) / (length(y) + 1)
+# qextgp <- qextgp(p = p, type = 1,
+#           kappa = kappa, sigma = sigma,
+#           xi = xi)
+# RMSE <- sqrt(mean((y.sort - qextgp)^2))
+
+library(ggplot2)
+
+# Create a data frame for ggplot
+qq_data <- data.frame(
+  Empirical = sort(y),   # Empirical quantiles (sorted y values)
+  Theoretical = qextgp(p = (1:length(y)) / (length(y) + 1), type = 1,
+                       kappa = kappa, sigma = sigma, xi = xi) # Theoretical quantiles
+)
+
+# Plot with ggplot
+ggplot(qq_data, aes(x = Empirical, y = Theoretical)) +
+  geom_point(color = "blue") +   # QQ plot points
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + # Reference line y=x
+  theme_minimal() +
+  labs(title = "QQ-Plot: Empirical vs Theoretical Quantiles",
+       x = "Theoretical Quantiles",
+       y = "Empirical Quantiles")
+
+ggsave(filename="test.png")
+
+str(qextgp)
+summary(qextgp)
+head(qextgp)
+tail(qextgp)
+
+
+mean_kappa <- mean(params_subrain$kappa)
+mean_sigma <- mean(params_subrain$sigma)
+mean_xi <- mean(params_subrain$xi)
+
+# Train the neural network model
+NN.fit <- eGPD.NN.train(Y.train, Y.valid, X.s, X.k, type = "MLP",
+      n.ep = 50, batch.size = 20, init.scale = mean_sigma,
+      init.kappa = mean_kappa, init.xi = mean_xi, widths = c(4, 2), seed = 1)
+
+NN.fit
+# we can change widths to reduce complexity (before c(6, 3))
+
+# Predict with the trained model
+out <- eGPD.NN.predict(X.s = X.s, X.k = X.k, NN.fit$model)
+# out$pred.xi
+# out$pred.kappa
+# Results
+print("sigma linear coefficients: "); print(round(out$pred.sigma, 5))
+print("kappa linear coefficients: "); print(round(out$pred.kappa,2))
+
+head(out$pred.sigma)
+
+sigma_site1 <- out$pred.sigma[, 1]
+kappa_site1 <- out$pred.kappa[, 1]
+
+year_idx <- which(df_downscaling_nn$year == 2019)
+sigma_site1_2019 <- sigma_site1[year_idx]
+kappa_site1_2019 <- kappa_site1[year_idx]
+print("Sigma for site 1 in 2019: ")
+print(sigma_site1_2019)

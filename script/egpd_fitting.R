@@ -5,42 +5,64 @@ rm(list = ls())
 # clear console
 cat("\014")
 
-# change working directory
-setwd("./script")
-
 # load libraries
 library(generain)
-source("load_libraries.R")
+source("./script/load_libraries.R")
 
 ################################################################################
 # DATA ---------------------------------------------------------------------
 ################################################################################
 
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+load("./data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
 rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 rownames(rain) <- rain$dates
 rain_new <- rain[-1] # remove dates column
 
-df_comephore <- read.csv("../data/comephore/inside_HF.csv", sep = ",")
+df_comephore <- read.csv("./data/comephore/inside_HF.csv", sep = ",")
 # loc_px <- read.csv("./data/comephore/loc_pixels_HF.csv", sep = ",")
-rain_com <- df_comephore[-1] # remove dates column
 
+# count number of non na data by column
+count_list <- c()
+for (i in 1:ncol(rain_new)) {
+   count_list[i] <- sum(!is.na(rain_new[,i]))
+}
+
+# convert count 5 min list into count year
+count_hour <- count_list / 12
+count_day <- count_hour / 24
+count_year <- count_day / 365
+
+# keep only columns with at least 2.5 year
+index_col <- which(count_year > 2.5)
+rain_sub <- rain_new[ ,index_col]
+
+# Take only data 3 years of data from COMEPHORE
+colnames(df_comephore)[1] <- "date"
+df_comephore <- df_comephore[df_comephore$date >= "2018-01-01", ]
+length(df_comephore[,1]) / 24 / 365
+rain_com <- df_comephore[-1] # remove dates column
+ncol(rain_com)
+
+
+# rain <- rain[rain$dates >= "2018-01-01"]
+rownames(rain) <- rain$dates
+rain_new <- rain[-1] # remove dates column
+colnames(rain_sub)
 ################################################################################
 # EGPD ---------------------------------------------------------------------
 ################################################################################
 
 # get censoring
-censores <- seq(0.05, 10, 0.05)
+censores <- seq(0.2, 5, 0.1)
 df_score_com <- choose_censore(rain_com, censores, n_samples = 100)
-censores <- seq(0.2, 0.3, 0.05)
-df_score_ohsm <- choose_censore(rain_new, censores, n_samples = 100)
+censores <- seq(0.2, 0.5, 0.01)
+df_score_ohsm <- choose_censore(rain_sub, censores, n_samples = 100)
 
 params_com_mtp <- get_egpd_estimates(rain_com,
                             left_censoring = df_score_com$censoreRMSE)
 
-params_subrain <- get_egpd_estimates(rain_new,
-                            left_censoring = df_score_ohsm$censoreRMSE)
-
+params_subrain <- get_egpd_estimates(rain_sub,
+                            left_censoring = 0.3)
 df_long_com <- get_df_long_params_egpd(params_com_mtp)
 df_long_com$Dataset <- "COMEPHORE"
 
