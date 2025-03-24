@@ -397,13 +397,13 @@ save.image("workspace.RData")
 
 # Spatio-temporal neighborhood parameters
 min_spatial_dist <- 5  # in km
-delta <- 12 # step for the episode before and after the max value
+delta <- 15 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.997 # quantile
+q <- 0.998 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -416,11 +416,39 @@ print(n_episodes)
 length(unique(selected_points$s0)) # can be same s0
 length(unique(selected_points$t0)) # never same t0?
 print(min(selected_points$u_s0)) # min threshold
-
+t0_list <- selected_points$t0
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
+
+
+library(ggplot2)
+library(reshape2)  # for melting wide data to long format
+
+# Convert matrix to data frame
+index <- 21
+sort(t0_list)
+which(t0_list == t0_list[index]-1)
+episode_test <- list_episodes[[index]]
+df_episode <- as.data.frame(episode_test)
+df_episode$Time <- 1:nrow(df_episode)  # Add a time column
+s0_list[index]
+# Convert from wide to long format
+df_long <- melt(df_episode, id.vars = "Time", variable.name = "Series", value.name = "Value")
+
+ggplot(df_long, aes(x = Time, y = Value, group = Series)) +
+  geom_line(color = btfgreen) +
+  geom_vline(xintercept = delta + 1, color = "red", linetype = "dashed") + 
+  labs(title = "Extreme Episode", x = "Time", y = "Value") +
+  annotate("text", x = delta + 1.5, y = 0, label = expression(t[0]),
+           color = "red", vjust = 0, size = 7) +
+  theme_minimal()
+
+filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
+                  "km_max", tmax, "h_delta_", delta, ".png", sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
 
 length(list_episodes)
 # Verif first episode
@@ -483,7 +511,8 @@ s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
-tau_vect <- -5:5
+
+tau_vect <- -10:10
 tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
@@ -590,7 +619,7 @@ ggplot(wind_ep_df, aes(x = cardDir_t0, fill = FF_interval)) +
 
 # save the wind data
 filename <- paste(im_folder, "wind/datagouv/wind_card_dir_t0_", end_filename,
-                    sep = "")
+                  sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 # Plot wind rose for DD_t0
@@ -740,23 +769,23 @@ neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, eta2, li
   return(nll_composite)
 }
 
-# library(bbmle)
-# result <- mle2(neg_ll_composite_fixpar,
-#               start = list(beta1 = init_param[1],
-#                            beta2 = init_param[2],
-#                            alpha1 = init_param[3],
-#                            alpha2 = init_param[4],
-#                            eta1 = 1,
-#                            eta2 = 1),
-#               data = list(list_lags = lags_opt,
-#                   list_excesses = excesses_opt, hmax = 7,
-#                   wind_df = wind_opt,
-#                   method = "L-BFGS-B",
-#                   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-#                   upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf)),
-#               control = list(maxit = 10000),
-#               fixed = list(eta1 = 1))
-# result
+library(bbmle)
+result <- mle2(neg_ll_composite_fixpar,
+              start = list(beta1 = init_param[1],
+                           beta2 = init_param[2],
+                           alpha1 = init_param[3],
+                           alpha2 = init_param[4],
+                           eta1 = 1,
+                           eta2 = 1),
+              data = list(list_lags = lags_opt,
+                  list_excesses = excesses_opt, hmax = 7,
+                  wind_df = wind_opt),
+              method = "L-BFGS-B",
+              lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+              upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+              control = list(maxit = 10000),
+              fixed = list(beta2 = init_param[2], alpha2 = init_param[4]))
+result
 
 
 # Vector of test values for eta1
@@ -828,180 +857,13 @@ persp(eta1_values, eta2_values, ll_values, theta = 30, phi = 0,
 
 library(knitr)
 library(kableExtra)
-
-# Configurations
-q_values <- c(0.997, 0.998, 0.999)
-delta_values <- c(10, 12, 15, 20)
-min_spatial_dist_values <- c(5)
-tau_ranges <- list(-10:10)
-wind_direction_type <- c("t_0")
-
-# Init results table
-results_table <- list()
-n_ep_list <- c()
-
-for (q in q_values) {
-  for (delta in delta_values) {
-    for (min_spatial_dist in min_spatial_dist_values) {
-      for (tau_range in tau_ranges) {
-        for (wind_dir in wind_direction_type) {
-          # print configuration
-          print(paste("q:", q, "delta:", delta, "minDist:", min_spatial_dist,
-                      "taumax:", max(tau_range), "direction:", wind_dir))
-
-          print("Select (s0, t0) pairs for extreme episodes")
-          #  Select (s0, t0) pairs for extreme episodes
-          selected_points <- select_extreme_episodes(sites_coords, comephore, q,
-                                              min_spatial_dist, delta = delta,
-                                              n_max_episodes = 10000,
-                                              time_ext = 0)
-          n_episodes <- length(selected_points$s0)
-          n_ep_list <- c(n_ep_list, n_episodes)
-          # Get the extreme episodes
-          list_episodes_unif_points <- get_extreme_episodes(selected_points,
-                                          comephore, delta = delta, unif = TRUE)
-          list_episodes_unif <- list_episodes_unif_points$episodes
-          s0_list <- selected_points$s0 # List of s0
-          t0_list <- selected_points$t0 # List of t0
-          u_list <- selected_points$u_s0 # List of threshold
-          tau_vect <- tau_range
-          tmax <- max(tau_range)
-          print("Compute the lags and excesses for each conditional point")
-          # Get the lags and excesses for each conditional point
-          list_results <- mclapply(1:length(s0_list), function(i) {
-            s0 <- s0_list[i]
-            s0_coords <- sites_coords[s0, ]
-            episode <- list_episodes_unif[[i]]
-            # u <- u_list[i]
-            ind_t0_ep <- delta + 1  # index of t0 in the episode
-            lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
-                                          ind_t0_ep, tau_vect, latlon = TRUE)
-            excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
-                                            t0 = ind_t0_ep)
-            list(lags = lags, excesses = excesses)
-          }, mc.cores = detectCores() - 1)
-
-          list_lags <- lapply(list_results, `[[`, "lags")
-          list_excesses <- lapply(list_results, `[[`, "excesses")
-
-          list_episodes_points <- get_extreme_episodes(selected_points, 
-                                    comephore, delta = delta, unif = FALSE)
-          list_episodes <- list_episodes_points$episodes
-          # Get wind components for each episode
-          wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list,
-                            u_list,
-                            MoreArgs = list(wind_df = wind_mtp, delta = delta))
-
-          wind_ep_df <- do.call(rbind, wind_per_episode)
-
-          if (wind_dir == "t_0") { # Use wind direction at t0
-            wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
-            wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
-          } else { # Use most frequent wind direction
-            wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD * pi / 180)
-            wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD * pi / 180)
-          }
-
-          # Get wind vectors in a dataframe
-          wind_df <- wind_ep_df[, c("vx", "vy")]
-
-          # Verify if there are NA values
-          ind_NA <- which(is.na(wind_df$vx))
-
-          if (any(ind_NA > 0)) { # Remove episodes with NA values
-            wind_opt <- wind_df[-ind_NA, ]
-            episodes_opt <- list_episodes[-ind_NA]
-            lags_opt <- list_lags[-ind_NA]
-            excesses_opt <- list_excesses[-ind_NA]
-          } else {
-            wind_opt <- wind_df
-            episodes_opt <- list_episodes
-            lags_opt <- list_lags
-            excesses_opt <- list_excesses
-          }
-
-          # Initial parameters
-          init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
-
-          print("Optimization")
-          # Optimisation
-          result <- optim(par = init_param, fn = neg_ll_composite,
-                          list_lags = lags_opt,
-                          list_excesses = excesses_opt, hmax = 7,
-                          wind_df = wind_opt,
-                          latlon = TRUE,
-                          directional = TRUE,
-                          method = "L-BFGS-B",
-                          lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-                          upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-                          control = list(maxit = 10000,
-                                         trace = 1),
-                          hessian = F)
-
-          # Check the convergence
-          if (result$convergence != 0) { # No convergence
-            df_result <- data.frame(
-              quantile = q,
-              delta = delta,
-              minDist = min_spatial_dist,
-              tau = tmax,
-              direction = wind_dir,
-              beta1 = "NC",
-              beta2 = "NC",
-              alpha1 = "NC",
-              alpha2 = "NC",
-              eta1 = "NC",
-              eta2 = "NC"
-            )
-          } else { # Convergence
-            # Extract the results
-            df_result <- data.frame(
-              quantile = q,
-              delta = delta,
-              minDist = min_spatial_dist,
-              tau = tmax,
-              direction = wind_dir,
-              beta1 = round(result$par[1], 3),
-              beta2 = round(result$par[2], 3),
-              alpha1 = round(result$par[3], 3),
-              alpha2 = round(result$par[4], 3),
-              eta1 = round(result$par[5], 3),
-              eta2 = round(result$par[6], 3)
-            )
-          }
-
-          print(df_result)
-          # Add the results to the table
-          results_table[[length(results_table) + 1]] <- df_result
-        }
-      }
-    }
-  }
-}
-
-# Combine the results into a single dataframe
-final_results <- do.call(rbind, results_table)
-final_results$nepsiodes <- n_ep_list
-
-# Latex table
-kable(final_results, format = "latex",
-      caption = "Optimization results with wind components as covariates") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed",
-                                            "responsive"), latex_options = "H")
-
-
-
-
-
-library(knitr)
-library(kableExtra)
 library(parallel)
 
 # Configurations
 q_values <- c(0.997, 0.998, 0.999)
-delta_values <- c(10, 12, 15, 20)
+delta_values <- c(12, 15, 20)
 min_spatial_dist_values <- c(5)
-tau_max <- c(5, 10)
+tau_max <- c(5)
 wind_direction_type <- c("t_0")
 
 # Create a parameter grid
@@ -1009,13 +871,13 @@ param_grid <- expand.grid(
   q = q_values,
   delta = delta_values,
   min_spatial_dist = min_spatial_dist_values,
-  tau_range = tau_ranges,
+  tau_max = tau_max,
   wind_dir = wind_direction_type,
   stringsAsFactors = FALSE
 )
 
 # Function to process each parameter set
-process_params <- function(params) {
+process_params <- function(sites_coords, params) {
   q <- params$q
   delta <- params$delta
   min_spatial_dist <- params$min_spatial_dist
@@ -1118,7 +980,7 @@ process_params <- function(params) {
 
 # Run in parallel
 results_list <- mclapply(seq_len(nrow(param_grid)), function(i) {
-  process_params(param_grid[i, ])
+  process_params(sites_coords, param_grid[i, ])
 }, mc.cores = detectCores() - 1)
 
 # Combine results
@@ -1130,7 +992,7 @@ kable(final_results, format = "latex",
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), latex_options = "H")
 
 
-
+# final_result_tau10 <- final_results
 
 # ADVECTION ESTIMATION #########################################################
 

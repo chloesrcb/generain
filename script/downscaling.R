@@ -313,11 +313,39 @@ n_observations <- nrow(df_downscaling_nn)
 n_sites <- 17
 n_predictors <- ncol(df_downscaling_nn) - 2
 
-X_all <- df_downscaling_nn[, -c(which(names(df_downscaling_nn) == "Y_obs"),
-                           which(names(df_downscaling_nn) == "time"))]
+# remove the first column
+df_downscaling_nn <- df_downscaling_nn[, -1]
+
+# Standardize data
+df_standardized <- df_downscaling_nn %>%
+  mutate(across(where(is.numeric), scale))
+head(df_standardized)
+
+df_standardized <- df_downscaling_nn %>%
+  # Convert time variables to cyclical features
+  mutate(
+    hour_sin = sin(2 * pi * hour / 24),
+    hour_cos = cos(2 * pi * hour / 24),
+    minute_sin = sin(2 * pi * minute / 60),
+    minute_cos = cos(2 * pi * minute / 60),
+    day_sin = sin(2 * pi * day / 31),  # Max 31 days
+    day_cos = cos(2 * pi * day / 31),
+    month_sin = sin(2 * pi * (month-1) / 12),
+    month_cos = cos(2 * pi * (month-1) / 12)
+  ) %>%
+  select(-hour, -minute, -day, -month, -year) %>%  # Remove original columns
+  # Standardize all numerical predictors (except cyclical time features)
+  mutate(across(c(starts_with("X"), "Y_obs", "lon_X",
+                        "lon_Y", "lat_X", "lat_Y"), scale))
+head(df_standardized)
+head(df_downscaling_nn)
+
+
+X_all <- df_standardized[, -c(which(names(df_standardized) == "Y_obs"),
+                           which(names(df_standardized) == "time"))]
 # Convert into a 3D array
 X_all <- array(unlist(X_all), dim = c(n_observations, n_sites, n_predictors))
-Y_obs <- df_downscaling_nn$Y_obs
+Y_obs <- df_standardized$Y_obs
 
 # Check for missing values
 sum(is.na(X_all))
@@ -331,9 +359,6 @@ X_all_clean <- X_all[!rows_with_na, , , drop = FALSE]  # Keep the same dimension
 Y_obs_clean <- Y_obs[!rows_with_na]
 n_obs <- length(Y_obs_clean)
 dim(X_all_clean)
-
-X_all_clean <- scale(X_all_clean)
-
 
 # Flatten X_all_clean into a 2D array for glmnet
 X_all_clean_flat <- array(X_all_clean, dim = c(n_obs, n_sites * n_predictors))
@@ -414,6 +439,7 @@ X.s <- list("X.nn.s" = X.nn.s)
 X.k <- list("X.nn.k" = X.nn.k)
 
 
+length(Y.train)
 
 # initialize the neural network model EGPD fitting
 # get censoring
@@ -423,78 +449,7 @@ rain_new <- rain_hsm[-1] # remove the first column date
 df_score_ohsm <- choose_censore(rain_new, censores, n_samples = 100)
 
 params_subrain <- get_egpd_estimates(rain_new,
-                      left_censoring = df_score_ohsm$censoreRMSE)
-
-
-
-y <- as.data.frame(na.omit(rain_df[, 1]))
-y <- y[y > 0]
-kappa_0 <- 2
-inits <- init_values(y, 0)
-sigma_0 <- inits[1]
-xi_0 <- inits[2]
-
-c <- 0.251
-egpd.fit <- fit.extgp(y, model = 1, method = "mle",
-                          init = c(kappa_0, sigma_0, xi_0),
-                          censoring = c(c, Inf), plots = F,
-                          confint = F, ncpus = 7, R = 1000)
-param <- egpd.fit$fit$mle
-kappa <- param[1]
-sigma <- param[2]
-xi <- param[3]
-
-
-y <- as.data.frame(na.omit(rain_df[, 1]))
-y <- y[y > 0]
-y.sort <- sort(y)
-
-# Quantile
-p <- (1:length(y)) / (length(y) + 1)
-qextgp <- qextgp(p = p, type = 1,
-          kappa = kappa, sigma = sigma,
-          xi = xi)
-qqplot(y.sort, qextgp, asp=1)
-abline(0, 1)
-RMSE <- sqrt(mean((y.sort - qextgp)^2))
-print(RMSE)
-
-# 0.32 c0.27
-# y <- as.data.frame(na.omit(rain_df[, 1]))
-# y <- y[y > 0.3]
-# y.sort <- sort(y)
-
-# # Quantile
-# p <- (1:length(y)) / (length(y) + 1)
-# qextgp <- qextgp(p = p, type = 1,
-#           kappa = kappa, sigma = sigma,
-#           xi = xi)
-# RMSE <- sqrt(mean((y.sort - qextgp)^2))
-
-library(ggplot2)
-
-# Create a data frame for ggplot
-qq_data <- data.frame(
-  Empirical = sort(y),   # Empirical quantiles (sorted y values)
-  Theoretical = qextgp(p = (1:length(y)) / (length(y) + 1), type = 1,
-                       kappa = kappa, sigma = sigma, xi = xi) # Theoretical quantiles
-)
-
-# Plot with ggplot
-ggplot(qq_data, aes(x = Empirical, y = Theoretical)) +
-  geom_point(color = "blue") +   # QQ plot points
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + # Reference line y=x
-  theme_minimal() +
-  labs(title = "QQ-Plot: Empirical vs Theoretical Quantiles",
-       x = "Theoretical Quantiles",
-       y = "Empirical Quantiles")
-
-ggsave(filename="test.png")
-
-str(qextgp)
-summary(qextgp)
-head(qextgp)
-tail(qextgp)
+                      left_censoring = 0.3)
 
 
 mean_kappa <- mean(params_subrain$kappa)
@@ -503,9 +458,9 @@ mean_xi <- mean(params_subrain$xi)
 
 # Train the neural network model
 NN.fit <- eGPD.NN.train(Y.train, Y.valid, X.s, X.k, type = "MLP",
-      n.ep = 50, batch.size = 20, init.scale = mean_sigma,
+      n.ep = 200, batch.size = 10, init.scale = mean_sigma,
       init.kappa = mean_kappa, init.xi = mean_xi, widths = c(4, 2), seed = 1)
-
+# reticulate::py_last_error()
 NN.fit
 # we can change widths to reduce complexity (before c(6, 3))
 

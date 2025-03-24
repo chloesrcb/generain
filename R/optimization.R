@@ -101,7 +101,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
       selected_points <- rbindlist(list(selected_points, best_candidate))
 
       # Remove nearby temporal data
-      t_inf <- max(1, best_candidate$t0 - delta - time_ext)
+      t_inf <- max(1, best_candidate$t0 - (delta + 1) - time_ext)
       t_sup <- min(nrow(data), best_candidate$t0 + delta + time_ext)
       invalid_time_mask[t_inf:t_sup,
                         which(site_names == best_candidate$s0)] <- TRUE
@@ -116,6 +116,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
 
   return(selected_points)
 }
+
 
 #' check_intervals_overlap function
 #'
@@ -190,10 +191,13 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
     t0 <- selected_points$t0[i]
     t_inf <- t0 - (delta) - beta
     t_sup <- t0 + delta + beta
-
+    print(t_inf)
+    print(t_sup)
+    print(t_sup - t_inf + 1)
     # Check that the episode is the correct size (2 * delta)
     episode_size <- t_sup - t_inf + 1
     if (episode_size == 2 * delta + 1 + 2*beta) {
+      print("hello")
       episode <- data[t_inf:t_sup, ]  # Get the episode
       episodes <- append(episodes, list(episode))
       valid_indices <- c(valid_indices, i)  # Mark this index as valid
@@ -271,9 +275,9 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
   ind_s1 <- df_lags$s1[1] # s0
-  # if (t0 == 0) {
-  #   t0 <- t0 + 1 # for simulation TODO
-  # }
+  if (t0 == 0) {
+    t0 <- t0 + 1 # for simulation TODO
+  }
   for (t in unique_tau) { # loop over temporal lags
     df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
 
@@ -290,7 +294,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
       # }
 
       # shifted data
-      X_s_t <- X_s2[((t0 + 1) + t)] # X_{s,t0 + tau}
+      X_s_t <- X_s2[((t0) + (t))] # X_{s,t0 + tau}
       nmargin <- sum(X_s_t > quantile) # 0 or 1
 
       # store the number of excesses and T - tau
@@ -694,8 +698,8 @@ neg_ll_composite <- function(params, list_lags,
   if (length(params) == 4) {
     params <- c(params, 0, 0) # No advection
   }
-  # params[6] <- 1
-  # params[c(1, 3)] <- c(beta1, alpha1)
+  # params[5] <- 1
+  # params[c(2)] <- c(beta2)
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
   } else {
