@@ -4,7 +4,7 @@
 .Rbuildignore
 
 # Session Data files
-.RData
+*.RData
 .RDataTmp
 data
 .csv
@@ -12,7 +12,9 @@ data
 # Imags files
 images
 
-
+# model
+model_eGPD*
+checkpoint
 
 # User-specific files
 .Ruserdata
