@@ -7,13 +7,15 @@ cat("\014")
 # Load libraries and set theme
 source("./script/load_libraries.R")
 devtools::load_all() # load the last version of the package
+load("workspace.RData")
+
 
 # LOAD DATA ####################################################################
 comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
 loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
 
-comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")
+# comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
+# loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")
 
 df_comephore <- comephore_raw
 head(df_comephore)
@@ -30,10 +32,8 @@ dist_mat <- get_dist_mat(loc_px)
 df_dist <- reshape_distances(dist_mat)
 nsites <- nrow(loc_px)
 
-# # get wind data
-# vpn connect vpn.inria.fr
-# ssh srv-sophia.inria.fr
 
+# # get wind data
 wind_mtp <- read.csv("./data/wind/data_gouv/wind_mtp.csv")
 
 # Convert datetime to POSIXct
@@ -123,7 +123,7 @@ comephore_pair <- cbind(rain_nolag, rain_lag)
 comephore_pair_no0 <- comephore_pair[rowSums(comephore_pair) > 0, ]
 chiplot(comephore_pair_no0, xlim = c(0.8, 0.99), ylim1 = c(0, 1), which = 1,
         qlim = c(0.8, 0.99))
-abline(v = 0.93, col = "red", lty = 2)
+abline(v = 0.94, col = "red", lty = 2)
 
 comephore_pair <- cbind(rain_nolag, rain_lag)
 # comephore_pair <- comephore_pair[rowSums(comephore_pair) > 0, ]
@@ -134,7 +134,7 @@ abline(v = 0.995, col = "red", lty = 2)
 # count conjoint excesses
 q_no0_spa <- 0.97
 
-q_no0_temp <- 0.93
+q_no0_temp <- 0.94
 # get the corresponding quantile in the data without 0 and with 0
 q_value_no0 <- quantile(c(comephore_pair_no0[,1], comephore_pair_no0[,2]),
                         probs = q_no0_temp, na.rm = TRUE)
@@ -176,7 +176,7 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 chitemp
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/full_from2008_temporal_chi_boxplot_", q_no0_temp,
+filename <- paste(im_folder, "WLSE/comephore/full_temporal_chi_boxplot_", q_no0_temp,
                  ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -217,7 +217,7 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 chitemp_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/full_from2008_temporal_chi_eta_estim_",
+filename <- paste(im_folder, "WLSE/comephore/full_temporal_chi_eta_estim_",
                 q_no0_temp, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -250,7 +250,7 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
 chispa_plot
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/full_from2008_spatial_chi_", q,
+filename <- paste(im_folder, "WLSE/comephore/full_spatial_chi_", q,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -273,7 +273,7 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
 chispa_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/full_from2008_spatial_chi_eta_estim_", q,
+filename <- paste(im_folder, "WLSE/comephore/full_spatial_chi_eta_estim_", q,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -288,110 +288,110 @@ colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2")
 kable(df_result, format = "latex") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
   "responsive"), latex_options = "H")
-
+save.image("workspace.RData")
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-# Find zero gaps
-find_zero_gaps <- function(data) {
-  data <- as.matrix(data)  # Ensure matrix format
+# # Find zero gaps
+# find_zero_gaps <- function(data) {
+#   data <- as.matrix(data)  # Ensure matrix format
   
-  zero_gaps_list <- lapply(seq_len(ncol(data)), function(col_idx) {
-    col_data <- data[, col_idx] == 0  # Identify zero positions
-    zero_indices <- which(col_data)  # Get row indices where values are zero
+#   zero_gaps_list <- lapply(seq_len(ncol(data)), function(col_idx) {
+#     col_data <- data[, col_idx] == 0  # Identify zero positions
+#     zero_indices <- which(col_data)  # Get row indices where values are zero
     
-    if (length(zero_indices) < 4) return(NULL)  # Ignore short series
+#     if (length(zero_indices) < 4) return(NULL)  # Ignore short series
     
-    # Find consecutive zero sequences
-    gap_starts <- zero_indices[c(TRUE, diff(zero_indices) > 1)]  # Start of each gap
-    gap_lengths <- rle(diff(c(zero_indices, Inf)))$lengths  # Lengths of gaps
+#     # Find consecutive zero sequences
+#     gap_starts <- zero_indices[c(TRUE, diff(zero_indices) > 1)]  # Start of each gap
+#     gap_lengths <- rle(diff(c(zero_indices, Inf)))$lengths  # Lengths of gaps
     
-    # Keep only gaps of at least 4 zeros
-    valid_gaps <- gap_lengths >= 4
+#     # Keep only gaps of at least 4 zeros
+#     valid_gaps <- gap_lengths >= 4
     
-    if (!any(valid_gaps)) return(NULL)  # No valid gaps
+#     if (!any(valid_gaps)) return(NULL)  # No valid gaps
 
-    # Return a dataframe for this column
-    data.frame(
-      column = colnames(data)[col_idx],
-      start = gap_starts[valid_gaps],
-      gap_length = gap_lengths[valid_gaps]
-    )
-  })
+#     # Return a dataframe for this column
+#     data.frame(
+#       column = colnames(data)[col_idx],
+#       start = gap_starts[valid_gaps],
+#       gap_length = gap_lengths[valid_gaps]
+#     )
+#   })
   
-  zero_gaps_df <- do.call(rbind, zero_gaps_list)
+#   zero_gaps_df <- do.call(rbind, zero_gaps_list)
   
-  return(zero_gaps_df)
-}
+#   return(zero_gaps_df)
+# }
 
-zero_gaps_df <- find_zero_gaps(comephore)
-print(zero_gaps_df)
-max(zero_gaps_df$gap_length)
+# zero_gaps_df <- find_zero_gaps(comephore)
+# print(zero_gaps_df)
+# max(zero_gaps_df$gap_length)
 
 
-find_extreme_episodes <- function(data, quantile_value, min_gap = 4) {
-  data <- as.matrix(data)  # Conversion en matrice pour traitement plus rapide
+# find_extreme_episodes <- function(data, quantile_value, min_gap = 4) {
+#   data <- as.matrix(data)  # Conversion en matrice pour traitement plus rapide
   
-  # Convertir en valeurs uniformes, colonne par colonne
-  data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") / (length(col) + 1))
+#   # Convertir en valeurs uniformes, colonne par colonne
+#   data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") / (length(col) + 1))
   
-  # Identifier les indices des événements extrêmes (valeurs supérieures au quantile)
-  extreme_indices <- which(data_unif > quantile_value, arr.ind = TRUE)
+#   # Identifier les indices des événements extrêmes (valeurs supérieures au quantile)
+#   extreme_indices <- which(data_unif > quantile_value, arr.ind = TRUE)
   
-  if (nrow(extreme_indices) == 0) {
-    return(NULL)  # Aucun événement extrême trouvé
-  }
+#   if (nrow(extreme_indices) == 0) {
+#     return(NULL)  # Aucun événement extrême trouvé
+#   }
   
-  # Initialisation de la liste pour les épisodes extrêmes
-  extreme_episodes <- list()
+#   # Initialisation de la liste pour les épisodes extrêmes
+#   extreme_episodes <- list()
 
-  for (i in 1:nrow(extreme_indices)) {
-    row_i <- extreme_indices[i, 1]
-    col_i <- extreme_indices[i, 2]
+#   for (i in 1:nrow(extreme_indices)) {
+#     row_i <- extreme_indices[i, 1]
+#     col_i <- extreme_indices[i, 2]
 
-    # Trouver la séquence de zéros avant et après l'extrême
-    # before_extreme <- which(data[1:(row_i - 1), col_i] == 0)  # Zéros avant
-    # after_extreme <- which(data[(row_i + 1):nrow(data), col_i] == 0)  # Zéros après
+#     # Trouver la séquence de zéros avant et après l'extrême
+#     # before_extreme <- which(data[1:(row_i - 1), col_i] == 0)  # Zéros avant
+#     # after_extreme <- which(data[(row_i + 1):nrow(data), col_i] == 0)  # Zéros après
 
-    # Get values almost extreme
-    before_extreme <- which(data_unif[1:(row_i - 1), col_i] <= quantile_value)
-    after_extreme <- which(data[(row_i + 1):nrow(data), col_i] <= quantile_value)
+#     # Get values almost extreme
+#     before_extreme <- which(data_unif[1:(row_i - 1), col_i] <= quantile_value)
+#     after_extreme <- which(data[(row_i + 1):nrow(data), col_i] <= quantile_value)
 
-    # Enregistrer l'épisode uniquement s'il y a un gap de zéro d'au moins 4
-    if (length(before_extreme) > 0 & length(after_extreme) > 0) {
-      first_after <- min(after_extreme)
-      last_before <- max(before_extreme)
-      start_extreme <- last_before
-      end_extreme <- row_i + first_after
-      extreme_episodes[[length(extreme_episodes) + 1]] <- data.frame(
-        column = colnames(data)[col_i],
-        start = start_extreme,
-        end = end_extreme,
-        length = end_extreme - start_extreme + 1
-      )
-    }
-  }
+#     # Enregistrer l'épisode uniquement s'il y a un gap de zéro d'au moins 4
+#     if (length(before_extreme) > 0 & length(after_extreme) > 0) {
+#       first_after <- min(after_extreme)
+#       last_before <- max(before_extreme)
+#       start_extreme <- last_before
+#       end_extreme <- row_i + first_after
+#       extreme_episodes[[length(extreme_episodes) + 1]] <- data.frame(
+#         column = colnames(data)[col_i],
+#         start = start_extreme,
+#         end = end_extreme,
+#         length = end_extreme - start_extreme + 1
+#       )
+#     }
+#   }
 
-  # Si des épisodes extrêmes ont été trouvés, les combiner en un seul dataframe
-  if (length(extreme_episodes) > 0) {
-    extreme_episodes_df <- do.call(rbind, extreme_episodes)
-    return(extreme_episodes_df)
-  } else {
-    return(NULL)
-  }
-}
+#   # Si des épisodes extrêmes ont été trouvés, les combiner en un seul dataframe
+#   if (length(extreme_episodes) > 0) {
+#     extreme_episodes_df <- do.call(rbind, extreme_episodes)
+#     return(extreme_episodes_df)
+#   } else {
+#     return(NULL)
+#   }
+# }
 
 
-extreme_episodes_df <- find_extreme_episodes(comephore, 0.998)
+# extreme_episodes_df <- find_extreme_episodes(comephore, 0.998)
 # p254  18376  18394     19
 # comephore[18376:18410, "p254"]
-max(extreme_episodes_df$length)
-sort(unique(extreme_episodes_df$length))
-par(mfrow = c(1, 1))
-hist(extreme_episodes_df$length, breaks = 20, col = btfgreen, border = "black")
-which.max(extreme_episodes_df$length)
-extreme_episodes_df[which.max(extreme_episodes_df$length), ]
-comephore[87840:87870, "p250"]
+# max(extreme_episodes_df$length)
+# sort(unique(extreme_episodes_df$length))
+# par(mfrow = c(1, 1))
+# hist(extreme_episodes_df$length, breaks = 20, col = btfgreen, border = "black")
+# which.max(extreme_episodes_df$length)
+# extreme_episodes_df[which.max(extreme_episodes_df$length), ]
+# comephore[87840:87870, "p250"]
 
 
 
@@ -403,7 +403,7 @@ delta <- 12 # step for the episode before and after the max value
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.998 # quantile
+q <- 0.997 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -484,7 +484,6 @@ t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
 tau_vect <- -5:5
-q <- 0.998
 tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
@@ -669,7 +668,7 @@ if (any(ind_NA > 0)) {
   lags_opt <- list_lags
   excesses_opt <- list_excesses
 }
-
+save.image("workspace.RData")
 # init_param <- c(beta1, 1.15, alpha1, 0.76, 1, 1)
 # eta1 <- 1
 # a_ratio <- 1
@@ -768,7 +767,7 @@ neg_log_likelihoods <- numeric(length(eta1_values))
 
 # Loop over different values of eta1
 for (i in seq_along(eta1_values)) {
-  params <- c(beta1, 1.4, alpha1, alpha2, eta1_values[i], 1)
+  params <- c(beta1, beta2, alpha1, alpha2, eta1_values[i], 1)
   neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
                               list_excesses = excesses_opt, hmax = 7,
                               wind_df = wind_opt)
@@ -817,11 +816,13 @@ for (i in seq_along(eta1_values)) {
     params_test <- init_param
     params_test[5] <- eta1_values[i]
     params_test[6] <- eta2_values[j]
-    ll_values[i, j] <- neg_ll_composite(params_test, lags_opt, excesses_opt, hmax = 7, wind_df = wind_opt)
+    ll_values[i, j] <- neg_ll_composite(params_test, lags_opt, excesses_opt,
+                                        hmax = 7, wind_df = wind_opt)
   }
 }
 
-persp(eta1_values, eta2_values, ll_values, theta = 30, phi = 30, col = "lightblue")
+persp(eta1_values, eta2_values, ll_values, theta = 30, phi = 0, 
+      col = "lightblue")
 
 # GENERATE TABLE FROM TEST #####################################################
 
@@ -830,10 +831,10 @@ library(kableExtra)
 
 # Configurations
 q_values <- c(0.997, 0.998, 0.999)
-delta_values <- c(10, 12, 15)
-min_spatial_dist_values <- c(3, 5)
+delta_values <- c(10, 12, 15, 20)
+min_spatial_dist_values <- c(5)
 tau_ranges <- list(-10:10)
-wind_direction_type <- c("t_0", "freq")
+wind_direction_type <- c("t_0")
 
 # Init results table
 results_table <- list()
@@ -872,22 +873,19 @@ for (q in q_values) {
             s0_coords <- sites_coords[s0, ]
             episode <- list_episodes_unif[[i]]
             # u <- u_list[i]
-            ind_t0_ep <- delta  # index of t0 in the episode
+            ind_t0_ep <- delta + 1  # index of t0 in the episode
             lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
-                                      ind_t0_ep, tau_vect, latlon = TRUE)
-            lags$hx <- lags$hx / 1000  # in km
-            lags$hy <- lags$hy / 1000  # in km
-            lags$hnorm <- lags$hnorm / 1000  # in km
+                                          ind_t0_ep, tau_vect, latlon = TRUE)
             excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
-                                           t0 = ind_t0_ep)
+                                            t0 = ind_t0_ep)
             list(lags = lags, excesses = excesses)
           }, mc.cores = detectCores() - 1)
 
           list_lags <- lapply(list_results, `[[`, "lags")
           list_excesses <- lapply(list_results, `[[`, "excesses")
 
-          list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                          delta = delta, unif = FALSE)
+          list_episodes_points <- get_extreme_episodes(selected_points, 
+                                    comephore, delta = delta, unif = FALSE)
           list_episodes <- list_episodes_points$episodes
           # Get wind components for each episode
           wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list,
@@ -983,12 +981,155 @@ for (q in q_values) {
 
 # Combine the results into a single dataframe
 final_results <- do.call(rbind, results_table)
+final_results$nepsiodes <- n_ep_list
 
 # Latex table
 kable(final_results, format = "latex",
       caption = "Optimization results with wind components as covariates") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed",
                                             "responsive"), latex_options = "H")
+
+
+
+
+
+library(knitr)
+library(kableExtra)
+library(parallel)
+
+# Configurations
+q_values <- c(0.997, 0.998, 0.999)
+delta_values <- c(10, 12, 15, 20)
+min_spatial_dist_values <- c(5)
+tau_max <- c(5, 10)
+wind_direction_type <- c("t_0")
+
+# Create a parameter grid
+param_grid <- expand.grid(
+  q = q_values,
+  delta = delta_values,
+  min_spatial_dist = min_spatial_dist_values,
+  tau_range = tau_ranges,
+  wind_dir = wind_direction_type,
+  stringsAsFactors = FALSE
+)
+
+# Function to process each parameter set
+process_params <- function(params) {
+  q <- params$q
+  delta <- params$delta
+  min_spatial_dist <- params$min_spatial_dist
+  tau_max <- params$tau_max
+  wind_dir <- params$wind_dir
+
+  print(paste("q:", q, "delta:", delta, "minDist:", min_spatial_dist,
+              "taumax:", tau_max, "direction:", wind_dir))
+
+  # Select (s0, t0) pairs for extreme episodes
+  selected_points <- select_extreme_episodes(sites_coords, comephore, q,
+                                             min_spatial_dist, delta = delta,
+                                             n_max_episodes = 10000,
+                                             time_ext = 0)
+  n_episodes <- length(selected_points$s0)
+
+  # Get the extreme episodes
+  list_episodes_unif_points <- get_extreme_episodes(selected_points,
+                                                    comephore, delta = delta, unif = TRUE)
+  list_episodes_unif <- list_episodes_unif_points$episodes
+  s0_list <- selected_points$s0
+  u_list <- selected_points$u_s0
+  tau_vect <- -tau_max:tau_max
+  ind_t0_ep <- delta + 1  # index of t0 in the episode
+
+  print("Compute the lags and excesses for each conditional point")
+
+  # Compute lags and excesses in parallel
+  list_results <- mclapply(1:length(s0_list), function(i) {
+    s0_coords <- sites_coords[s0_list[i], ]
+    episode <- list_episodes_unif[[i]]
+
+    lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep, tau_vect, latlon = TRUE)
+    excesses <- empirical_excesses(episode, q, lags, type = "rpareto", t0 = ind_t0_ep)
+    
+    list(lags = lags, excesses = excesses)
+  }, mc.cores = detectCores() - 1)
+
+  list_lags <- lapply(list_results, `[[`, "lags")
+  list_excesses <- lapply(list_results, `[[`, "excesses")
+
+  # Get wind components for each episode
+  wind_per_episode <- Map(compute_wind_episode, list_episodes_unif, s0_list, u_list,
+                          MoreArgs = list(wind_df = wind_mtp, delta = delta))
+
+  wind_ep_df <- do.call(rbind, wind_per_episode)
+
+  if (wind_dir == "t_0") { # Use wind direction at t0
+    wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
+    wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
+  } else { # Use most frequent wind direction
+    wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD * pi / 180)
+    wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD * pi / 180)
+  }
+
+  wind_df <- wind_ep_df[, c("vx", "vy")]
+
+  # Remove NA values
+  ind_NA <- which(is.na(wind_df$vx))
+  if (length(ind_NA) > 0) {
+    wind_df <- wind_df[-ind_NA, ]
+    list_lags <- list_lags[-ind_NA]
+    list_excesses <- list_excesses[-ind_NA]
+  }
+
+  # Initial parameters
+  init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+
+  print("Optimization")
+
+  # Optimization
+  result <- optim(par = init_param, fn = neg_ll_composite,
+                  list_lags = list_lags, list_excesses = list_excesses, hmax = 7,
+                  wind_df = wind_df, latlon = TRUE, directional = TRUE,
+                  method = "L-BFGS-B",
+                  lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+                  upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+                  control = list(maxit = 10000, trace = 1),
+                  hessian = FALSE)
+
+  # Store results
+  if (result$convergence != 0) {
+    df_result <- data.frame(q, delta, min_spatial_dist, tau = tau_max,
+                            wind_dir, beta1 = "NC", beta2 = "NC", alpha1 = "NC",
+                            alpha2 = "NC", eta1 = "NC", eta2 = "NC")
+  } else {
+    df_result <- data.frame(q, delta, min_spatial_dist, tau = tau_max,
+                            wind_dir,
+                            beta1 = round(result$par[1], 3),
+                            beta2 = round(result$par[2], 3),
+                            alpha1 = round(result$par[3], 3),
+                            alpha2 = round(result$par[4], 3),
+                            eta1 = round(result$par[5], 3),
+                            eta2 = round(result$par[6], 3))
+  }
+
+  df_result$nepisodes <- n_episodes
+  return(df_result)
+}
+
+# Run in parallel
+results_list <- mclapply(seq_len(nrow(param_grid)), function(i) {
+  process_params(param_grid[i, ])
+}, mc.cores = detectCores() - 1)
+
+# Combine results
+final_results <- do.call(rbind, results_list)
+
+# Create LaTeX table
+kable(final_results, format = "latex",
+      caption = "Optimization results with wind components as covariates") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), latex_options = "H")
+
+
 
 
 # ADVECTION ESTIMATION #########################################################
