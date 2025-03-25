@@ -488,18 +488,75 @@ print(sigma_site1_2019)
 ################## OCCURENCE ##################################################
 set.seed(123) # For reproducibility
 
+df_downscaling_all <- df_Y_X
+# Remove rows with Y_obs = 0 for model EGPD of positive rainfall
+df_downscaling_nn <- df_downscaling_all[df_downscaling_all$Y_obs > 0, ]
+nrow(df_downscaling_nn)
+
+n_observations <- nrow(df_downscaling_nn)
+n_sites <- 17
+n_predictors <- ncol(df_downscaling_nn) - 2
+
+# remove the first column
+df_downscaling_nn <- df_downscaling_nn[, -1]
+
+
+df_standardized <- df_downscaling_nn %>%
+  # Convert time variables to cyclical features
+  mutate(
+    hour_sin = sin(2 * pi * hour / 24),
+    hour_cos = cos(2 * pi * hour / 24),
+    minute_sin = sin(2 * pi * minute / 60),
+    minute_cos = cos(2 * pi * minute / 60),
+    day_sin = sin(2 * pi * day / 31),  # Max 31 days
+    day_cos = cos(2 * pi * day / 31),
+    month_sin = sin(2 * pi * (month-1) / 12),
+    month_cos = cos(2 * pi * (month-1) / 12)
+  ) %>%
+  select(-hour, -minute, -day, -month, -year) %>%  # Remove original columns
+  # Standardize all numerical predictors (except cyclical time features)
+  mutate(across(c(starts_with("X"), "lon_X",
+                        "lon_Y", "lat_X", "lat_Y"), scale))
+head(df_standardized)
+head(df_downscaling_nn)
+
+
+X_all <- df_standardized[, -c(which(names(df_standardized) == "Y_obs"),
+                           which(names(df_standardized) == "time"))]
+# Convert into a 3D array
+X_all <- array(unlist(X_all), dim = c(n_observations, n_sites, n_predictors))
+Y_obs <- df_standardized$Y_obs
+
+# Check for missing values
+sum(is.na(X_all))
+# sum(is.na(Y_obs))
+
+# Identify rows with missing values in X_all
+rows_with_na <- apply(X_all, 1, function(row) any(is.na(row)))
+
+# Remove corresponding rows from X_all and Y_obs
+X_all_clean <- X_all[!rows_with_na, , , drop = FALSE]  # Keep the same dimensions as the original array
+Y_obs_clean <- Y_obs[!rows_with_na]
+n_obs <- length(Y_obs_clean)
+dim(X_all_clean)
+
 # Get occurrence of rainfall
 Y_occurrence <- ifelse(Y_obs_clean > 0, 1, 0)
 
-# Split the data into training and validation sets
-train_idx <- sample(1:length(Y_occurrence), size = 0.8 * length(Y_occurrence))  # 80% train
+# Flatten dimensions 2 and 3 of X_all_clean into a data frame
+X_train_df <- as.data.frame(matrix(X_all_clean[train_idx, , ], nrow = length(train_idx)))
 
-# Create the training and validation datasets
-train_data <- data.frame(Y_occurrence = Y_occurrence[train_idx], 
-                         X_all_clean = X_all_clean[train_idx, ])  # Sélectionner les bonnes lignes
+# Rename columns
+colnames(X_train_df) <- paste0("X", seq_len(ncol(X_train_df)))
 
-valid_data <- data.frame(Y_occurrence = Y_occurrence[-train_idx], 
-                         X_all_clean = X_all_clean[-train_idx, ])
+# Create a data frame with the response variable and predictors
+train_data <- data.frame(Y_occurrence = Y_occurrence[train_idx], X_train_df)
+
+# Validation set
+X_valid_df <- as.data.frame(matrix(X_all_clean[-train_idx, , ], nrow = length(Y_occurrence[-train_idx])))
+colnames(X_valid_df) <- paste0("X", seq_len(ncol(X_valid_df)))
+
+valid_data <- data.frame(Y_occurrence = Y_occurrence[-train_idx], X_valid_df)
 
 # Logistic regression
 fit_logistic <- glm(Y_occurrence ~ ., data = train_data, family = binomial)
