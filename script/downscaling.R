@@ -482,3 +482,43 @@ sigma_site1_2019 <- sigma_site1[year_idx]
 kappa_site1_2019 <- kappa_site1[year_idx]
 print("Sigma for site 1 in 2019: ")
 print(sigma_site1_2019)
+
+
+
+################## OCCURENCE ##################################################
+set.seed(123) # For reproducibility
+
+# Get occurrence of rainfall
+Y_occurrence <- ifelse(Y_obs_clean > 0, 1, 0)
+
+# Split the data into training and validation sets
+train_idx <- sample(1:length(Y_occurrence), size = 0.8 * length(Y_occurrence))  # 80% train
+
+# Create the training and validation datasets
+train_data <- data.frame(Y_occurrence = Y_occurrence[train_idx], 
+                         X_all_clean = X_all_clean[train_idx, ])  # Sélectionner les bonnes lignes
+
+valid_data <- data.frame(Y_occurrence = Y_occurrence[-train_idx], 
+                         X_all_clean = X_all_clean[-train_idx, ])
+
+# Logistic regression
+fit_logistic <- glm(Y_occurrence ~ ., data = train_data, family = binomial)
+
+summary(fit_logistic)
+
+# Prediction on the validation set
+valid_data$predicted_prob <- predict(fit_logistic, newdata = valid_data, type = "response")
+
+# Convert the probabilities to classes (0 or 1) using a threshold of 0.5
+valid_data$predicted_class <- ifelse(valid_data$predicted_prob > 0.5, 1, 0)
+
+# Evaluate the model
+library(caret)
+conf_matrix <- confusionMatrix(factor(valid_data$predicted_class), factor(valid_data$Y_occurrence))
+print(conf_matrix)
+
+# ROC and AUC curves
+library(pROC)
+roc_curve <- roc(valid_data$Y_occurrence, valid_data$predicted_prob)
+plot(roc_curve, col = "blue", main = "ROC Curve")
+auc(roc_curve)
