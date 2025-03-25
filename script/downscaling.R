@@ -460,7 +460,7 @@ mean_xi <- mean(params_subrain$xi)
 NN.fit <- eGPD.NN.train(Y.train, Y.valid, X.s, X.k, type = "MLP",
       n.ep = 200, batch.size = 10, init.scale = mean_sigma,
       init.kappa = mean_kappa, init.xi = mean_xi, widths = c(4, 2), seed = 1)
-# reticulate::py_last_error()
+reticulate::py_last_error()
 NN.fit
 # we can change widths to reduce complexity (before c(6, 3))
 
