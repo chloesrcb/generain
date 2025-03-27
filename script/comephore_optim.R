@@ -292,118 +292,15 @@ save.image("workspace.RData")
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-# # Find zero gaps
-# find_zero_gaps <- function(data) {
-#   data <- as.matrix(data)  # Ensure matrix format
-  
-#   zero_gaps_list <- lapply(seq_len(ncol(data)), function(col_idx) {
-#     col_data <- data[, col_idx] == 0  # Identify zero positions
-#     zero_indices <- which(col_data)  # Get row indices where values are zero
-    
-#     if (length(zero_indices) < 4) return(NULL)  # Ignore short series
-    
-#     # Find consecutive zero sequences
-#     gap_starts <- zero_indices[c(TRUE, diff(zero_indices) > 1)]  # Start of each gap
-#     gap_lengths <- rle(diff(c(zero_indices, Inf)))$lengths  # Lengths of gaps
-    
-#     # Keep only gaps of at least 4 zeros
-#     valid_gaps <- gap_lengths >= 4
-    
-#     if (!any(valid_gaps)) return(NULL)  # No valid gaps
-
-#     # Return a dataframe for this column
-#     data.frame(
-#       column = colnames(data)[col_idx],
-#       start = gap_starts[valid_gaps],
-#       gap_length = gap_lengths[valid_gaps]
-#     )
-#   })
-  
-#   zero_gaps_df <- do.call(rbind, zero_gaps_list)
-  
-#   return(zero_gaps_df)
-# }
-
-# zero_gaps_df <- find_zero_gaps(comephore)
-# print(zero_gaps_df)
-# max(zero_gaps_df$gap_length)
-
-
-# find_extreme_episodes <- function(data, quantile_value, min_gap = 4) {
-#   data <- as.matrix(data)  # Conversion en matrice pour traitement plus rapide
-  
-#   # Convertir en valeurs uniformes, colonne par colonne
-#   data_unif <- apply(data, 2, function(col) rank(col, na.last = "keep") / (length(col) + 1))
-  
-#   # Identifier les indices des événements extrêmes (valeurs supérieures au quantile)
-#   extreme_indices <- which(data_unif > quantile_value, arr.ind = TRUE)
-  
-#   if (nrow(extreme_indices) == 0) {
-#     return(NULL)  # Aucun événement extrême trouvé
-#   }
-  
-#   # Initialisation de la liste pour les épisodes extrêmes
-#   extreme_episodes <- list()
-
-#   for (i in 1:nrow(extreme_indices)) {
-#     row_i <- extreme_indices[i, 1]
-#     col_i <- extreme_indices[i, 2]
-
-#     # Trouver la séquence de zéros avant et après l'extrême
-#     # before_extreme <- which(data[1:(row_i - 1), col_i] == 0)  # Zéros avant
-#     # after_extreme <- which(data[(row_i + 1):nrow(data), col_i] == 0)  # Zéros après
-
-#     # Get values almost extreme
-#     before_extreme <- which(data_unif[1:(row_i - 1), col_i] <= quantile_value)
-#     after_extreme <- which(data[(row_i + 1):nrow(data), col_i] <= quantile_value)
-
-#     # Enregistrer l'épisode uniquement s'il y a un gap de zéro d'au moins 4
-#     if (length(before_extreme) > 0 & length(after_extreme) > 0) {
-#       first_after <- min(after_extreme)
-#       last_before <- max(before_extreme)
-#       start_extreme <- last_before
-#       end_extreme <- row_i + first_after
-#       extreme_episodes[[length(extreme_episodes) + 1]] <- data.frame(
-#         column = colnames(data)[col_i],
-#         start = start_extreme,
-#         end = end_extreme,
-#         length = end_extreme - start_extreme + 1
-#       )
-#     }
-#   }
-
-#   # Si des épisodes extrêmes ont été trouvés, les combiner en un seul dataframe
-#   if (length(extreme_episodes) > 0) {
-#     extreme_episodes_df <- do.call(rbind, extreme_episodes)
-#     return(extreme_episodes_df)
-#   } else {
-#     return(NULL)
-#   }
-# }
-
-
-# extreme_episodes_df <- find_extreme_episodes(comephore, 0.998)
-# p254  18376  18394     19
-# comephore[18376:18410, "p254"]
-# max(extreme_episodes_df$length)
-# sort(unique(extreme_episodes_df$length))
-# par(mfrow = c(1, 1))
-# hist(extreme_episodes_df$length, breaks = 20, col = btfgreen, border = "black")
-# which.max(extreme_episodes_df$length)
-# extreme_episodes_df[which.max(extreme_episodes_df$length), ]
-# comephore[87840:87870, "p250"]
-
-
-
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5  # in km
-delta <- 15 # step for the episode before and after the max value
+min_spatial_dist <- 5 # in km
+delta <- 12 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.998 # quantile
+q <- 0.995 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -417,6 +314,7 @@ length(unique(selected_points$s0)) # can be same s0
 length(unique(selected_points$t0)) # never same t0?
 print(min(selected_points$u_s0)) # min threshold
 t0_list <- selected_points$t0
+s0_list <- selected_points$s0
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                       delta = delta, unif = FALSE)
 
@@ -427,9 +325,9 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
 
 # Convert matrix to data frame
-index <- 21
+index <- 31
 sort(t0_list)
-which(t0_list == t0_list[index]-1)
+which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
 df_episode <- as.data.frame(episode_test)
 df_episode$Time <- 1:nrow(df_episode)  # Add a time column
@@ -447,8 +345,8 @@ ggplot(df_long, aes(x = Time, y = Value, group = Series)) +
 
 filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
                   "km_max", tmax, "h_delta_", delta, ".png", sep = "")
+filename <- "test.png"
 ggsave(filename, width = 20, height = 15, units = "cm")
-
 
 length(list_episodes)
 # Verif first episode
@@ -482,7 +380,6 @@ for (s in unique(selected_points$s0)) {
 any(overlaps)
 
 
-
 # get month and year for p236
 # list_date <- lapply(1:length(list_p236), function(ep) {
 #   list_date_t0 <- rownames(list_p236[[ep]])[1]
@@ -512,7 +409,17 @@ t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
 
 
-tau_vect <- -10:10
+# filename <- paste0(im_folder, "optim/comephore/timeseries_p99_centre_zoom_t0.png")
+# png(filename)
+# plot(df_comephore$p99, type = "l", col = btfgreen, xlim = c(59270, 59340),
+#      xlab = "Time", ylab = "Rainfall (mm)", ylim = c(0, 120))
+# abline(v = 59303, col = "#cc3126", lty = 1, lwd = 1)
+# abline(v = 59303 + 12, col = "#be8ba5", lty = 2)
+# abline(v= 59303 - 12, col = "#be8ba5", lty = 2)
+# dev.off()
+
+
+tau_vect <- -5:5
 tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
@@ -638,42 +545,18 @@ filename <- paste(im_folder, "wind/datagouv/wind_dir_t0_", end_filename,
                     sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
+
 # OPTIMIZATION #################################################################
 
-# TODO: TO PUT IN TESTS
-# df_lags <- list_lags[[2]]
-# excesses <- list_excesses[[2]]
-# wind_vect <- c(wind_km_h$vx[2], wind_km_h$vy[2])
-# eta1 <- 1
-# eta2 <- 1
-# adv <- (abs(wind_vect)^eta1) * sign(wind_vect) * eta2
-# print(adv)
-# init_param <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
-# neg_ll(init_param, df_lags, excesses, wind_vect = wind_vect,
-#                       hmax = 7)
-# init_adv <- c(beta1, beta2, alpha1, alpha2, 0, 0)
-# neg_ll(init_adv, df_lags, excesses, wind_vect = NA,
-#                       hmax = 7)
-# chi_adv <- theorical_chi(init_adv, df_lags, NA)
-# chi_adv[6, ]
+list_episodes_points <- get_extreme_episodes(selected_points, comephore,
+                                      delta = delta, unif = FALSE)
 
-# init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1.5)
-# neg_ll_composite_rpar(init_param, list_lags, list_excesses, wind_km_h, hmax = 7)
-# 51130.74 for eta1 = 1, eta2 = 1
-# 51130.67 for eta1 = 0.9, eta2 = 1.5
-
-# convert FF into km/h
-# wind_km_h <- wind_ep_df
-# wind_km_h$FF <- wind_ep_df$FF * 3.6
-# wind_km_h$vx <- wind_km_h$FF * cos(wind_km_h$DD_t0)
-# wind_km_h$vy <- wind_km_h$FF * sin(wind_km_h$DD_t0)
-# head(wind_km_h)
+list_episodes <- list_episodes_points$episodes
 
 # Compute the wind vector for each episode (-FF because it's the wind direction)
 # sin and cos are shifted because 0 degree means North
 wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
 wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
-
 # if values of vx or vy are really close to 0, set them to 0
 wind_ep_df$vx[abs(wind_ep_df$vx) < 1e-08] <- 0
 wind_ep_df$vy[abs(wind_ep_df$vy) < 1e-08] <- 0
@@ -698,18 +581,15 @@ if (any(ind_NA > 0)) {
   excesses_opt <- list_excesses
 }
 save.image("workspace.RData")
-# init_param <- c(beta1, 1.15, alpha1, 0.76, 1, 1)
-# eta1 <- 1
-# a_ratio <- 1
-# phi <- 0.5
 
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
-
+# load("workspace.RData")
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.8, 1)
+# init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = lags_opt,
         list_excesses = excesses_opt, hmax = 7,
-        wind_df = wind_opt,
+        wind_df = wind_df,
         latlon = TRUE,
         directional = TRUE,
         method = "L-BFGS-B",
@@ -758,34 +638,34 @@ kable(df_result, format = "latex") %>%
   "responsive"), latex_options = "H")
 
 
-# fix parameters
-neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, eta2, list_lags,
-                    list_excesses, wind_df, hmax = NA, latlon = TRUE) {
-  params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
-  nll_composite <- neg_ll_composite(params, list_lags,
-                                      list_excesses, wind_df,
-                                      hmax = hmax, latlon = latlon,
-                                      directional = TRUE)
-  return(nll_composite)
-}
+# # fix parameters
+# neg_ll_composite_fixpar <- function(beta1, beta2, alpha1, alpha2, eta1, eta2, list_lags,
+#                     list_excesses, wind_df, hmax = NA, latlon = TRUE) {
+#   params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
+#   nll_composite <- neg_ll_composite(params, list_lags,
+#                                       list_excesses, wind_df,
+#                                       hmax = hmax, latlon = latlon,
+#                                       directional = TRUE)
+#   return(nll_composite)
+# }
 
-library(bbmle)
-result <- mle2(neg_ll_composite_fixpar,
-              start = list(beta1 = init_param[1],
-                           beta2 = init_param[2],
-                           alpha1 = init_param[3],
-                           alpha2 = init_param[4],
-                           eta1 = 1,
-                           eta2 = 1),
-              data = list(list_lags = lags_opt,
-                  list_excesses = excesses_opt, hmax = 7,
-                  wind_df = wind_opt),
-              method = "L-BFGS-B",
-              lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-              upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-              control = list(maxit = 10000),
-              fixed = list(beta2 = init_param[2], alpha2 = init_param[4]))
-result
+# library(bbmle)
+# result <- mle2(neg_ll_composite_fixpar,
+#               start = list(beta1 = init_param[1],
+#                            beta2 = init_param[2],
+#                            alpha1 = init_param[3],
+#                            alpha2 = init_param[4],
+#                            eta1 = 1,
+#                            eta2 = 1),
+#               data = list(list_lags = lags_opt,
+#                   list_excesses = excesses_opt, hmax = 7,
+#                   wind_df = wind_opt),
+#               method = "L-BFGS-B",
+#               lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#               upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+#               control = list(maxit = 10000),
+#               fixed = list(beta2 = init_param[2], alpha2 = init_param[4]))
+# result
 
 
 # Vector of test values for eta1
@@ -794,9 +674,10 @@ eta1_values <- seq(1e-08, 2, length.out = 50)
 # Store for negative log-likelihood values
 neg_log_likelihoods <- numeric(length(eta1_values))
 
+params <- c(0.002, 0.4, 1.540152351, 0.852229228, 0.78891006, 1)
 # Loop over different values of eta1
 for (i in seq_along(eta1_values)) {
-  params <- c(beta1, beta2, alpha1, alpha2, eta1_values[i], 1)
+  params[5] <- eta1_values[i]
   neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
                               list_excesses = excesses_opt, hmax = 7,
                               wind_df = wind_opt)
@@ -808,6 +689,7 @@ end_filename <- paste(q*1000, "q_", min_spatial_dist, "_km_",
 filename <- paste(im_folder, "optim/comephore/likelihood_plot_varying_eta1_",
                   end_filename,
                     sep = "")
+filename <- "test.png"
 png(filename, width = 800, height = 600)
 par(mfrow = c(1, 1))
 plot(eta1_values, neg_log_likelihoods, type = "l", col = "blue", lwd = 2,
