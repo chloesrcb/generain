@@ -55,34 +55,12 @@ library(keras)
 library(tensorflow)
 library(reticulate)
 py_version <- "3.9.18"
-# path_to_python <- reticulate::install_python(version=py_version)
-# path_to_python <- "/home/cserreco/.pyenv/versions/3.9.18/bin/python3.9"
-# reticulate::virtualenv_remove("pinnEV_env")
-# Create a virtual envionment 'pinnEV_env' with Python 3.9.18. Install tensorflow
-# within this environment.
-# reticulate::virtualenv_create(envname = 'pinnEV_env',
-#                               python=path_to_python,
-#                               version=py_version)
-
-path<- paste0(reticulate::virtualenv_root(),"/pinnEV_env/bin/python")
-Sys.setenv(RETICULATE_PYTHON = "/home/cserreco/.virtualenvs/pinnEV_env/bin/python")
+path <- paste0(reticulate::virtualenv_root(), "/pinnEV_env/bin/python")
+Sys.setenv(RETICULATE_PYTHON = "/home/serrec/.virtualenvs/pinnEV_env/bin/python")
 # Sys.setenv(RETICULATE_PYTHON = path) # Set Python interpreter
 Sys.setenv(RETICULATE_LOG_LEVEL = "DEBUG")
-tf_version="2.13.1"
+tf_version = "2.13.1"
 reticulate::use_virtualenv("pinnEV_env", required = T)
-# tensorflow::install_tensorflow(method="virtualenv", envname="pinnEV_env",
-#                                version=tf_version) #Install version of tensorflow in virtual environment
-# keras::install_keras(method = c("virtualenv"), envname = "pinnEV_env",version=tf_version)
-
-# keras::is_keras_available() #Check if keras is available
-
-# tf$constant("Hello TensorFlow!")
-# py_run_string("import tensorflow as tf; print(tf.__version__)")
-#Install spektral 1.3.0 - this is for the graph convolutional neural networks. Remove all code hereafter if not necessary.
-# reticulate::virtualenv_install("pinnEV_env",
-#                                packages = "spektral", version="1.3.0")
-
-
 
 df_downscaling_all <- df_Y_X
 # Remove rows with Y_obs = 0 for model EGPD of positive rainfall
@@ -265,7 +243,7 @@ print(sigma_site1_2019)
 
 
 
-################## OCCURENCE ##################################################
+################## OCCURENCE ###################################################
 set.seed(123) # For reproducibility
 
 df_downscaling_all <- df_Y_X
@@ -349,13 +327,13 @@ valid_data$predicted_prob <- predict(fit_logistic, newdata = valid_data, type = 
 # Convert the probabilities to classes (0 or 1) using a threshold of 0.5
 valid_data$predicted_class <- ifelse(valid_data$predicted_prob > 0.5, 1, 0)
 
-# Evaluate the model
-library(caret)
-conf_matrix <- confusionMatrix(factor(valid_data$predicted_class), factor(valid_data$Y_occurrence))
-print(conf_matrix)
+# # Evaluate the model
+# library(caret)
+# conf_matrix <- confusionMatrix(factor(valid_data$predicted_class), factor(valid_data$Y_occurrence))
+# print(conf_matrix)
 
 # ROC and AUC curves
-library(pROC)
-roc_curve <- roc(valid_data$Y_occurrence, valid_data$predicted_prob)
-plot(roc_curve, col = "blue", main = "ROC Curve")
-auc(roc_curve)
+# library(pROC)
+# roc_curve <- roc(valid_data$Y_occurrence, valid_data$predicted_prob)
+# plot(roc_curve, col = "blue", main = "ROC Curve")
+# auc(roc_curve)
