@@ -583,7 +583,7 @@ if (any(ind_NA > 0)) {
 save.image("workspace.RData")
 
 # load("workspace.RData")
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.8, 1)
+init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,

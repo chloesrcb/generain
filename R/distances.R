@@ -240,8 +240,8 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   lags$s2x <- df_coords$Longitude[lags$s2]
   lags$s2y <- df_coords$Latitude[lags$s2]
 
-  s1_coords <- unlist(df_coords[ind_s0, c("Longitude", "Latitude")])
-  s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
+  # s1_coords <- unlist(df_coords[ind_s0, c("Longitude", "Latitude")])
+  # s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
 
   # Vector coordinates between two sites
   # Convert to meters using Haversine distance for hx, hy
@@ -254,8 +254,10 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
 
     }
   } else {
-    lags$hx <- s2_coords$Longitude - s1_coords[1]
-    lags$hy <- s2_coords$Latitude - s1_coords[2]
+    # lags$hx <- s2_coords$Longitude - s1_coords[1]
+    # lags$hy <- s2_coords$Latitude - s1_coords[2]
+    lags$hx <- lags$s2x  - lags$s1x
+    lags$hy <- lags$s2y - lags$s1y
     lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
   }
 
@@ -401,8 +403,8 @@ haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
     adv_y <- adv[2] * tau  # Advection in Y (m)
 
     # Adjust the coordinates based on advection
-    lon2_adj <- lon2 - adv_x / (111319 * cos(lat2 * pi / 180))
-    lat2_adj <- lat2 - adv_y / 111319
+    lon2_adj <- lon2 + adv_x / (111319 * cos(lat2 * pi / 180))
+    lat2_adj <- lat2 + adv_y / 111319
 
     # Recalculate the distance after adjustment
     deltaLat_adj <- (lat2_adj - lat1) * pi / 180

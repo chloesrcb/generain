@@ -311,6 +311,29 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   return(excesses)
 }
 
+# function (data_rain, quantile, df_lags, threshold = FALSE, t0 = 0)
+# {
+#     excesses <- df_lags
+#     unique_tau <- unique(df_lags$tau)
+#     ind_s1 <- df_lags$s1[1]
+#     for (t in unique_tau) {
+#         df_h_t <- df_lags[df_lags$tau == t, ]
+#         for (i in seq_len(nrow(df_h_t))) {
+#             ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+#             rain_cp <- data_rain[, c(ind_s2), drop = FALSE]
+#             rain_cp <- as.data.frame(na.omit(rain_cp))
+#             colnames(rain_cp) <- c("s2")
+#             X_s_t <- rain_cp$s2[((t0 + 1) + abs(t))]
+#             nmargin <- sum(X_s_t > quantile)
+#             excesses$Tobs[excesses$s1 == ind_s1 & excesses$s2 ==
+#                 ind_s2 & excesses$tau == t] <- 1
+#             excesses$kij[excesses$s1 == ind_s1 & excesses$s2 ==
+#                 ind_s2 & excesses$tau == t] <- nmargin
+#         }
+#     }
+#     return(excesses)
+# }
+
 
 #' empirical_excesses function
 #'
@@ -434,8 +457,8 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
     # Cartesian coordinates case
     chi_df$s1xv <- chi_df$s1x
     chi_df$s1yv <- chi_df$s1y
-    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau
-    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
+    chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau
+    chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
     if (all(adv == 0)) {
       chi_df$hnormV <- chi_df$hnorm
     } else {
@@ -463,63 +486,6 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
 
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
 
-  return(chi_df)
-}
-
-
-# theoretical_chi <- function(params, df_lags, latlon=T, directional=T) {
-#   beta1 <- params[1]
-#   beta2 <- params[2]
-#   alpha1 <- params[3]
-#   alpha2 <- params[4]
-#   if (length(params) == 6) {
-#     adv <- params[5:6]
-#   } else {
-#     adv <- c(0, 0)
-#   }
-
-#   chi_df <- df_lags[c("s1", "s2", "tau")]
-#   # Get vario and chi for each lagtemp
-#   chi_df$s1xv <- df_lags$s1x
-#   chi_df$s1yv <- df_lags$s1y
-#   chi_df$s2xv <- df_lags$s2x - adv[1] * df_lags$tau
-#   chi_df$s2yv <- df_lags$s2y - adv[2] * df_lags$tau
-#   chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-#                         (chi_df$s2yv - chi_df$s1yv)^2)
-#   # chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-#   # chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-#   # chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
-#   # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
-
-#   chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
-#                   (2 * beta2) * abs(chi_df$tau)^alpha2
-
-#   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
-#   return(chi_df)
-# }
-
-theoretical_chi <- function(params, df_lags) { # AVANT
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  if (length(params) == 6) {
-    adv <- params[5:6]
-  } else {
-    adv <- c(0, 0)
-  }
-
-  chi_df <- df_lags[c("s1", "s2", "tau")]
-  # Get vario and chi for each lagtemp
-  chi_df$hx <- df_lags$hx - adv[1] * df_lags$tau
-  chi_df$hy <- df_lags$hy - adv[2] * df_lags$tau
-  chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
-  # chi_df$hnorm <- norm_Lp(chi_df$hy, chi_df$hx, p = alpha1)
-
-  chi_df$vario <- (2 * beta1) * chi_df$hnormV^alpha1 +
-                  (2 * beta2) * abs(chi_df$tau)^alpha2
-
-  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
   return(chi_df)
 }
 

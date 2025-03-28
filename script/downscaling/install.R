@@ -25,4 +25,4 @@ keras::is_keras_available() #Check if keras is available
 # reticulate::virtualenv_install("pinnEV_env",
 #                                packages = "spektral", version="1.3.0")
 
-intall.packages("caret")
+# intall.packages("caret")
