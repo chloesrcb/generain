@@ -300,7 +300,7 @@ delta <- 12 # step for the episode before and after the max value
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.995 # quantile
+q <- 0.998 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -325,7 +325,7 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
 
 # Convert matrix to data frame
-index <- 31
+index <- 3
 sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
@@ -334,8 +334,8 @@ df_episode$Time <- 1:nrow(df_episode)  # Add a time column
 s0_list[index]
 # Convert from wide to long format
 df_long <- melt(df_episode, id.vars = "Time", variable.name = "Series", value.name = "Value")
-
-ggplot(df_long, aes(x = Time, y = Value, group = Series)) +
+head(df_long)
+ggplot(df_long, aes(x = Time, y = value, group = variable)) +
   geom_line(color = btfgreen) +
   geom_vline(xintercept = delta + 1, color = "red", linetype = "dashed") + 
   labs(title = "Extreme Episode", x = "Time", y = "Value") +
@@ -345,8 +345,45 @@ ggplot(df_long, aes(x = Time, y = Value, group = Series)) +
 
 filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
                   "km_max", tmax, "h_delta_", delta, ".png", sep = "")
-filename <- "test.png"
+# filename <- "test.png"
 ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+library(ggplot2)
+library(reshape2)
+
+unique_s0_list <- unique(s0_list)
+
+for (target_s0 in unique_s0_list) {
+  matching_indices <- which(s0_list == target_s0)
+  
+  df_list <- list()
+  
+  for (i in matching_indices) {
+    episode_test <- list_episodes[[i]]
+    df_episode <- as.data.frame(episode_test)
+    df_episode$Time <- 0:(nrow(df_episode) - 1)
+
+    df_long <- melt(df_episode, id.vars = "Time", variable.name = "Pixel", value.name = "Value")
+    colnames(df_long) <- c("Time", "Pixel", "Value")
+    df_filtered <- subset(df_long, Pixel == target_s0) 
+    df_filtered$Episode <- as.factor(i)
+     df_list[[i]] <- df_filtered
+  }
+  
+  df_all <- do.call(rbind, df_list)
+  
+  p <- ggplot(df_all, aes(x = Time, y = Value, group = Episode)) +
+    geom_line(color = btfgreen, alpha = 0.7) +
+    labs(x = "Time", y = "Rainfall (mm)") +
+    theme_minimal()
+  
+  filename <- paste0(im_folder, "optim/comephore/extreme_episodes_site_", target_s0, 
+                     "_min", min_spatial_dist, "km_max", tmax, "h_delta_", delta, ".png")
+  ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
+
+}
+
 
 length(list_episodes)
 # Verif first episode
@@ -419,7 +456,7 @@ u_list <- selected_points$u_s0
 # dev.off()
 
 
-tau_vect <- -5:5
+tau_vect <- -10:10
 tmax <- max(tau_vect)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
@@ -587,7 +624,7 @@ init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = lags_opt,
+        list_lags = lags_opt, list_episodes = episodes_opt,
         list_excesses = excesses_opt, hmax = 7,
         wind_df = wind_df,
         latlon = TRUE,

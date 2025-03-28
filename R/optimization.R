@@ -656,47 +656,6 @@ neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
 #' @return The negative log-likelihood value.
 #'
 #' @export
-neg_ll_composite <- function(params, list_lags,
-                    list_excesses, wind_df = NA, hmax = NA, latlon = TRUE,
-                    directional = TRUE) {
-  if (length(params) == 4) {
-    params <- c(params, 0, 0) # No advection
-  }
-  # params[5] <- 1
-  # params[c(2, 4)] <- c(0.4, 1) 
-  print(params)
-  if (all(is.na(wind_df))) {
-    adv <- params[5:6]
-  } else {
-    eta1 <- params[5] # try transformation
-    eta2 <- params[6]
-    adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2  # in m/s
-    adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2  # in m/s
-    adv_df <- cbind(adv_x, adv_y)
-  }
-  m <- length(list_excesses) # number of r-pareto processes
-  nll_composite <- 0 # composite negative log-likelihood
-  # print(params[5])
-  
-  for (i in 1:m) {
-    # extract lags and excesses from i-th r-pareto process from data
-    df_lags <- list_lags[[i]]
-    excesses <- list_excesses[[i]]
-    if (!all(is.na(wind_df))) {
-      adv <- as.vector(adv_df[i,])
-    }
-    params_adv <- c(params[1:4], adv)
-    nll_i <- neg_ll(params_adv, df_lags,
-                    hmax = hmax, excesses = excesses, rpar = TRUE,
-                    latlon = latlon, directional = directional)
-    nll_composite <- nll_composite + nll_i
-  }
-  res <- nll_composite
-  if (!is.finite(res)) {
-    cat("Warning: Non-finite value detected for parameters:", par, "\n")
-  }
-  return(res)
-}
 neg_ll_composite <- function(params, list_episodes, list_excesses,
                              list_lags, wind_df = NA,
                              hmax = NA, latlon = TRUE,
@@ -709,7 +668,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
   } else {
-    eta1 <- params[5]
+    eta1 <- exp(params[5])
     eta2 <- params[6]
     adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
     adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
