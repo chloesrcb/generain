@@ -11,8 +11,8 @@ load("workspace.RData")
 
 
 # LOAD DATA ####################################################################
-comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
+comephore_raw <- read.csv("./data/comephore/zoom_5km.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_px_zoom_5km.csv", sep = ",")
 
 # comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
 # loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")

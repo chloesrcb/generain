@@ -81,13 +81,13 @@ format_value <- function(x) {
   }
 }
 # Apply formatting
-params_str <- paste(sapply(params, format_value), collapse = "_")
+param_str <- paste(sapply(params, format_value), collapse = "_")
 adv_str <- paste(sapply(adv, format_value), collapse = "_")
 s0_str <- paste(sapply(s0, format_value), collapse = "_")
 t0_str <- format_value(t0)
 
 # Save the data
-foldername <- paste0("./data/simulations_rpar/rpar_", params_str, "_", adv_str,
+foldername <- paste0("./data/simulations_rpar/rpar_", param_str, "_", adv_str,
                    "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
                     s0_str, "_t0_", t0_str, "/")
 
@@ -111,7 +111,7 @@ num_cores <- detectCores() - 1  # Reserve 1 core for the OS
 
 # Parallel execution
 sites_coords <- generate_grid_coords(ngrid)
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect = 0:10)
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect = -10:10)
 u <- 1 # threshold corresponding to the r-pareto simulation
 result_list <- mclapply(1:M, process_simulation, M = M, m = m,
                         list_simuM = list_simuM, u = u, df_lags = df_lags,
@@ -149,33 +149,16 @@ df_bplot <- as.data.frame(df_result_all)
 # [1] 0.01000697 0.40325170 1.46085957 0.99187402 0.39389899 0.30198489
 # [1]  0.01016631  0.40431457  1.49671136  0.94789362 -0.74466754 -0.79885082
 # [1]  0.01217717  0.40107062  1.39982817  0.99351691 -0.28077293 -0.23116656
-chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
+# chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
 
-chi_df$s1xv <- chi_df$s1x
-chi_df$s1yv <- chi_df$s1y
-chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau
-chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
-chi_df$dx <- chi_df$s2xv - chi_df$s1x  # Distance corrigée en x
-chi_df$dy <- chi_df$s2yv - chi_df$s1y  # Distance corrigée en y
-chi_df$dx_orig <- chi_df$s2x - chi_df$s1x  # Distance originale en x
-chi_df$dy_orig <- chi_df$s2y - chi_df$s1y  # Distance originale en y
-
-library(ggplot2)
-
-ggplot(chi_df, aes(x = tau)) +
-  geom_line(aes(y = dx, color = "dx corrigé")) +
-  geom_line(aes(y = dx_orig, color = "dx original")) +
-  labs(title = "Comparaison de dx avant et après correction",
-       x = "tau", y = "dx") +
-  scale_color_manual(values = c("red", "blue"))
-
-ggplot(chi_df, aes(x = tau)) +
-  geom_line(aes(y = dy, color = "dy corrigé")) +
-  geom_line(aes(y = dy_orig, color = "dy original")) +
-  labs(title = "Comparaison de dy avant et après correction",
-       x = "tau", y = "dy") +
-  scale_color_manual(values = c("red", "blue"))
-
+# chi_df$s1xv <- chi_df$s1x
+# chi_df$s1yv <- chi_df$s1y
+# chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau
+# chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
+# chi_df$dx <- chi_df$s2xv - chi_df$s1x  # Distance corrigée en x
+# chi_df$dy <- chi_df$s2yv - chi_df$s1y  # Distance corrigée en y
+# chi_df$dx_orig <- chi_df$s2x - chi_df$s1x  # Distance originale en x
+# chi_df$dy_orig <- chi_df$s2y - chi_df$s1y  # Distance originale en y
 
 # save data in csv
 foldername <- "./data/optim/rpar/"
@@ -213,4 +196,3 @@ name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
                 adv_str, ".png")
 
 ggsave(paste0(foldername, name_file), width = 5, height = 5)
-
