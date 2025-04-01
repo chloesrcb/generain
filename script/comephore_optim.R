@@ -166,6 +166,8 @@ chimat_dtlag <- temporal_chi(comephore, quantile = q_no0_temp, tmax = tmax,
 chi_df_dt <- data.frame(chimat_dtlag)
 colnames(chi_df_dt) <- c(0:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
+# remove lag 0
+chi_df_dt <- chi_df_dt[, -1] # remove lag 0
 
 # boxplot all pixels values for chi temp
 # Reshape data using gather function
@@ -300,7 +302,7 @@ save.image("workspace.RData")
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 3 # in km
+min_spatial_dist <- 5 # in km
 delta <- 12 # step for the episode before and after the max value
 
 # Get coords
