@@ -375,3 +375,32 @@ generate_variogram_plots_rpareto <- function(result, lags_r, wind_r) {
     theme(legend.position = "bottom")
 
 }
+
+
+
+# Function to format values correctly, considering decimal places
+format_value <- function(x) {
+  # Check if x is an integer
+  if (x == as.integer(x)) {
+    return(sprintf("%d", x))
+  } else {
+    # Count number of decimal places
+    num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(x)))
+
+    if (x >= 1) {
+      # If the number is greater than or equal to 1
+      if (num_decimals == 1) {
+        return(sprintf("%02d", round(x * 10)))
+      } else {
+        return(sprintf("%03d", round(x * 100)))
+      }
+    } else {
+      # If the number is less than 1
+      if (num_decimals == 1) {
+        return(sprintf("%02d", round(x * 10)))
+      } else {
+        return(sprintf("%03d", round(x * 100)))
+      }
+    }
+  }
+}

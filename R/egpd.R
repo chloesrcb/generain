@@ -134,40 +134,32 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
   df_score$RMSE <- Inf
   df_score$censoreRMSE <- NA
 
-  # Boucle pour chaque censore à tester
   for (c in seq_along(censores)) {
     censore <- censores[c]
     params <- as.data.frame(get_egpd_estimates(rain_df, left_censoring = censore))
 
-    # Une variable pour suivre l'RMSE précédent afin de savoir si ça augmente
     prev_rmse <- Inf
     
-    # Boucle pour chaque emplacement (location)
     for (i in seq_along(rain_df)) {
       y <- na.omit(rain_df[, i])
-      y <- y[y > 0]  # Conserver que les valeurs positives
+      y <- y[y > 0]
       y.sort <- sort(y)
       print(i)
       # Quantiles
       p <- (1:length(y)) / (length(y) + 1)
       qextgp <- qextgp(p = p, type = 1, kappa = params$kappa[i], sigma = params$sigma[i], xi = params$xi[i])
 
-      # Calculer l'RMSE
       RMSE <- sqrt(mean((y.sort - qextgp)^2))
       print(RMSE)
-      # Si l'RMSE augmente, on arrête de chercher plus loin
       # if (RMSE > prev_rmse & RMSE != Inf) {
-      #   # Si RMSE augmente, on arrête la boucle pour ce censore et on passe au suivant
       #   next
       # }
 
-      # Si l'RMSE est meilleur (plus petit), on le garde
       if (RMSE < df_score$RMSE[i]) {
         df_score$RMSE[i] <- RMSE
         df_score$censoreRMSE[i] <- censore
       }
 
-      # Mettre à jour le précédent RMSE pour la prochaine itération
       prev_rmse <- RMSE
     }
   }
@@ -176,146 +168,146 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
 
 
 
-choose_censore <- function(rain_df, censores, n_samples = 100) {
-  df_score <- data.frame(locations = seq_along(rain_df))
-  df_score$RMSE <- Inf
-  df_score$censoreRMSE <- NA
-  df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
+# choose_censore <- function(rain_df, censores, n_samples = 100) {
+#   df_score <- data.frame(locations = seq_along(rain_df))
+#   df_score$RMSE <- Inf
+#   df_score$censoreRMSE <- NA
+#   df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
 
-  # Boucle pour chaque censore à tester
-  for (c in seq_along(censores)) {
-    censore <- censores[c]
-    params <- as.data.frame(get_egpd_estimates(rain_df, left_censoring = censore))
+#   # Boucle pour chaque censore à tester
+#   for (c in seq_along(censores)) {
+#     censore <- censores[c]
+#     params <- as.data.frame(get_egpd_estimates(rain_df, left_censoring = censore))
 
-    # Une variable pour suivre l'RMSE précédent afin de savoir si ça augmente
-    prev_rmse <- Inf
-    prev_flag <- FALSE  # Suivi d'une fluctuation précédente
+#     # Une variable pour suivre l'RMSE précédent afin de savoir si ça augmente
+#     prev_rmse <- Inf
+#     prev_flag <- FALSE  # Suivi d'une fluctuation précédente
     
-    # Boucle pour chaque emplacement (location)
-    for (i in seq_along(rain_df)) {
-      y <- na.omit(rain_df[, i])
-      y <- y[y > 0]  # Conserver que les valeurs positives
-      y.sort <- sort(y)
+#     # Boucle pour chaque emplacement (location)
+#     for (i in seq_along(rain_df)) {
+#       y <- na.omit(rain_df[, i])
+#       y <- y[y > 0]  # Conserver que les valeurs positives
+#       y.sort <- sort(y)
 
-      # Vérifier si les paramètres sont valides
-      if (any(is.na(params$kappa[i]), is.na(params$sigma[i]), is.na(params$xi[i]))) {
-        next  # Passer à la prochaine itération si les paramètres sont invalides
-      }
+#       # Vérifier si les paramètres sont valides
+#       if (any(is.na(params$kappa[i]), is.na(params$sigma[i]), is.na(params$xi[i]))) {
+#         next  # Passer à la prochaine itération si les paramètres sont invalides
+#       }
 
-      # Quantiles
-      p <- (1:length(y)) / (length(y) + 1)
-      qextgp <- qextgp(p = p, type = 1, kappa = params$kappa[i], sigma = params$sigma[i], xi = params$xi[i])
+#       # Quantiles
+#       p <- (1:length(y)) / (length(y) + 1)
+#       qextgp <- qextgp(p = p, type = 1, kappa = params$kappa[i], sigma = params$sigma[i], xi = params$xi[i])
 
-      # Vérifier si les quantiles sont valides
-      if (any(is.na(qextgp), is.infinite(qextgp))) {
-        next  # Passer à la prochaine itération si les quantiles sont invalides
-      }
+#       # Vérifier si les quantiles sont valides
+#       if (any(is.na(qextgp), is.infinite(qextgp))) {
+#         next  # Passer à la prochaine itération si les quantiles sont invalides
+#       }
 
-      # Calculer l'RMSE
-      RMSE <- sqrt(mean((y.sort - qextgp)^2))
+#       # Calculer l'RMSE
+#       RMSE <- sqrt(mean((y.sort - qextgp)^2))
 
-      # Vérifier si l'RMSE est Inf
-      if (RMSE == Inf) {
-        next  # Passer à la prochaine itération si RMSE est Inf
-      }
+#       # Vérifier si l'RMSE est Inf
+#       if (RMSE == Inf) {
+#         next  # Passer à la prochaine itération si RMSE est Inf
+#       }
 
-      # Flag pour savoir si l'RMSE a augmenté puis diminué
-      fluctuation_flag <- FALSE
-      if (prev_rmse != Inf && RMSE > prev_rmse) {
-        # Si l'RMSE a augmenté après avoir diminué, on marque cela
-        fluctuation_flag <- TRUE
-      }
+#       # Flag pour savoir si l'RMSE a augmenté puis diminué
+#       fluctuation_flag <- FALSE
+#       if (prev_rmse != Inf && RMSE > prev_rmse) {
+#         # Si l'RMSE a augmenté après avoir diminué, on marque cela
+#         fluctuation_flag <- TRUE
+#       }
 
-      # Si l'RMSE a augmenté et est maintenant plus petit à la censure suivante, on le marque
-      if (fluctuation_flag) {
-        df_score$flag[i] <- TRUE
-      }
+#       # Si l'RMSE a augmenté et est maintenant plus petit à la censure suivante, on le marque
+#       if (fluctuation_flag) {
+#         df_score$flag[i] <- TRUE
+#       }
 
-      # Si l'RMSE augmente, on garde le précédent et on ne met pas à jour
-      if (RMSE > prev_rmse) {
-        next  # Ne pas mettre à jour df_score et passer à la prochaine censure
-      }
+#       # Si l'RMSE augmente, on garde le précédent et on ne met pas à jour
+#       if (RMSE > prev_rmse) {
+#         next  # Ne pas mettre à jour df_score et passer à la prochaine censure
+#       }
 
-      # Si l'RMSE est plus petit que celui enregistré, on le garde
-      if (RMSE < df_score$RMSE[i]) {
-        df_score$RMSE[i] <- RMSE
-        df_score$censoreRMSE[i] <- censore
-      }
+#       # Si l'RMSE est plus petit que celui enregistré, on le garde
+#       if (RMSE < df_score$RMSE[i]) {
+#         df_score$RMSE[i] <- RMSE
+#         df_score$censoreRMSE[i] <- censore
+#       }
 
-      # Mettre à jour le précédent RMSE pour la prochaine itération
-      prev_rmse <- RMSE
-    }
-  }
-  return(df_score)
-}
+#       # Mettre à jour le précédent RMSE pour la prochaine itération
+#       prev_rmse <- RMSE
+#     }
+#   }
+#   return(df_score)
+# }
 
 
-choose_censore <- function(rain_df, censores, n_samples = 100) {
-  df_score <- data.frame(locations = seq_along(rain_df))
-  df_score$RMSE <- Inf
-  df_score$censoreRMSE <- NA
-  df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
+# choose_censore <- function(rain_df, censores, n_samples = 100) {
+#   df_score <- data.frame(locations = seq_along(rain_df))
+#   df_score$RMSE <- Inf
+#   df_score$censoreRMSE <- NA
+#   df_score$flag <- FALSE  # Flag pour indiquer si l'RMSE a fluctué
 
-  # Boucle pour chaque emplacement (site)
-  for (i in seq_along(rain_df)) {
-    rain_site <- as.data.frame(rain_df[, i])
-    y <- na.omit(rain_site)
-    y <- y[y > 0]  # Conserver que les valeurs positives
-    y.sort <- sort(y)
+#   # Boucle pour chaque emplacement (site)
+#   for (i in seq_along(rain_df)) {
+#     rain_site <- as.data.frame(rain_df[, i])
+#     y <- na.omit(rain_site)
+#     y <- y[y > 0]  # Conserver que les valeurs positives
+#     y.sort <- sort(y)
 
-    # Initialiser les variables pour suivre l'RMSE minimum pour ce site
-    prev_rmse <- Inf
-    best_rmse <- Inf
-    best_censore <- NA
-    prev_flag <- FALSE  # Suivi d'une fluctuation précédente pour ce site
+#     # Initialiser les variables pour suivre l'RMSE minimum pour ce site
+#     prev_rmse <- Inf
+#     best_rmse <- Inf
+#     best_censore <- NA
+#     prev_flag <- FALSE  # Suivi d'une fluctuation précédente pour ce site
 
-    # Boucle pour chaque censore à tester
-    for (c in seq_along(censores)) {
-      censore <- censores[c]
-      params <- as.data.frame(get_egpd_estimates(rain_site, left_censoring = censore))
+#     # Boucle pour chaque censore à tester
+#     for (c in seq_along(censores)) {
+#       censore <- censores[c]
+#       params <- as.data.frame(get_egpd_estimates(rain_site, left_censoring = censore))
 
-      # Quantiles
-      p <- (1:length(y)) / (length(y) + 1)
-      qextgp <- qextgp(p = p, type = 1, kappa = params$kappa, sigma = params$sigma, xi = params$xi)
+#       # Quantiles
+#       p <- (1:length(y)) / (length(y) + 1)
+#       qextgp <- qextgp(p = p, type = 1, kappa = params$kappa, sigma = params$sigma, xi = params$xi)
 
-      # Vérifier si les quantiles sont valides
-      if (any(is.na(qextgp), is.infinite(qextgp))) {
-        next  # Passer à la prochaine itération si les quantiles sont invalides
-      }
+#       # Vérifier si les quantiles sont valides
+#       if (any(is.na(qextgp), is.infinite(qextgp))) {
+#         next  # Passer à la prochaine itération si les quantiles sont invalides
+#       }
 
-      # Calculer l'RMSE
-      RMSE <- sqrt(mean((y.sort - qextgp)^2))
+#       # Calculer l'RMSE
+#       RMSE <- sqrt(mean((y.sort - qextgp)^2))
 
-      # Vérifier si l'RMSE est valide
-      if (is.na(RMSE) || is.infinite(RMSE)) {
-        next  # Passer à la prochaine itération si l'RMSE est invalide
-      }
+#       # Vérifier si l'RMSE est valide
+#       if (is.na(RMSE) || is.infinite(RMSE)) {
+#         next  # Passer à la prochaine itération si l'RMSE est invalide
+#       }
 
-      # Si l'RMSE a augmenté après avoir diminué, on marque cela
-      fluctuation_flag <- FALSE
-      if (prev_rmse != Inf && RMSE > prev_rmse) {
-        fluctuation_flag <- TRUE
-      }
+#       # Si l'RMSE a augmenté après avoir diminué, on marque cela
+#       fluctuation_flag <- FALSE
+#       if (prev_rmse != Inf && RMSE > prev_rmse) {
+#         fluctuation_flag <- TRUE
+#       }
 
-      # Si l'RMSE augmente et a fluctué, on marque le flag pour ce site
-      if (fluctuation_flag) {
-        df_score$flag[i] <- TRUE
-      }
+#       # Si l'RMSE augmente et a fluctué, on marque le flag pour ce site
+#       if (fluctuation_flag) {
+#         df_score$flag[i] <- TRUE
+#       }
 
-      # Si l'RMSE est plus petit que le précédent, on met à jour
-      if (RMSE < best_rmse) {
-        best_rmse <- RMSE
-        best_censore <- censore
-      }
+#       # Si l'RMSE est plus petit que le précédent, on met à jour
+#       if (RMSE < best_rmse) {
+#         best_rmse <- RMSE
+#         best_censore <- censore
+#       }
 
-      # Mettre à jour le précédent RMSE pour la prochaine itération
-      prev_rmse <- RMSE
-    }
+#       # Mettre à jour le précédent RMSE pour la prochaine itération
+#       prev_rmse <- RMSE
+#     }
 
-    # Enregistrer le meilleur RMSE et la censure associée pour ce site
-    df_score$RMSE[i] <- best_rmse
-    df_score$censoreRMSE[i] <- best_censore
-  }
+#     # Enregistrer le meilleur RMSE et la censure associée pour ce site
+#     df_score$RMSE[i] <- best_rmse
+#     df_score$censoreRMSE[i] <- best_censore
+#   }
 
-  return(df_score)
-}
+#   return(df_score)
+# }

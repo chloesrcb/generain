@@ -10,11 +10,10 @@ muse <- FALSE
 
 if (muse) {
   # Get the muse folder
-  folder_muse <- "/home/serrec/work_rainstsimu/downscaling"
+  folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"
   setwd(folder_muse)
   # Load libraries and set theme
   source("load_libraries.R")
-  source("pinnEV.R")
   source("config.R")
 } else {
   # Load libraries and set theme
@@ -45,7 +44,7 @@ spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 
 # Number of realizations
-M <- 10 # number of simulations
+M <- 100 # number of simulations
 m <- 1000 # number of extreme episodes
 nres <- M * m
 
@@ -121,7 +120,7 @@ result_list <- mclapply(1:M, process_simulation, M = M, m = m,
 # Combine results into a data frame
 df_result_all <- do.call(rbind, result_list)
 colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
-                              "alpha2", "adv1", "adv2")
+                             "alpha2", "adv1", "adv2")
 
 df_bplot <- as.data.frame(df_result_all)
 

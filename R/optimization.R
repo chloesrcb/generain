@@ -102,7 +102,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
       selected_points <- rbindlist(list(selected_points, best_candidate))
 
       # Remove nearby temporal data
-      t_inf <- max(1, best_candidate$t0 - (delta + 1) - time_ext)
+      t_inf <- max(1, best_candidate$t0 - (delta) - time_ext)
       t_sup <- min(nrow(data), best_candidate$t0 + delta + time_ext)
       invalid_time_mask[t_inf:t_sup,
                         which(site_names == best_candidate$s0)] <- TRUE
@@ -192,16 +192,13 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
     t0 <- selected_points$t0[i]
     t_inf <- t0 - (delta) - beta
     t_sup <- t0 + delta + beta
-    print(t_inf)
-    print(t_sup)
-    print(t_sup - t_inf + 1)
+
     # Check that the episode is the correct size (2 * delta)
     episode_size <- t_sup - t_inf + 1
-    if (episode_size == 2 * delta + 1 + 2*beta) {
-      print("hello")
-      episode <- data[t_inf:t_sup, ]  # Get the episode
+    if (episode_size == 2 * delta + 1 + 2 * beta) {
+      episode <- data[t_inf:t_sup, , drop = FALSE] # Get the episode
       episodes <- append(episodes, list(episode))
-      valid_indices <- c(valid_indices, i)  # Mark this index as valid
+      valid_indices <- c(valid_indices, i) # Mark this index as valid
     }
   }
 
@@ -668,7 +665,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
   } else {
-    eta1 <- exp(params[5])
+    eta1 <- params[5]
     eta2 <- params[6]
     adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
     adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
@@ -692,9 +689,9 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
       adv <- as.vector(adv_df[i,])
     }
 
-    params_adv <- c(params[1:4], adv)
+    params_adv <- c(params[1:4], adv) # Add advection parameters
 
-    # Construction dynamique des arguments pour neg_ll
+    # Arguments for the negative log-likelihood function
     args_neg_ll <- list(params = params_adv,
                         df_lags = lags,
                         hmax = hmax, excesses = excesses,
@@ -1084,6 +1081,8 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
     list_excesses = list_excesses,
     hmax = hmax,
     threshold = TRUE,
+    latlon = FALSE,
+    directional = FALSE,
     method = "L-BFGS-B",
     lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
     upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),

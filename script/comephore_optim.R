@@ -6,13 +6,20 @@ cat("\014")
 
 # Load libraries and set theme
 source("./script/load_libraries.R")
-devtools::load_all() # load the last version of the package
+
+# Get all files in the folder "R"
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
+# load all functions in files
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
+library(latex2exp)
+
 load("workspace.RData")
 
 
 # LOAD DATA ####################################################################
-comephore_raw <- read.csv("./data/comephore/zoom_5km.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_px_zoom_5km.csv", sep = ",")
+comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
+loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
 
 # comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
 # loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")
@@ -293,14 +300,14 @@ save.image("workspace.RData")
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5 # in km
+min_spatial_dist <- 3 # in km
 delta <- 12 # step for the episode before and after the max value
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.998 # quantile
+q <- 0.997 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
@@ -465,17 +472,20 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   # t0 <- t0_list[i]
   episode <- list_episodes_unif[[i]]
   u <- u_list[i]
-  ind_t0_ep <- delta + 1  # index of t0 in the episode
+  ind_t0_ep <- delta # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
-                                  tau_vect, latlon = TRUE)
+                                tau_vect, latlon = TRUE)
   excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
-                                  t0 = ind_t0_ep)
+                                t0 = ind_t0_ep)
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
+
+# params <- c(beta1, beta2, alpha1, alpha2, 0.1, 0.1)
+# chi <- theoretical_chi(params, excesses)
 # list_lags[[1]]
 # list_excesses[[1]]$kij
 
@@ -486,12 +496,12 @@ excesses <- list_excesses[[1]]
 excesses <- excesses[order(excesses$hnorm), ]
 excesses$kij
 excesses[1:20, ]
-
+df_lags <- list_lags[[1]]
 
 # ADD WIND DATA ################################################################
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = FALSE)
+                                    delta = delta, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
 
@@ -625,7 +635,7 @@ init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = lags_opt, list_episodes = episodes_opt,
-        list_excesses = excesses_opt, hmax = 7,
+        list_excesses = excesses_opt, hmax = 10,
         wind_df = wind_df,
         latlon = TRUE,
         directional = TRUE,
@@ -711,11 +721,11 @@ eta1_values <- seq(1e-08, 2, length.out = 50)
 # Store for negative log-likelihood values
 neg_log_likelihoods <- numeric(length(eta1_values))
 
-params <- c(0.002, 0.4, 1.540152351, 0.852229228, 0.78891006, 1)
+params <- init_param
 # Loop over different values of eta1
 for (i in seq_along(eta1_values)) {
   params[5] <- eta1_values[i]
-  neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
+  neg_ll <- neg_ll_composite(params, list_lags = lags_opt, list_episodes = episodes_opt,
                               list_excesses = excesses_opt, hmax = 7,
                               wind_df = wind_opt)
   neg_log_likelihoods[i] <- neg_ll
@@ -725,7 +735,7 @@ end_filename <- paste(q*1000, "q_", min_spatial_dist, "_km_",
                       tmax, "_h_delta_", delta, ".png", sep = "")
 filename <- paste(im_folder, "optim/comephore/likelihood_plot_varying_eta1_",
                   end_filename,
-                    sep = "")
+                  sep = "")
 filename <- "test.png"
 png(filename, width = 800, height = 600)
 par(mfrow = c(1, 1))
@@ -744,8 +754,9 @@ for (i in seq_along(eta1_values)) {
   for (j in seq_along(beta2_values)) {
     params <- c(beta1, beta2_values[j], alpha1, alpha2, eta1_values[i], 1)
     likelihood_matrix[i, j] <- neg_ll_composite(params, list_lags = lags_opt,
-                                                list_excesses = excesses_opt, hmax = 7,
-                                                wind_df = wind_opt)
+                                  list_episodes = episodes_opt,
+                                  list_excesses = excesses_opt, hmax = 7,
+                                  wind_df = wind_opt)
   }
 }
 
