@@ -100,5 +100,5 @@ btf_boxplot_theme <- btf_theme +
 btfgreen <- "#69b3a2"
 
 # images folder
-# im_folder <- "../../phd_extremes/thesis/resources/images/"
 im_folder <- "../phd_extremes/thesis/resources/images/"
+data_folder <- "../phd_extremes/data/"

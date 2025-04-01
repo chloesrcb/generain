@@ -74,7 +74,8 @@ df_dist_hsm <- reshape_distances(dist_mat)
 
 # get rain measurements
 # load data
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+load(filename_rain)
 rain_hsm <- rain.all5[c(1, 6:ncol(rain.all5))]
 
 ################################################################################

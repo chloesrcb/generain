@@ -7,7 +7,8 @@ source("load_libraries.R")
 # LOCATION ---------------------------------------------------------------------
 ################################################################################
 # get location of each rain gauge
-location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
+filename_loc <- paste0(data_folder, "omsev/pluvio_mtp_loc.csv")
+location_gauges <- read.csv(filename_loc)
 location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                                  "crbm", "archiw", "archie", "um35", "chu1",
                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
@@ -21,7 +22,8 @@ df_dist <- reshape_distances(dist_mat)
 ################################################################################
 # get rain measurements
 # load data
-load("../data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+load(filename_rain)
 rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 
 ################################################################################

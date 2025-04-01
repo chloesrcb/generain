@@ -13,8 +13,10 @@ library(geosphere)
 
 # LOAD DATA ####################################################################
 # Meteo France COMEPHORE data
-comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
+filename_com <- paste0(data_folder, "comephore/inside_mtp.csv")
+filename_loc <- paste0(data_folder, "comephore/loc_pixels_mtp.csv")
+comephore_raw <- read.csv(filename_com, sep = ",")
+loc_px <- read.csv(filename_loc, sep = ",")
 colnames(loc_px) <- c("pixel_name", "Longitude", "Latitude")
 # ncol(comephore_raw)
 # Convert loc_px to an sf object with Lambert-93 CRS
@@ -41,7 +43,9 @@ dist_mat_com <- get_dist_mat(loc_px)
 df_dist_com <- reshape_distances(dist_mat_com)
 
 # OMSEV HSM rainfall data
-load("./data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
+filename_rain <- paste0(data_folder, 
+                              "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+load(filename_rain)
 rain_hsm <- rain.all5[c(1, 6:ncol(rain.all5))]
 location_gauges <- read.csv("./data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
 location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",

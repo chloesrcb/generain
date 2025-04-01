@@ -7,8 +7,10 @@ library(units)
 library(generain)
 
 # load data
-df_comephore <- read.csv("./data/comephore/inside_mtp.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_pixels_mtp.csv", sep = ",")
+filename_com <- paste0(data_folder, "comephore/inside_mtp.csv")
+df_comephore <- read.csv(filename_com, sep = ",")
+filename_loc <- paste0(data_folder, "comephore/loc_pixels_mtp.csv")
+loc_px <- read.csv(filename_loc, sep = ",")
 
 comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix

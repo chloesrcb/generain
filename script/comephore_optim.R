@@ -18,11 +18,10 @@ load("workspace.RData")
 
 
 # LOAD DATA ####################################################################
-comephore_raw <- read.csv("./data/comephore/zoom_3km.csv", sep = ",")
-loc_px <- read.csv("./data/comephore/loc_px_zoom_3km.csv", sep = ",")
-
-# comephore_raw <- read.csv("./data/comephore/comephore_full.csv", sep = ",")
-# loc_px <- read.csv("./data/comephore/coords_pixels_wgs84.csv", sep = ",")
+filename_com <- paste0(data_folder, "comephore/zoom_3km.csv")
+comephore_raw <- read.csv(filename_com, sep = ",")
+filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_3km.csv")
+loc_px <- read.csv(filename_loc, sep = ",")
 
 df_comephore <- comephore_raw
 head(df_comephore)
@@ -41,7 +40,8 @@ nsites <- nrow(loc_px)
 
 
 # # get wind data
-wind_mtp <- read.csv("./data/wind/data_gouv/wind_mtp.csv")
+filename_wind <- paste0(data_folder, "wind/data_gouv/wind_mtp.csv")
+wind_mtp <- read.csv(filename_wind)
 
 # Convert datetime to POSIXct
 wind_mtp$datetime <- as.POSIXct(wind_mtp$datetime,

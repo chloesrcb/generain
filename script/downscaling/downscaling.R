@@ -22,7 +22,7 @@ library(geosphere)
 
 # LOAD DOWNSCALING TABLE #######################################################
 
-output_file <- "./data/downscaling_table.csv"
+output_file <- paste0(data_folder, "downscaling/downscaling_table.csv")
 
 df_Y_X_raw <- read.csv(output_file, sep = ";", header = TRUE)
 head(df_Y_X_raw)

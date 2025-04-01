@@ -1012,18 +1012,25 @@ get_criterion <- function(df_result, true_param) {
 #' @param result The result of the optimization process.
 #' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param filename The name of the file to save the results.
+#' @param data_folder The folder where the results will be saved. Default is NA.
 #'
 #' @import utils
 #'
 #' @export
-save_results_optim <- function(result, true_param, filename) {
+save_results_optim <- function(result, true_param, filename, data_folder = NA) {
+  if (is.na(data_folder)) {
+    data_folder <- ""
+  } else {
+    data_folder <- paste0(data_folder, "/simulations/simulation_rpar/")
+  }
+
   if (result$convergence == 0) {
     rmse <- sqrt((result$par - true_param)^2)
     df_rmse <- data.frame(estim = result$par, rmse = rmse)
     rownames(df_rmse) <- c("beta1", "beta2", "alpha1", "alpha2", "Vx", "Vy")
     # save the results
-    utils::write.csv(t(df_rmse), file = paste0("../data/simulations_BR/results/",
-                          filename, ".csv"))
+    utils::write.csv(t(df_rmse), file = paste0(data_folder,
+                                                    filename, ".csv"))
   } else {
     print("No convergence")
   }
@@ -1034,12 +1041,19 @@ save_results_optim <- function(result, true_param, filename) {
 #' Get the results of the optimization process from a CSV file.
 #'
 #' @param filename The name of the file to get the results.
+#' @param data_folder The folder where the results are saved. Default is NA.
 #'
 #' @import utils
 #' 
 #' @export
-get_results_optim <- function(filename) {
-  df_rmse <- utils::read.csv(paste0("../data/simulations_BR/results/", filename,
+get_results_optim <- function(filename, data_folder = NA) {
+  if (is.na(data_folder)) {
+    data_folder <- ""
+  } else {
+    data_folder <- paste0(data_folder, "/simulations/simulation_rpar/")
+  }
+  # read the results
+  df_rmse <- utils::read.csv(paste0(data_folder, filename,
                       ".csv"))
   return(df_rmse)
 }
