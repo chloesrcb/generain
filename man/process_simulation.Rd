@@ -4,7 +4,7 @@
 \alias{process_simulation}
 \title{process_simulation function}
 \usage{
-process_simulation(i, M, m, list_simuM, u, df_lags, s0, t0, true_param)
+process_simulation(i, M, m, list_simuM, u, df_lags, t0, true_param, hmax = NA)
 }
 \arguments{
 \item{i}{The index of the simulation.}
@@ -19,11 +19,11 @@ process_simulation(i, M, m, list_simuM, u, df_lags, s0, t0, true_param)
 
 \item{df_lags}{The dataframe with spatial and temporal lag values.}
 
-\item{s0}{The starting location.}
-
 \item{t0}{The starting time.}
 
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
+
+\item{hmax}{The maximum spatial lag value. Default is NA.}
 }
 \value{
 The optimized parameters.

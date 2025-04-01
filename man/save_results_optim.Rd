@@ -4,7 +4,7 @@
 \alias{save_results_optim}
 \title{save_results_optim function}
 \usage{
-save_results_optim(result, true_param, filename)
+save_results_optim(result, true_param, filename, data_folder = NA)
 }
 \arguments{
 \item{result}{The result of the optimization process.}
@@ -12,6 +12,8 @@ save_results_optim(result, true_param, filename)
 \item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
 \item{filename}{The name of the file to save the results.}
+
+\item{data_folder}{The folder where the results will be saved. Default is NA.}
 }
 \description{
 Save the results of the optimization process in a CSV file.

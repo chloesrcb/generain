@@ -4,10 +4,12 @@
 \alias{get_results_optim}
 \title{get_results_optim function}
 \usage{
-get_results_optim(filename)
+get_results_optim(filename, data_folder = NA)
 }
 \arguments{
 \item{filename}{The name of the file to get the results.}
+
+\item{data_folder}{The folder where the results are saved. Default is NA.}
 }
 \description{
 Get the results of the optimization process from a CSV file.

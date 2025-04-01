@@ -6,21 +6,24 @@
 \usage{
 neg_ll_composite(
   params,
-  list_lags,
+  list_episodes,
   list_excesses,
+  list_lags,
   wind_df = NA,
   hmax = NA,
   latlon = TRUE,
-  directional = TRUE
+  directional = TRUE,
+  threshold = FALSE,
+  rpar = TRUE
 )
 }
 \arguments{
 \item{params}{Vector of variogram parameters (beta1, beta2, alpha1, alpha2
 eta1, eta2).}
 
-\item{list_lags}{A list of dataframes with spatial and temporal lag values.}
-
 \item{list_excesses}{A list of excesses dataframes.}
+
+\item{list_lags}{A list of dataframes with spatial and temporal lag values.}
 
 \item{wind_df}{A dataframe with wind values. Default is NA.}
 
