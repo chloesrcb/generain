@@ -8,14 +8,14 @@ cat("\014")
 source("./script/load_libraries.R")
 
 # Get all files in the folder "R"
-functions_folder <- "./R"
-files <- list.files(functions_folder, full.names = TRUE)
-# load all functions in files
-invisible(lapply(files, function(f) source(f, echo = FALSE)))
+# functions_folder <- "./R"
+# files <- list.files(functions_folder, full.names = TRUE)
+# # load all functions in files
+# invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
-load("workspace.RData")
-
+# load("workspace.RData")
+library(generain)
 
 # LOAD DATA ####################################################################
 filename_com <- paste0(data_folder, "comephore/zoom_3km.csv")
@@ -309,13 +309,22 @@ delta <- 12 # step for the episode before and after the max value
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
 
-q <- 0.997 # quantile
+# library(sf)
+# sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 4326)  # WGS84
+# sites_coords_utm <- st_transform(sites_coords_sf, crs = 32633)  # UTM zone 33N (système de coordonnées cartésiennes)
+# sites_coords_cartesian <- st_coordinates(sites_coords_utm)
+# head(sites_coords_cartesian)
+# rownames(sites_coords_cartesian) <- rownames(sites_coords)
+# colnames(sites_coords_cartesian) <- c("Longitude", "Latitude")
+# sites_coords <- sites_coords_cartesian
+
+q <- 0.998 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
                                         min_spatial_dist, delta = delta,
                                         n_max_episodes = 10000,
-                                        time_ext = 0)
+                                        time_ext = 0, latlon = TRUE)
 
 n_episodes <- length(selected_points$s0)
 print(n_episodes)
@@ -325,11 +334,12 @@ print(min(selected_points$u_s0)) # min threshold
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = FALSE)
+                                      delta = delta, unif = FALSE, beta = 0)
 
 list_episodes <- list_episodes_points$episodes
-
-
+episode <- list_episodes[[1]]
+# check the episode
+head(episode)
 library(ggplot2)
 library(reshape2)  # for melting wide data to long format
 
@@ -339,17 +349,20 @@ sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
 df_episode <- as.data.frame(episode_test)
-df_episode$Time <- 1:nrow(df_episode)  # Add a time column
+df_episode$Time <- 0:(nrow(df_episode)-1)  # Add a time column
 s0_list[index]
+u_episode <- selected_points$u_s0[index]
+# t0_episode <- t0_list[index]
 # Convert from wide to long format
-df_long <- melt(df_episode, id.vars = "Time", variable.name = "Series", value.name = "Value")
+df_long <- melt(df_episode, id.vars = "Time")
 head(df_long)
-ggplot(df_long, aes(x = Time, y = value, group = variable)) +
+colnames(df_long) <- c("Time", "Pixel", "Value")
+ggplot(df_long, aes(x = Time, y = Value, group = Pixel)) +
   geom_line(color = btfgreen) +
-  geom_vline(xintercept = delta + 1, color = "red", linetype = "dashed") + 
-  labs(title = "Extreme Episode", x = "Time", y = "Value") +
-  annotate("text", x = delta + 1.5, y = 0, label = expression(t[0]),
-           color = "red", vjust = 0, size = 7) +
+  geom_hline(yintercept = u_episode, color = "red", linetype = "dashed") + 
+  # labs(title = "Extreme Episode", x = "Time", y = "Value") +
+  # annotate("text", x = t0_episode, y = 0, label = expression(t[0]),
+  #          color = "red", vjust = 0, size = 7) +
   theme_minimal()
 
 filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
@@ -377,18 +390,32 @@ for (target_s0 in unique_s0_list) {
     colnames(df_long) <- c("Time", "Pixel", "Value")
     df_filtered <- subset(df_long, Pixel == target_s0) 
     df_filtered$Episode <- as.factor(i)
-     df_list[[i]] <- df_filtered
+    df_list[[i]] <- df_filtered
   }
   
   df_all <- do.call(rbind, df_list)
-  
+  u_episode <- selected_points$u_s0[matching_indices[1]]
   p <- ggplot(df_all, aes(x = Time, y = Value, group = Episode)) +
     geom_line(color = btfgreen, alpha = 0.7) +
     labs(x = "Time", y = "Rainfall (mm)") +
-    theme_minimal()
+    theme_minimal() +
+    geom_hline(yintercept = u_episode, color = "red", linetype = "dashed")
+
+  # Find the min and max values of the 'Value' for setting the position of the annotation
+  y_min <- min(df_all$Value, na.rm = TRUE)
+  y_max <- max(df_all$Value, na.rm = TRUE)
   
-  filename <- paste0(im_folder, "optim/comephore/extreme_episodes_site_", target_s0, 
-                     "_min", min_spatial_dist, "km_max", tmax, "h_delta_", delta, ".png")
+  # Set the annotation's y position dynamically based on the min value
+  annotation_y <- y_min - 0.1 * (y_max - y_min)  # Adjust the multiplier for optimal positioning
+
+  # Add vertical line at t0 and annotation for t0
+  # p <- p + geom_vline(xintercept = delta, color = "#ff0000a6", linetype = "dashed") +
+  #   annotate("text", x = delta + 0.5, y = annotation_y, label = expression(t[0]),
+  #            color = "red", vjust = 0, size = 5)
+  
+  
+  filename <- paste0(im_folder, "optim/comephore/excess_episodes/extreme_episodes_site_", target_s0, 
+                     "_min", min_spatial_dist, "km", "_delta_", delta, ".png")
   ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
 
 }
@@ -463,10 +490,11 @@ u_list <- selected_points$u_s0
 # abline(v = 59303 + 12, col = "#be8ba5", lty = 2)
 # abline(v= 59303 - 12, col = "#be8ba5", lty = 2)
 # dev.off()
+library(parallel)
 
-
-tau_vect <- -10:10
+tau_vect <- 0:10
 tmax <- max(tau_vect)
+sites_coords <- as.data.frame(sites_coords)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -474,9 +502,10 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   # t0 <- t0_list[i]
   episode <- list_episodes_unif[[i]]
   u <- u_list[i]
-  ind_t0_ep <- delta # index of t0 in the episode
+  ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = TRUE)
+  # lags$hnorm <- lags$hnorm / 1000 # convert to km
   excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
                                 t0 = ind_t0_ep)
   list(lags = lags, excesses = excesses)
@@ -499,7 +528,7 @@ excesses <- excesses[order(excesses$hnorm), ]
 excesses$kij
 excesses[1:20, ]
 df_lags <- list_lags[[1]]
-
+head(df_lags)
 # ADD WIND DATA ################################################################
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
@@ -508,7 +537,7 @@ list_episodes_points <- get_extreme_episodes(selected_points, comephore,
 list_episodes <- list_episodes_points$episodes
 
 wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
-               MoreArgs = list(wind_df = wind_mtp, delta = delta))
+               MoreArgs = list(wind_df = wind_mtp, delta = 0))
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
 head(wind_ep_df)
@@ -551,10 +580,10 @@ ggplot(wind_ep_df, aes(x = cardDir, fill = FF_interval)) +
         legend.text = element_text(size = 10))
 
 # Save plot
-end_filename <- paste(n_episodes, "_ep_", min_spatial_dist, "_km_",
-                      tmax, "_h_delta_", delta, ".png", sep = "")
-filename <- paste(im_folder, "wind/datagouv/wind_card_dir_", end_filename,
-                    sep = "")
+end_filename <- paste(q*1000, "q_", n_episodes, "ep_", min_spatial_dist, "km_",
+                      tmax, "h_delta_", delta, ".png", sep = "")
+filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_card_dir_", 
+                  end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 
@@ -574,7 +603,7 @@ ggplot(wind_ep_df, aes(x = cardDir_t0, fill = FF_interval)) +
         legend.text = element_text(size = 10))
 
 # save the wind data
-filename <- paste(im_folder, "wind/datagouv/wind_card_dir_t0_", end_filename,
+filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_card_dir_t0_", end_filename,
                   sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -590,7 +619,7 @@ ggplot(wind_ep_df, aes(x = DD_t0)) +
         legend.text = element_text(size = 10))
 
 # save the wind data
-filename <- paste(im_folder, "wind/datagouv/wind_dir_t0_", end_filename,
+filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_dir_t0_", end_filename,
                     sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -609,6 +638,9 @@ wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
 # if values of vx or vy are really close to 0, set them to 0
 wind_ep_df$vx[abs(wind_ep_df$vx) < 1e-08] <- 0
 wind_ep_df$vy[abs(wind_ep_df$vy) < 1e-08] <- 0
+
+mean_vx <- mean(wind_ep_df$vx, na.rm = TRUE)
+mean_vy <- mean(wind_ep_df$vy, na.rm = TRUE)
 
 head(wind_ep_df)
 
@@ -631,13 +663,17 @@ if (any(ind_NA > 0)) {
 }
 save.image("workspace.RData")
 
+wind_df_test <- wind_df
+wind_df_test$vx <- 0.1
+wind_df_test$vy <- 0.1
 # load("workspace.RData")
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+# init_param <- c(beta1, beta2, alpha1, alpha2, mean_vx, mean_vy)
 # init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = lags_opt, list_episodes = episodes_opt,
-        list_excesses = excesses_opt, hmax = 10,
+        list_excesses = excesses_opt, hmax = 7,
         wind_df = wind_df,
         latlon = TRUE,
         directional = TRUE,
@@ -645,10 +681,24 @@ result <- optim(par = init_param, fn = neg_ll_composite,
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
         control = list(maxit = 10000,
-                      trace = 1),
+                      trace = 1,
+                      parscale = c(1, 1, 1, 1, 1, 1)),
         hessian = F)
 result
 
+# test_param <- init_param
+# test_param[5] <- 2
+# df_chi <- theoretical_chi(test_param, lags_opt[[10]], latlon = TRUE,
+#                 directional = TRUE)
+
+# 839832.4
+# neg_ll_composite(test_param, list_lags = lags_opt, list_episodes = episodes_opt,
+#         list_excesses = excesses_opt, hmax = 7,
+#         wind_df = wind_df,
+#         latlon = TRUE,
+#         directional = TRUE)
+
+# plot(df_chi$chi)
 
 # result <- optim(par = init_param, fn = neg_ll_composite,
 #         list_lags = lags_opt,
@@ -718,7 +768,7 @@ kable(df_result, format = "latex") %>%
 
 
 # Vector of test values for eta1
-eta1_values <- seq(1e-08, 2, length.out = 50)
+eta1_values <- seq(0.1, 2, length.out = 50)
 
 # Store for negative log-likelihood values
 neg_log_likelihoods <- numeric(length(eta1_values))
@@ -727,48 +777,34 @@ params <- init_param
 # Loop over different values of eta1
 for (i in seq_along(eta1_values)) {
   params[5] <- eta1_values[i]
-  neg_ll <- neg_ll_composite(params, list_lags = lags_opt, list_episodes = episodes_opt,
+  neg_ll <- neg_ll_composite(params, list_lags = lags_opt,
+                              list_episodes = episodes_opt, latlon = TRUE,
+                              directional = TRUE,
                               list_excesses = excesses_opt, hmax = 7,
                               wind_df = wind_opt)
   neg_log_likelihoods[i] <- neg_ll
 }
 
-end_filename <- paste(q*1000, "q_", min_spatial_dist, "_km_",
-                      tmax, "_h_delta_", delta, ".png", sep = "")
-filename <- paste(im_folder, "optim/comephore/likelihood_plot_varying_eta1_",
-                  end_filename,
-                  sep = "")
-filename <- "test.png"
-png(filename, width = 800, height = 600)
-par(mfrow = c(1, 1))
-plot(eta1_values, neg_log_likelihoods, type = "l", col = "blue", lwd = 2,
-     xlab = expression(eta[1]), ylab = "- Log-likelihood",
-     main = "Likelihood profile as a function of eta1")
-dev.off()
+# Create data frame for ggplot
+df_plot <- data.frame(eta1 =eta1_values, neg_log_likelihood = neg_log_likelihoods)
+
+# Generate the plot using ggplot2
+p <- ggplot(df_plot, aes(x = eta1, y = neg_log_likelihood)) +
+  geom_line(color = "#4b4b8a", linewidth = 1.2) +
+  labs(x = parse(text = "eta[1]"), y = "- Log-likelihood") +
+  theme_minimal()
+p
+# Save the plot
+end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
+                      "h_delta_", delta, ".pdf", sep = "")
+filename <- paste0(im_folder, "optim/comephore/likelihood_varying_eta1_", end_filename)
+
+ggsave(filename, plot = p, width = 7, height = 5, dpi = 300)
 
 
-eta1_values <- seq(0.001, 1.5, length.out = 30)
-beta2_values <- seq(0.1, 3, length.out = 30)
-
-likelihood_matrix <- matrix(NA, nrow = length(eta1_values), ncol = length(beta2_values))
-
-for (i in seq_along(eta1_values)) {
-  for (j in seq_along(beta2_values)) {
-    params <- c(beta1, beta2_values[j], alpha1, alpha2, eta1_values[i], 1)
-    likelihood_matrix[i, j] <- neg_ll_composite(params, list_lags = lags_opt,
-                                  list_episodes = episodes_opt,
-                                  list_excesses = excesses_opt, hmax = 7,
-                                  wind_df = wind_opt)
-  }
-}
-
-contour(eta1_values, beta2_values, likelihood_matrix, xlab = expression(eta[1]),
-        ylab = expression(beta[2]), main = "Log-likelihood contours for eta1 and beta2")
-
-
-
-eta1_values <- seq(0.1, 2, length.out = 10)
-eta2_values <- seq(0.1, 2, length.out = 10)
+# 3D plot of log-likelihood surface
+eta1_values <- seq(0.8, 1.8, length.out = 20)
+eta2_values <- seq(0.8, 1.2, length.out = 30)
 
 ll_values <- matrix(nrow = length(eta1_values), ncol = length(eta2_values))
 
@@ -777,13 +813,103 @@ for (i in seq_along(eta1_values)) {
     params_test <- init_param
     params_test[5] <- eta1_values[i]
     params_test[6] <- eta2_values[j]
-    ll_values[i, j] <- neg_ll_composite(params_test, lags_opt, excesses_opt,
-                                        hmax = 7, wind_df = wind_opt)
+    ll_values[i, j] <- generain::neg_ll_composite(params_test,
+                                  list_lags = lags_opt,
+                                  list_episodes = episodes_opt,
+                                  list_excesses = excesses_opt, hmax = 7,
+                                  wind_df = wind_opt)
   }
 }
 
-persp(eta1_values, eta2_values, ll_values, theta = 30, phi = 0, 
-      col = "lightblue")
+library(plotly)
+
+fig <- plot_ly(
+  x = eta1_values, y = eta2_values, z = ll_values,
+  type = "surface", colorscale = "Viridis"
+)
+
+fig <- fig %>%
+  layout(
+    title = "3D Log-Likelihood Surface",
+    scene = list(
+      xaxis = list(title = "eta1"),
+      yaxis = list(title = "eta2"),
+      zaxis = list(title = "- Log-likelihood")
+    )
+  )
+
+fig
+
+
+
+contour(eta1_values, eta2_values, ll_values, nlevels = 40, 
+  xlab = expression(eta[1]), ylab = expression(eta[2]),
+  main = "Log-likelihood contours for eta1 and eta2")
+
+# Save the plot
+end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
+                      "h_delta_", delta, ".png", sep = "")
+filename <- paste0(im_folder, 
+            "optim/comephore/log_likelihood_contours_eta1_eta2_", 
+            end_filename)
+png(filename, width = 800, height = 600)
+contour(eta1_values, eta2_values, ll_values, nlevels = 40, 
+  xlab = expression(eta[1]), ylab = expression(eta[2]),
+  main = "Log-likelihood contours for eta1 and eta2")
+dev.off()
+
+
+# 2D plot of log-likelihood surface
+eta1_values <- seq(0.1, 1.5, length.out = 30)
+beta2_values <- seq(0.1, 3, length.out = 30)
+
+ll_values <- matrix(nrow = length(eta1_values), ncol = length(beta2_values))
+for (i in seq_along(eta1_values)) {
+  for (j in seq_along(beta2_values)) {
+    params_test <- init_param
+    params_test[5] <- eta1_values[i]
+    params_test[6] <- beta2_values[j]
+    ll_values[i, j] <- generain::neg_ll_composite(params_test,
+                                  list_lags = lags_opt,
+                                  list_episodes = episodes_opt,
+                                  list_excesses = excesses_opt, hmax = 7,
+                                  wind_df = wind_opt)
+  }
+}
+
+# Save the plot
+end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
+                      "h_delta_", delta, ".png", sep = "")
+filename <- paste0(im_folder,
+            "optim/comephore/log_likelihood_contours_eta1_beta2_", 
+            end_filename)
+png(filename, width = 800, height = 600)
+contour(eta1_values, beta2_values, ll_values, nlevels = 40, 
+  xlab = expression(eta[1]), ylab = expression(beta[2]),
+  main = "Log-likelihood contours for eta1 and beta2")
+dev.off()
+
+# 3D plot of log-likelihood surface
+fig <- plot_ly(
+  x = eta1_values, y = beta2_values, z = ll_values,
+  type = "surface", colorscale = "Viridis"
+)
+
+fig <- fig %>%
+  layout(
+    title = "3D Log-Likelihood Surface",
+    scene = list(
+      xaxis = list(title = "eta1"),
+      yaxis = list(title = "beta2"),
+      zaxis = list(title = "- Log-likelihood")
+    )
+  )
+fig
+
+
+htmlwidgets::saveWidget(fig, "interactive_plot.html")
+# Save the figure as a PNG
+orca(fig, "plot.png")
 
 # GENERATE TABLE FROM TEST #####################################################
 
@@ -792,10 +918,10 @@ library(kableExtra)
 library(parallel)
 
 # Configurations
-q_values <- c(0.997, 0.998, 0.999)
-delta_values <- c(12, 15, 20)
-min_spatial_dist_values <- c(5)
-tau_max <- c(5)
+q_values <- c(0.997, 0.9975, 0.998, 0.9985)
+delta_values <- c(12)
+min_spatial_dist_values <- c(3, 5)
+tau_max <- c(10)
 wind_direction_type <- c("t_0")
 
 # Create a parameter grid
@@ -828,23 +954,25 @@ process_params <- function(sites_coords, params) {
 
   # Get the extreme episodes
   list_episodes_unif_points <- get_extreme_episodes(selected_points,
-                                                    comephore, delta = delta, unif = TRUE)
+                                        comephore, delta = delta, unif = TRUE)
   list_episodes_unif <- list_episodes_unif_points$episodes
   s0_list <- selected_points$s0
   u_list <- selected_points$u_s0
-  tau_vect <- -tau_max:tau_max
-  ind_t0_ep <- delta + 1  # index of t0 in the episode
+  tau_vect <- 0:tau_max
+  ind_t0_ep <- 0  # index of t0 in the episode
 
   print("Compute the lags and excesses for each conditional point")
 
   # Compute lags and excesses in parallel
   list_results <- mclapply(1:length(s0_list), function(i) {
-    s0_coords <- sites_coords[s0_list[i], ]
+    s0 <- s0_list[i]
+    s0_coords <- sites_coords[s0, ]
     episode <- list_episodes_unif[[i]]
 
-    lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep, tau_vect, latlon = TRUE)
-    excesses <- empirical_excesses(episode, q, lags, type = "rpareto", t0 = ind_t0_ep)
-    
+    lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
+                                ind_t0_ep, tau_vect, latlon = TRUE)
+    excesses <- empirical_excesses(episode, q, lags, type = "rpareto", 
+                                    t0 = ind_t0_ep)
     list(lags = lags, excesses = excesses)
   }, mc.cores = detectCores() - 1)
 
@@ -853,7 +981,7 @@ process_params <- function(sites_coords, params) {
 
   # Get wind components for each episode
   wind_per_episode <- Map(compute_wind_episode, list_episodes_unif, s0_list, u_list,
-                          MoreArgs = list(wind_df = wind_mtp, delta = delta))
+                          MoreArgs = list(wind_df = wind_mtp, delta = 0))
 
   wind_ep_df <- do.call(rbind, wind_per_episode)
 
@@ -879,9 +1007,12 @@ process_params <- function(sites_coords, params) {
   init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
   print("Optimization")
+  list_episodes_points <- get_extreme_episodes(selected_points, comephore,
+                                      delta = delta, unif = FALSE)
+  list_episodes <- list_episodes_points$episodes
 
   # Optimization
-  result <- optim(par = init_param, fn = neg_ll_composite,
+  result <- optim(par = init_param, fn = neg_ll_composite, list_episodes = list_episodes,
                   list_lags = list_lags, list_excesses = list_excesses, hmax = 7,
                   wind_df = wind_df, latlon = TRUE, directional = TRUE,
                   method = "L-BFGS-B",
@@ -929,7 +1060,7 @@ kable(final_results, format = "latex",
 # ADVECTION ESTIMATION #########################################################
 
 # get first result
-df_result <- final_results[31, ]
+df_result <- final_results[7, ]
 df_result
 
 # Estimated advection vector with wind components
@@ -956,11 +1087,13 @@ head(adv_hat)
 
 # Define wind speed categories and reorder levels to change legend order
 wind_plot_df <- adv_hat %>%
-  mutate(FF_interval = factor(cut(FF_hat_mms,
-                            breaks = c(0, 100, 120, 150, 200, Inf),
-                            labels = c("<100", "100-120", "120-150", "150-200", ">200"),
+  mutate(FF_interval = factor(cut(FF_hat_kmh,
+                            breaks = c(0, 1, 1.2, 1.4, 1.6, 1.8, 2, Inf),
+                            labels = c("<1", "1-1.2", "1.2-1.4", "1.4-1.6",
+                                       "1.6-1.8", "1.8-2", ">2"),
                             right = FALSE),
-            levels = c("<100", "100-120", "120-150", "150-200", ">200")))  # Reverse order
+                            levels = c(">2", "1.8-2", "1.6-1.8",
+                                       "1.4-1.6", "1.2-1.4", "1-1.2", "<1")))  # Reverse order
 
 # Define wind direction order
 wind_plot_df$cardDir <- factor(wind_plot_df$cardDir,
@@ -969,23 +1102,24 @@ wind_plot_df$cardDir <- factor(wind_plot_df$cardDir,
 # remove NA values
 wind_plot_df <- wind_plot_df[!is.na(wind_plot_df$cardDir), ]
 # Custom color palette
-custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e")
+custom_colors <- c("#0335258e", "#1a755a8e", "#5b99868e", "#98d6c48e",
+                   "#d9e4e8", "#f0f0f0", "#f7f7f7", "#ffffff")
 
 # Plot wind rose
 advplot <- ggplot(wind_plot_df, aes(x = cardDir, fill = FF_interval)) +
   geom_bar(position = "stack", width = 1, color = "black") +
-  coord_polar(start = 0) +
-  scale_fill_manual(values = custom_colors, name = "Force (mm/s)") +
+  coord_polar(start = 15 * pi / 8) +
+  scale_fill_manual(values = custom_colors, name = "Force (km/h)") +
   labs(x = "Direction", y = "Count", title = "") +
   theme_minimal() +
   theme(axis.text.x = element_text(size = 12, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         legend.text = element_text(size = 10))
 
-file_path <- paste(im_folder, "optim/comephore/estimated_adv_",
-                    df_result$quantile*1000, "_", df_result$delta, "_",
-                    df_result$minDist, "_", df_result$tau,
-                    "_", df_result$direction, ".png", sep = "")
+file_path <- paste(im_folder, "optim/comephore/excess_episodes/estimated_adv_",
+                    df_result$q*1000, "_", df_result$delta, "_",
+                    df_result$min_spatial_dist, "_", df_result$tau,
+                    "_", df_result$wind_dir, ".png", sep = "")
 ggsave(file_path, plot = advplot, width = 20, height = 15, units = "cm")
 
 
@@ -1036,7 +1170,6 @@ head(df_chi_all)
 library(ggplot2)
 
 df_chi_all$hlagabs <- abs(df_chi_all$hlag)
-
 ggplot(df_chi_all, aes(x = hlagabs, y = vario)) +
   geom_line() +
   facet_wrap(~ tau, scales = "free_x",
@@ -1046,16 +1179,40 @@ ggplot(df_chi_all, aes(x = hlagabs, y = vario)) +
     x = "Spatial lag",
     y = "Variogram"
   ) +
+  scale_color_discrete(name = expression(tau), breaks = sort(unique(df_chi_all$tau))) +
   theme_minimal()
 
 n_episodes <- length(unique(df_chi_all$episode))
 # save the plot
-end_filename <- paste(df_result$quantile*1000, "_", min_spatial_dist, "km_",
-                     wind_dir, "_delta", delta, ".png", sep = "")
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_all",
+end_filename <- paste(df_result$q*1000, "_", df_result$min_spatial_dist, "km_",
+                     df_result$wind_dir, "_delta", delta, ".png", sep = "")
+filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_rpareto_all",
                     "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
+library(ggplot2)
+
+
+# Order tau (ascending or your custom order)
+df_chi_all$tau <- factor(df_chi_all$tau, levels = rev(sort(unique(df_chi_all$tau))))
+
+# Now plot
+ggplot(df_chi_all, aes(x = hlagabs, y = vario, color = tau)) +
+  geom_line() +
+  labs(
+    title = "Directional variogram",
+    x = "Spatial lag",
+    y = "Variogram",
+    color = expression(tau)
+  ) +
+  theme_minimal()
+
+# save the plot
+end_filename <- paste(df_result$q*1000, "_", df_result$min_spatial_dist, "km_",
+                     df_result$wind_dir, "_delta", delta, ".png", sep = "")
+filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_rpareto_all",
+                    "_", end_filename, sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
 
 
 # Plot only for tau = 10
@@ -1071,7 +1228,7 @@ ggplot(df_chi_tau10, aes(x = hlagabs, y = vario)) +
   theme_minimal()
 
 # save the plot
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_tau10",
+filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_rpareto_tau10",
                     "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -1089,6 +1246,6 @@ ggplot(df_chi_tau10, aes(x = hlagabs, y = vario)) +
   theme_minimal()
 
 # save the plot
-filename <- paste(im_folder, "optim/comephore/variogram_rpareto_tau0",
+filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_rpareto_tau0",
                     "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")

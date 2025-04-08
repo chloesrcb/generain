@@ -55,34 +55,51 @@ simu <- sim_rpareto(beta1, beta2, alpha1, alpha2, spa, spa, temp, adv, s0,
 
 # Function to format values correctly, considering decimal places
 format_value <- function(x) {
-  # Check if x is an integer
-  if (x == as.integer(x)) {
-    return(sprintf("%d", x))
-  } else {
-    # Count number of decimal places
-    num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(x)))
-
-    if (x >= 1) {
-      # If the number is greater than or equal to 1
-      if (num_decimals == 1) {
-        return(sprintf("%02d", round(x * 10)))
-      } else {
-        return(sprintf("%03d", round(x * 100)))
-      }
+  formatted_values <- sapply(x, function(val) {
+    # Vérifier si val est négatif
+    is_negative <- val < 0
+    val <- abs(val)  # Travailler avec la valeur absolue pour le formatage
+    
+    # Vérifier si val est un entier
+    if (val == as.integer(val)) {
+      formatted_value <- sprintf("%d", val)
     } else {
-      # If the number is less than 1
-      if (num_decimals == 1) {
-        return(sprintf("%02d", round(x * 10)))
+      # Compter le nombre de décimales
+      num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(val)))
+      
+      if (val >= 1) {
+        # Si le nombre est supérieur ou égal à 1
+        if (num_decimals == 1) {
+          formatted_value <- sprintf("%02d", round(val * 10))
+        } else {
+          formatted_value <- sprintf("%03d", round(val * 100))
+        }
       } else {
-        return(sprintf("%03d", round(x * 100)))
+        # Si le nombre est inférieur à 1
+        if (num_decimals == 1) {
+          formatted_value <- sprintf("%02d", round(val * 10))
+        } else {
+          formatted_value <- sprintf("%03d", round(val * 100))
+        }
       }
     }
-  }
+    
+    # Ajouter "neg" devant si le nombre était négatif
+    if (is_negative) {
+      formatted_value <- paste0("neg", formatted_value)
+    }
+    
+    return(formatted_value)
+  })
+  
+  # Concaténer les valeurs avec un underscore "_"
+  return(paste(formatted_values, collapse = "_"))
 }
+
 # Apply formatting
-param_str <- paste(sapply(params, format_value), collapse = "_")
-adv_str <- paste(sapply(adv, format_value), collapse = "_")
-s0_str <- paste(sapply(s0, format_value), collapse = "_")
+param_str <- format_value(true_param)
+adv_str <- format_value(adv)
+s0_str <- format_value(s0)
 t0_str <- format_value(t0)
 
 # Save the data

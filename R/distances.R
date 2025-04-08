@@ -200,7 +200,7 @@ get_lag_vectors <- function(df_coords, tau_vect, latlon = FALSE) {
 get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
                                     t0 = 0, tau_vect = 0:10, latlon = FALSE) {
   # Conditional point index in df_coords
-  if (typeof(s0) == "list") {
+  if (typeof(s0) == "list") { # TODO t0 inutile
     ind_s0 <- which(df_coords$Latitude == s0$Latitude &
                     df_coords$Longitude == s0$Longitude)
   } else {
