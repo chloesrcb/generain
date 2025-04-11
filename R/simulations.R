@@ -508,7 +508,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
   gamma_temp <- RandomFields::RFvariogram( # for t0
       modelTime,
-      x = grid$t[ind_s0_t0] - t # Todo: verif t0-t or t-t0 for t0 != 0
+      x = t - grid$t[ind_s0_t0] # Todo: verif t0-t or t-t0 for t0 != 0
     )
 
 

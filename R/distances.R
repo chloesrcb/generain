@@ -387,44 +387,99 @@ generate_realistic_latlon_grid <- function(n_sites, lat_range = c(40, 50),
 #' and the direction of the vector in radians.
 #'
 #' @export
-haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
-                                                                          tau) {
-  # Perform the classic Haversine distance calculation
-  deltaLat <- (lat2 - lat1) * pi / 180
-  deltaLon <- (lon2 - lon1) * pi / 180
-  a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) *
-                              cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
-  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-  distance <- 6371000 * c  # Radius of the Earth in meters
+haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) {
+  # Convert degrees to radians
+  to_rad <- function(deg) deg * pi / 180
 
-  # If advection is present, adjust the distance based on advection and time
-  if (length(adv) == 2) {
-    adv_x <- adv[1] * tau  # Advection in X (m)
-    adv_y <- adv[2] * tau  # Advection in Y (m)
+  # Earth's radius in meters
+  R <- 6371000
 
-    # Adjust the coordinates based on advection
-    lon2_adj <- lon2 + adv_x / (111319 * cos(lat2 * pi / 180))
-    lat2_adj <- lat2 + adv_y / 111319
-
-    # Recalculate the distance after adjustment
-    deltaLat_adj <- (lat2_adj - lat1) * pi / 180
-    deltaLon_adj <- (lon2_adj - lon1) * pi / 180
-    a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) *
-                        cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
-    c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
-    distance <- 6371000 * c_adj  # Radius of the Earth in meters
+  # Ensure inputs are numeric vectors of the same length
+  if (!all(length(lat1) == length(lat2), length(lat1) == length(tau))) {
+    stop("lat/lon and tau inputs must be of the same length.")
   }
 
-  # Calculate the direction (theta) using atan2
-  deltaLat <- (lat2 - lat1) * pi / 180
-  deltaLon <- (lon2 - lon1) * pi / 180
-  theta <- atan2(deltaLat, deltaLon)  # Direction of the vector in radians
-  theta_meteo <- (pi / 2 - theta) %% (2 * pi) # Meteorological direction
-  # If the distance is less than a very small value, set to zero for
-  # each element
-  distance <- ifelse(distance < 1e-06, 0, distance)
+  # Initial haversine calculation
+  deltaLat <- to_rad(lat2 - lat1)
+  deltaLon <- to_rad(lon2 - lon1)
 
-  # Return the norm and angle (theta)
-  return(list(distance = distance / 1000, theta = theta,
-                                          theta_meteo = theta_meteo))
+  a <- sin(deltaLat / 2)^2 +
+       cos(to_rad(lat1)) * cos(to_rad(lat2)) * sin(deltaLon / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  # distance <- R * c
+
+  # Add advection to the coordinates
+  adv_x <- adv[1] * tau # m/s * s = m or km/h * h = km
+  adv_y <- adv[2] * tau
+
+  # Convert displacement to degrees
+  lat2_adj <- lat2 + (adv_y / 111132.92)   # 1° latitude ≈ 111132 m
+  lon2_adj <- lon2 + (adv_x / (111412.84 * cos(to_rad(lat2))))  # lon varies by latitude
+
+  # Haversine distance after advection
+  deltaLat_adj <- to_rad(lat2_adj - lat1)
+  deltaLon_adj <- to_rad(lon2_adj - lon1)
+
+  a_adj <- sin(deltaLat_adj / 2)^2 +
+           cos(to_rad(lat1)) * cos(to_rad(lat2_adj)) * sin(deltaLon_adj / 2)^2
+  c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
+  distance_adj <- R * c_adj
+
+  # Direction calculation
+  theta <- atan2(
+    sin(deltaLon_adj) * cos(to_rad(lat2_adj)),
+    cos(to_rad(lat1)) * sin(to_rad(lat2_adj)) -
+      sin(to_rad(lat1)) * cos(to_rad(lat2_adj)) * cos(deltaLon_adj)
+  )
+
+  # Meteorological convention (from North, clockwise)
+  theta_meteo <- (pi / 2 - theta) %% (2 * pi)
+
+  # In kilometers
+  distance_km <- distance_adj / 1000
+  distance_km[distance_km < 1e-6] <- 0
+
+  return(list(distance = distance_km, theta = theta, theta_meteo = theta_meteo))
 }
+
+
+# haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv,
+#                                               tau) {
+ 
+#   deltaLat <- (lat2 - lat1) * pi / 180
+#   deltaLon <- (lon2 - lon1) * pi / 180
+#   theta <- atan2(deltaLat, deltaLon)  # in radians
+#   a <- sin(deltaLat / 2)^2 + cos(lat1 * pi / 180) *
+#                             cos(lat2 * pi / 180) * sin(deltaLon / 2)^2
+#   c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+#   distance <- 6371000 * c  # Radius of the Earth in meters
+
+#   # With advection
+#   if (length(adv) == 2) {
+#     adv_x <- adv[1] * tau  * 3600
+#     adv_y <- adv[2] * tau  * 3600
+
+#     # Adjust the coordinates based on advection
+#     lon2_adj <- lon2 + adv_x / (111319 * cos(lat2 * pi / 180))
+#     lat2_adj <- lat2 + adv_y / 111319
+
+#     # Recalculate the distance after adjustment
+#     deltaLat_adj <- (lat2_adj - lat1) * pi / 180
+#     deltaLon_adj <- (lon2_adj - lon1) * pi / 180
+#     a_adj <- sin(deltaLat_adj / 2)^2 + cos(lat1 * pi / 180) *
+#                         cos(lat2_adj * pi / 180) * sin(deltaLon_adj / 2)^2
+#     c_adj <- 2 * atan2(sqrt(a_adj), sqrt(1 - a_adj))
+#     distance <- 6371000 * c_adj  # Radius of the Earth in meters
+#     theta <- atan2(deltaLat_adj, deltaLon_adj)  # in radians
+#   }
+
+#   theta_meteo <- (pi / 2 - theta) %% (2 * pi) # Meteorological direction
+#   # If the distance is less than a very small value, set to zero for
+#   # each element
+#   distance <- ifelse(distance < 1e-06, 0, distance)
+
+#   # Return the norm and angle (theta)
+#   return(list(distance = distance / 1000, theta = theta,
+#                                           theta_meteo = theta_meteo))
+# }
+

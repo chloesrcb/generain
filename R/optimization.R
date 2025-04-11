@@ -7,13 +7,13 @@
 #' quantile. A spatio-temporal specific neighborhood is considered to avoid
 #' selecting nearby episodes. Each episode is selected according to a 
 #' r-Pareto process with r(X) = X(s0, t0). Each episode will have a size of
-#' 2 * delta.
+#' episode_size.
 #'
 #' @param sites_coords The coordinates of the sites.
 #' @param data The rainfall dataframe.
 #' @param quantile The quantile value.
 #' @param min_spatial_dist The minimum spatial distance between two episodes.
-#' @param delta The temporal window size.
+#' @param episode_size The temporal window size, i.e. the size of the episode.
 #' @param n_max_episodes The maximum number of episodes to select. Default is 10000.
 #' @param time_ext The temporal window extension. Default is 0.
 #' @param latlon A boolean value to indicate if the locations are in latitude and longitude. Default is TRUE.
@@ -24,7 +24,7 @@
 #'
 #' @export
 select_extreme_episodes <- function(sites_coords, data, quantile,
-                                    min_spatial_dist, delta,
+                                    min_spatial_dist, episode_size,
                                     n_max_episodes = 10000, time_ext = 0,
                                     latlon = TRUE) {
   # Convert data to a matrix for fast access
@@ -75,7 +75,7 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
         selected_sites <- selected_points$s0
         time_differences <- abs(selected_points$t0 - t0_candidate)
         distances <- dist_matrix[selected_sites, s0_candidate, drop = FALSE]
-        valid_pairs <- (distances >= min_spatial_dist) | (time_differences > 2 * delta + 1)
+        valid_pairs <- (distances >= min_spatial_dist) | (time_differences > episode_size + 1)
 
         if (all(valid_pairs)) {
           best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
@@ -90,8 +90,8 @@ select_extreme_episodes <- function(sites_coords, data, quantile,
     if (!is.null(best_candidate)) {
       # Store the selected episode
       selected_points <- rbindlist(list(selected_points, best_candidate))
-      t_inf <- max(1, best_candidate$t0 - delta - time_ext)
-      t_sup <- min(nrow(data), best_candidate$t0 + delta + time_ext)
+      t_inf <- max(1, best_candidate$t0 - time_ext)
+      t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext)
       invalid_time_mask[t_inf:t_sup, which(site_names == best_candidate$s0)] <- TRUE
     }
   }
@@ -275,7 +275,7 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
 #'
 #' @param selected_points The selected points (s0, t0).
 #' @param data The rainfall data.
-#' @param delta The temporal window size.
+#' @param episode_size The temporal window size.
 #' @param beta The temporal window extension. Default is 0.
 #' @param unif A boolean value to indicate if we want to get the uniformized
 #'            data episodes. Default is FALSE.
@@ -283,7 +283,7 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
 #' @return The list of extreme episodes of size 2 * delta each.
 #'
 #' @export
-get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
+get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
                                 unif = FALSE) {
   if (unif) { # Uniformize the data
     data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
@@ -299,11 +299,11 @@ get_extreme_episodes <- function(selected_points, data, delta, beta = 0,
     # t_inf <- t0 - (delta) - beta
     # t_sup <- t0 + delta + 2 * beta
     t_inf <- t0 - beta
-    t_sup <- t0 + 2 * delta + beta
+    t_sup <- t0 + episode_size + beta
 
-    # Check that the episode is the correct size (2 * delta)
-    episode_size <- t_sup - t_inf + 1
-    if (episode_size == 2 * delta + 1 + 2 * beta) {
+    # Check that the episode is the correct size (episode_size)
+    episode_size_test <- t_sup - t_inf + 1
+    if (episode_size_test == episode_size + 1 + 2 * beta) {
       episode <- data[t_inf:t_sup, , drop = FALSE] # Get the episode
       episodes <- append(episodes, list(episode))
       valid_indices <- c(valid_indices, i) # Mark this index as valid
@@ -381,9 +381,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   excesses <- df_lags # copy the dataframe
   unique_tau <- unique(df_lags$tau) # unique temporal lags
   ind_s1 <- df_lags$s1[1] # s0
-  # if (t0 == 0) {
-  #   t0 <- t0 + 1 # for simulation TODO
-  # }
+
   for (tau in unique_tau) { # loop over temporal lags
     df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
 
@@ -393,7 +391,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 
       # get the data for the second site
       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+      X_s2 <- as.vector(na.omit(X_s2))
 
       # if (!threshold) {
       #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
@@ -505,50 +503,47 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #' @param params A vector of variogram parameters.
 #' @param df_lags A dataframe with spatial and temporal lag values.
 #' @param latlon A boolean value to indicate if the locations are in latitude
-#'             and longitude. Default is FALSE.
+#'             and longitude.
 #' @param directional A boolean value to indicate if the variogram is
-#'                  directional. Default is TRUE.
+#'                  directional.
 #'
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi <- function(params, df_lags, latlon = FALSE,
-                                            directional = TRUE) {
+theoretical_chi <- function(params, df_lags, latlon,
+                             directional) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
   adv <- params[5:6]
   chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
-  # print(adv)
-  # Convert tau from hours to seconds (assuming tau is in hours)
-  # chi_df$tau <- chi_df$tau * 3600  # Convert tau from hours to seconds
+
   if (latlon) {
     # Compute spatial distance in km (already in km in df_lags)
     haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
                                       chi_df$s2y, chi_df$s2x, adv,
-                                      chi_df$tau)  # Use tau in seconds
-    chi_df$hnormV <- haversine_df$distance
-
-    # Directional adjustment: compute the angle (theta) for the directional
-    # variogram
+                                      (chi_df$tau)* 3600) # seconds
+    chi_df$hnormV <- haversine_df$distance # km
     chi_df$theta <- haversine_df$theta
 
   } else {
-    # Cartesian coordinates case
-    chi_df$s1xv <- chi_df$s1x
-    chi_df$s1yv <- chi_df$s1y
-    chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau
-    chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
-    if (all(adv == 0)) {
-      chi_df$hnormV <- chi_df$hnorm
-    } else {
-      chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                            (chi_df$s2yv - chi_df$s1yv)^2)
-    }
-    # Directional adjustment: compute the angle (theta) for the directional
-    # variogram
-    chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+   # Cartesian coordinates case
+   chi_df$s1xv <- chi_df$s1x
+   chi_df$s1yv <- chi_df$s1y
+   # tau = t - t0 then t = tau + t0
+   # + adv because tau = t0 - t (in simulation)
+   chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau # m/s * s = m
+   chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
+
+   # Recompute distance and angle regardless of advection
+   chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+                        (chi_df$s2yv - chi_df$s1yv)^2) # m
+   # Convert to km
+   chi_df$hnormV <- chi_df$hnormV # km
+
+   chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+
   }
 
   if (directional) {
@@ -571,6 +566,175 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
   # print(chi_no0$chi)
   return(chi_df)
 }
+
+theoretical_chi <- function(params, df_lags, latlon=F, directional=F) {
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  adv <- params[5:6]
+  chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y")]
+
+  # Advected coordinates
+  chi_df$s1x_shifted <- chi_df$s1x
+  chi_df$s1y_shifted <- chi_df$s1y
+  chi_df$s2x_shifted <- chi_df$s2x + adv[1] * chi_df$tau
+  chi_df$s2y_shifted <- chi_df$s2y + adv[2] * chi_df$tau
+
+  # Euclidean distance
+  chi_df$hnormV <- sqrt((chi_df$s2x_shifted - chi_df$s1x_shifted)^2 +
+                        (chi_df$s2y_shifted - chi_df$s1y_shifted)^2)
+
+  # Compute variogram and chi
+  chi_df$vario <- (2 * beta1) * abs(chi_df$hnormV)^alpha1 +
+                  (2 * beta2) * abs(chi_df$tau)^alpha2
+
+  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+
+  return(chi_df)
+}
+
+
+neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
+                  s0 = NA, t0 = NA, threshold = FALSE) {
+  Tmax <- nrow(data) # number of total observations
+  # print(params)
+  if (all(!is.na(s0))) { # if we have a conditioning location
+    p <- 1 # sure excess for r-Pareto process in (s0,t0)
+  } else {
+    # number of marginal excesses
+    nmarg <- get_marginal_excess(data, quantile, threshold)
+    p <- nmarg / Tmax # probability of marginal excesses
+  }
+
+  # # Bounds for the parameters
+  # lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  # if (length(params) == 6) {
+  #   lower.bound <- c(lower.bound, -Inf, -Inf)
+  #   upper.bound <- c(upper.bound, Inf, Inf)
+  # }
+
+  # # Check if the parameters are in the bounds
+  # if (any(params < lower.bound) || any(params > upper.bound)) {
+  #   return(1e50)
+  # }
+
+  chi <- theoretical_chi(params, df_lags) # get chi matrix
+  ll_df <- df_lags # copy the dataframe
+  ll_df$kij <- excesses$kij # number of excesses
+  ll_df$Tobs <- excesses$Tobs
+  ll_df$hnormV <- chi$hnormV
+  ll_df$chi <- chi$chi
+  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
+  ll_df$pchi <- 1 - p * ll_df$chi
+  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
+
+  # number of non-excesses
+  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
+  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
+              ll_df$non_excesses * log(ll_df$pchi)
+  if (!is.na(hmax)) {
+    ll_df <- ll_df[ll_df$hnorm <= hmax, ]
+  }
+
+  nll <- -sum(ll_df$ll, na.rm = TRUE)
+  return(nll)
+}
+
+
+neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
+                    list_excesses, hmax = NA, s0 = NA,
+                    t0 = NA, threshold = FALSE) {
+  print(params)
+  # Bounds for the parameters
+  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
+  upper.bound <- c(Inf, Inf, 1.999, 1.999)
+  if (length(params) == 6) {
+    lower.bound <- c(lower.bound, -Inf, -Inf)
+    upper.bound <- c(upper.bound, Inf, Inf)
+  }
+
+  # Check if the parameters are in the bounds
+  if (any(params < lower.bound) || any(params > upper.bound)) {
+    return(1e50)
+  }
+
+  m <- length(list_simu) # number of replicates
+  nll_composite <- 0 # composite negative log-likelihood
+  for (i in 1:m) {
+    # extract simulation data from i-th simulation
+    simu <- list_simu[[i]]
+    excesses <- list_excesses[[i]]
+    nll_i <- neg_ll(params, simu, df_lags, quantile, hmax = hmax,
+                    excesses = excesses, s0 = s0, t0 = t0,
+                    threshold = threshold)
+    nll_composite <- nll_composite + nll_i
+  }
+  return(nll_composite)
+}
+
+
+
+# theoretical_chi <- function(params, df_lags, latlon,
+#                                             directional) {
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   adv <- params[5:6]
+#   chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
+
+#   # Convert tau from hours to seconds (assuming tau is in hours)
+#   # chi_df$tau_seconds <- chi_df$tau * 3600  # Convert tau from hours to seconds
+
+#   if (latlon) {
+#     # Compute spatial distance in km (already in km in df_lags)
+#     haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
+#                                       chi_df$s2y, chi_df$s2x, adv,
+#                                       chi_df$tau)  # Use tau in seconds
+#     chi_df$hnormV <- haversine_df$distance
+
+#     # Directional adjustment: compute the angle (theta) for the directional
+#     # variogram
+#     chi_df$theta <- haversine_df$theta
+
+#   } else {
+#     # Cartesian coordinates case
+#     chi_df$s1xv <- chi_df$s1x
+#     chi_df$s1yv <- chi_df$s1y
+#     chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau
+#     chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
+#     if (all(adv == 0)) {
+#       chi_df$hnormV <- chi_df$hnorm
+#     } else {
+#       chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
+#                             (chi_df$s2yv - chi_df$s1yv)^2)
+#     }
+#     # Directional adjustment: compute the angle (theta) for the directional
+#     # variogram
+#     chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+#   }
+
+#   if (directional) {
+#       # Apply directional distance adjustment
+#       chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
+#       chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
+#       chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
+#   } else {
+#       # Only distance lag
+#       chi_df$hlag <-  chi_df$hnormV
+#   }
+
+#   # Compute variogram and chi
+#   chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
+#                   (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
+
+#   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+
+#   return(chi_df)
+# }
+
 
 
 #' get_chi_vect function
@@ -639,32 +803,33 @@ neg_ll <- function(params, df_lags, excesses,
                       hmax = NA,  rpar = TRUE, threshold = FALSE,
                       latlon = FALSE, quantile = NA, data = NA,
                       directional = TRUE) {
-  if (rpar) { # if we have a conditioning location
+  # if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
-  } else {
-    if (is.na(data)) {
-      stop("The data must be provided for the max-stable composite likelihood.")
-    } else if (is.na(quantile)) {
-      stop("The quantile or threshold must be provided for the
-            max-stable composite likelihood.")
-    }
-    Tmax <- nrow(data) # number of total observations
-    # number of marginal excesses
-    nmarg <- get_marginal_excess(data, quantile, threshold)
-    p <- nmarg / Tmax # probability of marginal excesses
-  }
+  # } else {
+  #   if (is.na(data)) {
+  #     stop("The data must be provided for the max-stable composite likelihood.")
+  #   } else if (is.na(quantile)) {
+  #     stop("The quantile or threshold must be provided for the
+  #           max-stable composite likelihood.")
+  #   }
+  #   Tmax <- nrow(data) # number of total observations
+  #   # number of marginal excesses
+  #   nmarg <- get_marginal_excess(data, quantile, threshold)
+  #   p <- nmarg / Tmax # probability of marginal excesses
+  # }
 
   # compute theoretical chi values
-  # chi <- theoretical_chi(params, df_lags, latlon, directional)
-  chi <- theoretical_chi(params, df_lags)
+  chi <- theoretical_chi(params, df_lags, latlon, directional)
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
   ll_df$hnormV <- chi$hnormV
   ll_df$chi <- chi$chi
-  ll_df$chi <- pmax(pmin(ll_df$chi, 1 - 1e-8), 1e-8)
+  # ll_df$chi <- pmax(pmin(ll_df$chi, 1 - 1e-8), 1e-8)
+  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
   ll_df$pchi <- 1 - p * ll_df$chi
-  ll_df$pchi <- pmax(pmin(ll_df$pchi,  1 - 1e-8), 1e-8)
+  # ll_df$pchi <- pmax(pmin(ll_df$pchi,  1 - 1e-8), 1e-8)
+  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
 
   # number of non-excesses
   ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
@@ -701,19 +866,35 @@ neg_ll <- function(params, df_lags, excesses,
 #'
 #' @export
 neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
-                    list_excesses, hmax = NA, threshold = FALSE,
+                    list_excesses, adv=NA, hmax = NA, threshold = FALSE,
                     directional = FALSE, rpar = TRUE) {
   m <- length(list_simu) # number of replicates
   nll_composite <- 0 # composite negative log-likelihood
+  print(params)
+  # if (length(adv) == 1 && !is.na(adv)) {
+  #   eta1 <- params[5]
+  #   eta2 <- params[6]
+  #   adv_x <- (abs(adv[1])^eta1) * sign(adv[1]) * eta2
+  #   adv_y <- (abs(adv[2])^eta1) * sign(adv[2]) * eta2
+  #   adv <- cbind(adv_x, adv_y)
+  #   # params <- c(params, adv) # add advection parameters
+  # }
+  
   for (i in 1:m) {
     # extract simulation data from i-th simulation
     simu <- list_simu[[i]]
     excesses <- list_excesses[[i]]
-    nll_i <- neg_ll(params, data = simu, df_lags = df_lags,
-                    quantile = quantile, hmax = hmax,
-                    excesses = excesses, threshold = threshold,
-                    directional = directional,
-                    wind_vect = NA, rpar = rpar)
+    # nll_i <- neg_ll(params, data = simu, df_lags = df_lags,
+    #                 quantile = quantile, hmax = hmax,
+    #                 excesses = excesses, threshold = threshold,
+    #                 directional = directional,
+    #                 rpar = rpar)
+    nll_i <- neg_ll(params = params,
+                     df_lags = df_lags,
+                     hmax = hmax, excesses = excesses,
+                     directional = directional,
+                     threshold = threshold, rpar = rpar,
+                     data = data, quantile = quantile)
     nll_composite <- nll_composite + nll_i
   }
   return(nll_composite)
@@ -743,6 +924,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                              hmax = NA, latlon = TRUE,
                              directional = TRUE, threshold = FALSE,
                              rpar = TRUE) {
+  # params[1:4] <-  c(0.01, 0.2, 1.5, 1)
   # Add default values for advection parameters
   if (length(params) == 4) {
     params <- c(params, 0, 0) # No advection
@@ -753,22 +935,26 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   }
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
+  } else if (length(wind_df) == 2) {
+    eta1 <- params[5]
+    eta2 <- params[6]
+    adv_x <- (abs(wind_df[1])^eta1) * sign(wind_df[1]) * eta2
+    adv_y <- (abs(wind_df[2])^eta1) * sign(wind_df[2]) * eta2
+    adv <- cbind(adv_x, adv_y)
   } else {
     eta1 <- params[5]
     eta2 <- params[6]
     adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
     adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
-    # adv_x <- (abs(wind_df$vx)^eta1) * eta2
-    # adv_y <- (abs(wind_df$vy)^eta1) * eta2
     adv_df <- cbind(adv_x, adv_y)
   }
-  # print(params)
-  # Ensure list_lags has the same length as list_episodes
-  if (is.data.frame(list_lags)) {
-    list_lags <- list(list_lags)
-    list_lags <- rep(list_lags, length(list_episodes))
-  }
-
+  
+  print(params)
+  # # Ensure list_lags has the same length as list_episodes
+  # if (is.data.frame(list_lags)) {
+  #   list_lags <- list(list_lags)
+  #   list_lags <- rep(list_lags, length(list_episodes))
+  # }
   m <- length(list_episodes) # Number of r-Pareto processes
   nll_composite <- 0
   for (i in 1:m) {
@@ -776,25 +962,15 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     excesses <- list_excesses[[i]]
     lags <- list_lags[[i]]
 
-    if (!all(is.na(wind_df))) {
+    if (!all(is.na(wind_df)) && length(wind_df) != 2) {
       adv <- as.vector(adv_df[i,])
     }
-
+ 
     params_adv <- c(params[1:4], adv) # Add advection parameters
-
-    # Arguments for the negative log-likelihood function
-    # args_neg_ll <- list(params = params_adv,
-    #                     df_lags = lags,
-    #                     hmax = hmax, excesses = excesses,
-    #                     latlon = latlon, directional = directional,
-    #                     threshold = threshold, rpar = rpar)
-
     if (!rpar) {
       data <- list_episodes[[i]]
       quantile <- quantile
     }
-
-    # nll_i <- do.call(neg_ll, args_neg_ll)
 
     nll_i <- neg_ll(params = params_adv,
                      df_lags = lags,
@@ -879,15 +1055,15 @@ get_mode_dir <- function(x) {
 #' Compute the wind speed and direction for a given extreme episode.
 #'
 #' @param episode The extreme episode dataframe.
-#' @param s0 The starting location name.
+#' @param s0 The conditioning location name.
 #' @param u The quantile threshold.
 #' @param wind_df The wind dataframe.
-#' @param delta The temporal window size.
+#' @param speed_time The time index for wind speed.
 #'
 #' @return The wind episode dataframe.
 #'
 #' @export
-compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
+compute_wind_episode <- function(episode, s0, u, wind_df, speed_time) {
   timestamps <- as.POSIXct(rownames(episode),
                             format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
@@ -897,12 +1073,21 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
 
   # Time when there is excess above quantile in s0
   # s0_excess_time <- which(episode[, s0] > u)
-  # wind_subset_excess <- wind_df %>%
-  #   dplyr::filter(datetime %in% timestamps[s0_excess_time])
-
+  excess_idx <- which(episode[[s0]] > u)
+  excess_times <- timestamps[excess_idx]
+  wind_excess_subset <- wind_df %>%
+    dplyr::filter(datetime %in% excess_times)
+  if (nrow(wind_excess_subset) > 0) {
+    max_idx <- which.max(wind_excess_subset$FF)
+    DD_excess <- wind_excess_subset$DD[max_idx]
+    cardDir_excess <- wind_excess_subset$cardDir[max_idx]
+  } else {
+    DD_excess <- NA
+    cardDir_excess <- NA
+  }
   # Compute the mean wind speed and direction for the episode if there is data
   if (nrow(wind_subset) > 0) {
-    FF <- wind_subset$FF[delta + 1]
+    FF <- wind_subset$FF[speed_time + 1]
     cardDir <- get_mode_dir(wind_subset$cardDir)
     DD <- mean(wind_subset$DD[wind_subset$cardDir == cardDir])
     DD_deg <- cardinal_to_degree(cardDir)
@@ -910,8 +1095,8 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
     # DD_excess <- mean(wind_subset_excess$DD[wind_subset_excess$cardDir ==
     #                                                         cardDir_excess])
     # DD_excess <- mean(wind_subset_excess$DD)
-    DD_t0 <- wind_subset$DD[delta + 1]
-    cardDir_t0 <- wind_subset$cardDir[delta + 1]
+    DD_t0 <- wind_subset$DD[speed_time + 1]
+    cardDir_t0 <- wind_subset$cardDir[speed_time + 1]
   } else {
     FF <- NA
     DD <- NA
@@ -924,7 +1109,8 @@ compute_wind_episode <- function(episode, s0, u, wind_df, delta) {
   }
 
   return(data.frame(FF = FF, DD = DD, DD_deg = DD_deg, cardDir = cardDir,
-                    DD_t0 = DD_t0, cardDir_t0 = cardDir_t0))
+                    DD_t0 = DD_t0, cardDir_t0 = cardDir_t0,
+                    DD_excess = DD_excess, cardDir_excess = cardDir_excess))
 }
 
 
@@ -1176,7 +1362,7 @@ get_results_optim <- function(filename, data_folder = NA) {
 #'
 #' @export
 process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
-                              true_param, hmax = NA) {
+                              true_param, hmax = NA, wind_df = NA) {
   # Get the m corresponding simulations from list_simu inside a list
   list_episodes <- list_simuM[((i - 1) * m + 1):(i * m)]
   # Compute excesses
@@ -1184,21 +1370,32 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
     empirical_excesses_rpar(episode, u, df_lags, threshold = TRUE, t0 = t0)
   })
 
+  list_lags <- lapply(1:m, function(i) {
+   df_lags
+})
+
   # Optimize
   result <- optim(
     par = true_param,
     fn = neg_ll_composite,
     list_episodes = list_episodes,
-    list_lags = df_lags,
+    list_lags = list_lags,
     list_excesses = list_excesses,
     hmax = hmax,
+    wind_df = wind_df,
     threshold = TRUE,
     latlon = FALSE,
-    directional = FALSE,
+    directional = TRUE,
     method = "L-BFGS-B",
     lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
     upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
     control = list(maxit = 10000)
   )
-  return(result$par)
+
+  estimates <- result$par
+  if (result$convergence != 0) {
+    estimates <- rep(NA, length(true_param))
+  }
+  
+  return(estimates)
 }

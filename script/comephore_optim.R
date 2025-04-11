@@ -8,14 +8,14 @@ cat("\014")
 source("./script/load_libraries.R")
 
 # Get all files in the folder "R"
-# functions_folder <- "./R"
-# files <- list.files(functions_folder, full.names = TRUE)
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
 # # load all functions in files
-# invisible(lapply(files, function(f) source(f, echo = FALSE)))
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
-# load("workspace.RData")
-library(generain)
+load("workspace.RData")
+# library(generain)
 
 # LOAD DATA ####################################################################
 filename_com <- paste0(data_folder, "comephore/zoom_3km.csv")
@@ -303,8 +303,8 @@ save.image("workspace.RData")
 
 # Spatio-temporal neighborhood parameters
 min_spatial_dist <- 5 # in km
-delta <- 12 # step for the episode before and after the max value
-
+delta <- 12 # in hours
+episode_size <- 2 * delta # size of the episode
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
@@ -322,7 +322,8 @@ q <- 0.998 # quantile
 
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, comephore, q,
-                                        min_spatial_dist, delta = delta,
+                                        min_spatial_dist,
+                                        episode_size = episode_size,
                                         n_max_episodes = 10000,
                                         time_ext = 0, latlon = TRUE)
 
@@ -334,7 +335,8 @@ print(min(selected_points$u_s0)) # min threshold
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = FALSE, beta = 0)
+                                     episode_size = episode_size, unif = FALSE,
+                                     beta = 0)
 
 list_episodes <- list_episodes_points$episodes
 episode <- list_episodes[[1]]
@@ -470,7 +472,7 @@ any(overlaps)
 # list_date[list_date[,3] == year, ]
 # # 34, 47
 list_episodes_unif_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = TRUE)
+                                      episode_size = episode_size, unif = TRUE)
 
 list_episodes_unif <- list_episodes_unif_points$episodes
 # list_episodes[[100]] # check the episode
@@ -532,15 +534,18 @@ head(df_lags)
 # ADD WIND DATA ################################################################
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                    delta = delta, unif = FALSE)
+                                    episode_size = episode_size, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
 
 wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
-               MoreArgs = list(wind_df = wind_mtp, delta = 0))
+               MoreArgs = list(wind_df = wind_mtp, speed_time = 0))
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
 head(wind_ep_df)
+
+# show rows where DD_t0 is different than DD_excess
+wind_ep_df[wind_ep_df$DD_t0 != wind_ep_df$DD_excess, ]
 
 sum(is.na(wind_ep_df$DD_deg))
 sum(is.na(wind_ep_df$DD_t0))
@@ -624,10 +629,48 @@ filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_dir_t0_", end_f
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 
+# Ensure cardDir is a factor with correct order
+wind_ep_df$cardDir_excess <- factor(wind_ep_df$cardDir_excess,
+                        levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+
+# Plot wind rose
+ggplot(wind_ep_df, aes(x = cardDir_excess, fill = FF_interval)) +
+  geom_bar(position = "stack", width = 1, color = "black") +
+  coord_polar(start = 15 * pi / 8) +
+  scale_fill_manual(values = custom_colors, name = "Force (m/s)") +
+  labs(x = "Direction", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_card_dir_excess_", end_filename,
+                  sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+# Plot wind rose for DD_excess
+ggplot(wind_ep_df, aes(x = DD_excess)) +
+  geom_bar(position = "stack", width = 3, color = "#5048489d", fill = btfgreen,
+        alpha = 0.8) +
+  coord_polar(start = 15.85 * pi / 8) +
+  labs(x = "Direction (degree)", y = "Count", title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+# save the wind data
+# save the wind data
+filename <- paste(im_folder, "wind/datagouv/excess_episodes/wind_dir_excess_", end_filename,
+                    sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+
 # OPTIMIZATION #################################################################
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = FALSE)
+                                    episode_size = episode_size, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
 
@@ -663,9 +706,9 @@ if (any(ind_NA > 0)) {
 }
 save.image("workspace.RData")
 
-wind_df_test <- wind_df
-wind_df_test$vx <- 0.1
-wind_df_test$vy <- 0.1
+# wind_df_test <- wind_df
+# wind_df_test$vx <- 0.1
+# wind_df_test$vy <- 0.1
 # load("workspace.RData")
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # init_param <- c(beta1, beta2, alpha1, alpha2, mean_vx, mean_vy)
@@ -918,9 +961,9 @@ library(kableExtra)
 library(parallel)
 
 # Configurations
-q_values <- c(0.997, 0.9975, 0.998, 0.9985)
+q_values <- c(0.998)
 delta_values <- c(12)
-min_spatial_dist_values <- c(3, 5)
+min_spatial_dist_values <- c(5)
 tau_max <- c(10)
 wind_direction_type <- c("t_0")
 
@@ -938,6 +981,7 @@ param_grid <- expand.grid(
 process_params <- function(sites_coords, params) {
   q <- params$q
   delta <- params$delta
+  episode_size  <- 2 * delta
   min_spatial_dist <- params$min_spatial_dist
   tau_max <- params$tau_max
   wind_dir <- params$wind_dir
@@ -947,15 +991,23 @@ process_params <- function(sites_coords, params) {
 
   # Select (s0, t0) pairs for extreme episodes
   selected_points <- select_extreme_episodes(sites_coords, comephore, q,
-                                             min_spatial_dist, delta = delta,
+                                             min_spatial_dist,
+                                             episode_size = episode_size,
                                              n_max_episodes = 10000,
                                              time_ext = 0)
   n_episodes <- length(selected_points$s0)
 
   # Get the extreme episodes
   list_episodes_unif_points <- get_extreme_episodes(selected_points,
-                                        comephore, delta = delta, unif = TRUE)
+                                      comephore,
+                                      episode_size = episode_size, unif = TRUE)
   list_episodes_unif <- list_episodes_unif_points$episodes
+
+  list_episodes_points <- get_extreme_episodes(selected_points, comephore,
+                                    episode_size = episode_size, unif = FALSE)
+
+  list_episodes <- list_episodes_points$episodes
+
   s0_list <- selected_points$s0
   u_list <- selected_points$u_s0
   tau_vect <- 0:tau_max
@@ -971,26 +1023,26 @@ process_params <- function(sites_coords, params) {
 
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
                                 ind_t0_ep, tau_vect, latlon = TRUE)
-    excesses <- empirical_excesses(episode, q, lags, type = "rpareto", 
+    excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
                                     t0 = ind_t0_ep)
     list(lags = lags, excesses = excesses)
   }, mc.cores = detectCores() - 1)
 
   list_lags <- lapply(list_results, `[[`, "lags")
   list_excesses <- lapply(list_results, `[[`, "excesses")
-
+  
   # Get wind components for each episode
-  wind_per_episode <- Map(compute_wind_episode, list_episodes_unif, s0_list, u_list,
-                          MoreArgs = list(wind_df = wind_mtp, delta = 0))
+  wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
+                          MoreArgs = list(wind_df = wind_mtp, speed_time = 0))
 
   wind_ep_df <- do.call(rbind, wind_per_episode)
 
   if (wind_dir == "t_0") { # Use wind direction at t0
-    wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
-    wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
-  } else { # Use most frequent wind direction
-    wind_ep_df$vx <- -wind_ep_df$FF * cos(wind_ep_df$DD * pi / 180)
-    wind_ep_df$vy <- -wind_ep_df$FF * sin(wind_ep_df$DD * pi / 180)
+    wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_t0 * pi / 180)
+    wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_t0 * pi / 180)
+  } else { # Use excess wind direction
+    wind_ep_df$vx <- -wind_ep_df$FF * sin(wind_ep_df$DD_excess * pi / 180)
+    wind_ep_df$vy <- -wind_ep_df$FF * cos(wind_ep_df$DD_excess * pi / 180)
   }
 
   wind_df <- wind_ep_df[, c("vx", "vy")]
@@ -1007,13 +1059,12 @@ process_params <- function(sites_coords, params) {
   init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
   print("Optimization")
-  list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                      delta = delta, unif = FALSE)
-  list_episodes <- list_episodes_points$episodes
 
   # Optimization
-  result <- optim(par = init_param, fn = neg_ll_composite, list_episodes = list_episodes,
-                  list_lags = list_lags, list_excesses = list_excesses, hmax = 7,
+  result <- optim(par = init_param, fn = neg_ll_composite,
+                  list_episodes = list_episodes,
+                  list_lags = list_lags,
+                  list_excesses = list_excesses, hmax = 7,
                   wind_df = wind_df, latlon = TRUE, directional = TRUE,
                   method = "L-BFGS-B",
                   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
@@ -1048,6 +1099,10 @@ results_list <- mclapply(seq_len(nrow(param_grid)), function(i) {
 
 # Combine results
 final_results <- do.call(rbind, results_list)
+# remove tau column
+final_results <- final_results[, -which(names(final_results) == "tau")]
+# put nepisodes column before beta1 column
+final_results <- final_results[, c(1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10)]
 
 # Create LaTeX table
 kable(final_results, format = "latex",
@@ -1149,7 +1204,7 @@ adv_df <- wind_df %>%
   
 # remove NA values
 adv_df <- adv_df[!is.na(adv_df$adv_x), ]
-
+head(adv_df)
 list_lags <- lapply(seq_along(list_lags), function(i) {
   list_lags[[i]] %>%
     mutate(vx = wind_df$vx[i], vy = wind_df$vy[i])
@@ -1249,3 +1304,6 @@ ggplot(df_chi_tau10, aes(x = hlagabs, y = vario)) +
 filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_rpareto_tau0",
                     "_", end_filename, sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+# Revoir la pres du variogram: V=0 et une avec V qui vient du sud est et comparaison
