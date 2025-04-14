@@ -3,48 +3,81 @@ library(generain)
 library(ggplot2)
 library(reshape2)
 library(animation)
-
+library(RandomFields)
+library(RandomFieldsUtils)
+source("./script/load_libraries.R")
 
 ################################################################################
 # Simulate data using the rpareto model
 ngrid <- 5
 spa <- 1:ngrid
-temp <- 1:50
-n.res <- 100
-param <- c(0.4, 0.4, 1.5, 1) # true parameters for the variogram
+temp <- 0:20
+m <- 500 # number of episodes
+M <- 1 # number of simulations
+n.res <- m * M
+param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(0.05, 0.02)
+adv <- c(0.1, 0.2)
+true_param <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
 s0 <- c(1, 1)
-t0 <- 1
+t0 <- 0
 
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
                           adv, s0, t0, n.res)
 
-# Save the simulations
+
+# Apply formatting
+param_str <- format_value(true_param)
+adv_str <- format_value(adv)
+s0_str <- format_value(s0)
+t0_str <- format_value(t0)
+
+# Save the data
+foldername <- paste0(data_folder, "simulations/simulations_rpar/rpar_",
+                    param_str, "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
+                    s0_str, "_t0_", t0_str, "/")
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
 save_simulations(simu_rpar, ngrid, n.res,
-                 folder = "./data/simulations_rpar/",
+                 folder = foldername,
                  file = paste0("rpar_", ngrid^2, "s_",
                                 length(temp), "t"))
 
-file_path <- paste0("./data/simulations_rpar/rpar_", ngrid^2, "s_",
-                                length(temp), "t_1.csv")
+
+
+file_path <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                    length(temp), "t_1.csv")
 simulation_data <- read.csv(file_path)
 
-create_simu_gif(simulation_data, c(param, adv), type = "rpar", forcedtemp = 30)
+# create_simu_gif(simulation_data, c(param, adv), type = "rpar", forcedtemp = 30)
 
 ################################################################################
 # Simulation
+files <- list.files(foldername, full.names = TRUE)
+length(files)
 list_rpar <- list()
 for (i in 1:n.res) {
-  file_path <- paste0("./data/simulations_rpar/rpar_", ngrid^2, "s_",
-                                length(temp), "t_", i, ".csv")
-  df <- read.csv(file_path)
-  list_rpar[[i]] <- df
+  file_name <- files[i]
+  list_rpar[[i]]<- read.csv(file_name)
 }
+
+
+# files <- list.files(foldername, full.names = TRUE)
+# length(files)
+# list_simuM <- list()
+# m <- 500
+# nres <- m*M
+# for (i in 1:nres) {
+#   file_name <- files[i]
+#   list_simuM[[i]] <- read.csv(file_name)
+# }
 
 # dependece buhl
 simu_df <- list_rpar[[1]] # first simulation
@@ -57,10 +90,11 @@ sites_coords <- generate_grid_coords(sqrt(nsites))
 params <- c(param, adv)
 
 # get the lag vectors
-df_lags <- get_conditional_lag_vectors(sites_coords, params, s0, t0,
-                          hmax = sqrt(17), tau_vect = 0:10)
+df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0,
+                                        tau_vect = 0:10)
 
-chi_theorical <- theorical_chi(params, df_lags)
+chi_theorical <- theoretical_chi(params, df_lags, latlon = FALSE,
+                                            directional = FALSE)
 chi <- unique(chi_theorical$chi)
 plot(chi)
 tau <- 0:10 # temporal lags
@@ -70,22 +104,170 @@ quantile <- 0.8
 excesses <- empirical_excesses(simu_df, quantile, df_lags)
 # plot(density(excesses$kij), main = "Excesses")
 
+u = 1
+i = 1
+# Get the m corresponding simulations from list_simu inside a list
+list_episodes <- list_rpar[((i - 1) * m + 1):(i * m)]
+# Compute excesses
+list_excesses <- lapply(list_episodes, function(episode) {
+empirical_excesses_rpar(episode, u, df_lags, threshold = TRUE, t0 = t0)
+})
 
-result <- optim(par = c(params), fn = neg_ll,
-                  data = simu_df,
-                  quantile = quantile,
-                  df_lags = df_lags,
-                  excesses = excesses,
-                  locations = sites_coords,
-                  hmax = sqrt(17),
-                  s0 = s0,
-                  t0 = t0,
-                  method = "BFGS",
-                  control = list(parscale = c(1, 1, 1, 1, 1, 1),
-                                 maxit = 10000))
+library(parallel)
+num_cores <- detectCores() - 1
+true_param <- c(0.4, 0.2, 1.5, 1, 0.1, 0.2)
+init_params <- c(0.4, 0.2, 1.5, 1, 1.1, 0.8)
+result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+                        list_simuM = list_rpar, u = u, df_lags = df_lags,
+                        t0 = t0, true_param = init_params,
+                        wind_df = adv, hmax = sqrt(17),
+                        mc.cores = num_cores)
+result_list
 
-rmse_optim <- round(sqrt((result$par - params)^2), 5)
-print(rmse_optim)
+generate_init_close <- function(true_param) {
+  p1 <- abs(true_param[1] + rnorm(1, 0, sd = 0.1))         # > 0
+  p2 <- abs(true_param[2] + rnorm(1, 0, sd = 0.1))         # > 0
+
+  p3 <- true_param[3] + rnorm(1, 0, sd = 0.1)
+  p4 <- true_param[4] + rnorm(1, 0, sd = 0.1)
+
+  p5 <- true_param[5] + rnorm(1, 0, sd=0.1)
+  p6 <- true_param[6] + rnorm(1, 0, sd=0.1)
+
+  return(c(p1, p2, p3, p4, p5, p6))
+}
+generate_init_close <- function(true_param) {
+  p1 <- true_param[1]
+  p2 <- true_param[2]
+  p3 <- true_param[3]
+  p4 <- true_param[4]
+
+  p5 <- true_param[5] + rnorm(1, 0, sd = 0.2)
+  p6 <- true_param[6] + rnorm(1, 0, sd = 0.2)
+
+  return(c(p1, p2, p3, p4, p5, p6))
+}
+
+
+set.seed(123)
+n_inits <- 10
+true_param_eta <- c(0.4, 0.2, 1.5, 1, 1, 1)
+init_list <- replicate(n_inits, generate_init_close(true_param_eta), 
+                      simplify = FALSE)
+
+results_all <- lapply(init_list, function(params) {
+  mclapply(1:M, process_simulation, M = M, m = m,
+           list_simuM = list_rpar, u = u, df_lags = df_lags,
+           t0 = t0, true_param = params,
+           wind_df = adv, hmax = sqrt(17),
+           mc.cores = num_cores)
+})
+
+length(results_all)
+
+final_params <- do.call(rbind, lapply(results_all, function(res) do.call(rbind, res)))
+
+colnames(final_params) <- paste0("param", 1:6)
+
+# # Moyenne, écart-type
+# summary_stats <- as.data.frame(final_params) %>%
+#   summarise(across(everything(), list(mean = mean, sd = sd)))
+
+# print(summary_stats)
+
+# # Boxplot + true_param en rouge pointillé
+# boxplot(final_params, main = "")
+# abline(h = true_param, col = "red", lty = 2)
+
+
+# df <- data.frame(value = as.vector(final_params),
+#                  param = rep(colnames(final_params), each = nrow(final_params)))
+
+# Define true_param (vector of true values for each parameter)
+# Example: true_param <- c(a = 1, b = 2, c = 3)
+
+# Convert true_param into a data frame for plotting
+
+# Parameter names in latex
+param_names <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+param_str <- c(expression(beta[1]), expression(beta[2]),
+               expression(alpha[1]), expression(alpha[2]),
+               expression(v[x]), expression(v[y]))
+true_df <- data.frame(param = colnames(final_params), value = true_param)
+
+# Create the boxplot
+ggplot(df, aes(x = param, y = value)) +
+  geom_boxplot() +
+  geom_point(data = true_df, aes(x = param, y = value), 
+             color = "red", shape = 4, size = 3, stroke = 1.5) +
+  scale_x_discrete(labels = param_str) +
+  theme_minimal()
+
+folder_save <- paste0(im_folder, "optim/rpar/", param_str, "/")
+if (!dir.exists(folder_save)) {
+  dir.create(folder_save, recursive = TRUE)
+}
+filename <- paste0(folder_save, "boxplot_rpar_", n_inits, 
+                                      "_different_init.png")
+ggsave(filename, width = 10, height = 6)
+
+
+
+
+
+
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Parameter names in latex
+param_names <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+param_str <- c(expression(beta[1]), expression(beta[2]),
+               expression(alpha[1]), expression(alpha[2]),
+               expression(v[x]), expression(v[y]))
+
+init_params <- do.call(rbind, init_list)
+colnames(init_params) <- colnames(final_params)
+
+df_init <- data.frame(value = as.vector(init_params),
+                      param = rep(param_names,
+                              each = nrow(init_params)),
+                      type = "Initial")
+
+df_final <- data.frame(value = as.vector(final_params),
+                       param = rep(param_names,
+                              each = nrow(final_params)),
+                       type = "Final")
+
+
+
+
+df_all <- rbind(df_init, df_final)
+
+# Plot
+ggplot(df_all, aes(x = param, y = value, fill = type)) +
+  geom_boxplot(position = position_dodge(width = 0.75)) +
+  geom_point(data = true_df, aes(x = param_names, y = value),
+             inherit.aes = FALSE,
+             color = "red", shape = 4, size = 3, stroke = 1.5) +
+  scale_fill_manual(values = c("Initial" = "skyblue", "Final" = "orange")) +
+  theme_minimal() +
+  labs(title = "Boxplot of Parameters: Initial vs Final",
+       y = "Parameter Value", x = "Parameter",
+       fill = "Type")
+
+
+
+
+df_final[df_final$param == "beta2", ]$value
+
+
+
+
+
+# rmse_optim <- round(sqrt((result$par - params)^2), 5)
+# print(rmse_optim)
 
 ################################################################################
 # All simulations together

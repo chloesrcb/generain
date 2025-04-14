@@ -1273,14 +1273,14 @@ get_results_optim <- function(filename, data_folder = NA) {
 #' @param u The quantile value.
 #' @param df_lags The dataframe with spatial and temporal lag values.
 #' @param t0 The starting time.
-#' @param true_param The true variogram parameter (beta1, beta2, alpha1, alpha2)
+#' @param init_params The true variogram parameter (beta1, beta2, alpha1, alpha2)
 #' @param hmax The maximum spatial lag value. Default is NA.
 #'
 #' @return The optimized parameters.
 #'
 #' @export
 process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
-                              true_param, hmax = NA, wind_df = NA) {
+                              init_params, hmax = NA, wind_df = NA) {
   # Get the m corresponding simulations from list_simu inside a list
   list_episodes <- list_simuM[((i - 1) * m + 1):(i * m)]
   # Compute excesses
@@ -1294,7 +1294,7 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
 
   # Optimize
   result <- optim(
-    par = true_param,
+    par = init_params,
     fn = neg_ll_composite,
     list_episodes = list_episodes,
     list_lags = list_lags,
@@ -1307,12 +1307,14 @@ process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
     method = "L-BFGS-B",
     lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
     upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-    control = list(maxit = 10000)
+    control = list(maxit = 10000,
+                   parscale = c(0.1, 0.1, 1, 1, 1, 1),
+                   fnscale = -1)
   )
 
   estimates <- result$par
   if (result$convergence != 0) {
-    estimates <- rep(NA, length(true_param))
+    estimates <- rep(NA, length(init_params))
   }
   
   return(estimates)
