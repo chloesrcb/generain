@@ -508,13 +508,13 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
   gamma_space <- RandomFields::RFvariogram( # for s0,t0
       modelSpace,
-      x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+      x = coords$shifted_x - grid$shifted_x[ind_s0_t0], # s - s0
       y = coords$shifted_y - grid$shifted_y[ind_s0_t0],
     )
 
   gamma_temp <- RandomFields::RFvariogram( # for t0
       modelTime,
-      x = t - grid$t[ind_s0_t0] # t0-t
+      x = t - grid$t[ind_s0_t0] # t-t0
     )
 
 

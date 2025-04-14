@@ -510,8 +510,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi <- function(params, df_lags, latlon,
-                             directional) {
+theoretical_chi <- function(params, df_lags, latlon, directional) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
@@ -531,9 +530,8 @@ theoretical_chi <- function(params, df_lags, latlon,
    # Cartesian coordinates case
    chi_df$s1xv <- chi_df$s1x
    chi_df$s1yv <- chi_df$s1y
-   # tau = t - t0 then t = tau + t0
-   # + adv because tau = t0 - t (in simulation)
-   # - adv because tau = t - t0 (in simulation)
+   # - adv because tau = t - t0 (in simulation) and 
+   # s_shifted = s - adv * t, s0_shifted = s0 - adv * t0, h = s - s0
    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau # m/s * s = m
    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
 
