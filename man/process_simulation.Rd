@@ -4,7 +4,18 @@
 \alias{process_simulation}
 \title{process_simulation function}
 \usage{
-process_simulation(i, M, m, list_simuM, u, df_lags, t0, true_param, hmax = NA)
+process_simulation(
+  i,
+  M,
+  m,
+  list_simuM,
+  u,
+  df_lags,
+  t0,
+  true_param,
+  hmax = NA,
+  wind_df = NA
+)
 }
 \arguments{
 \item{i}{The index of the simulation.}

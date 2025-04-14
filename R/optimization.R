@@ -391,7 +391,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 
       # get the data for the second site
       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      X_s2 <- as.vector(na.omit(X_s2))
+      X_s2 <- as.vector(na.omit(X_s2[, 1]))
 
       # if (!threshold) {
       #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
@@ -533,8 +533,9 @@ theoretical_chi <- function(params, df_lags, latlon,
    chi_df$s1yv <- chi_df$s1y
    # tau = t - t0 then t = tau + t0
    # + adv because tau = t0 - t (in simulation)
-   chi_df$s2xv <- chi_df$s2x + adv[1] * chi_df$tau # m/s * s = m
-   chi_df$s2yv <- chi_df$s2y + adv[2] * chi_df$tau
+   # - adv because tau = t - t0 (in simulation)
+   chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau # m/s * s = m
+   chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
 
    # Recompute distance and angle regardless of advection
    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
@@ -567,113 +568,32 @@ theoretical_chi <- function(params, df_lags, latlon,
   return(chi_df)
 }
 
-theoretical_chi <- function(params, df_lags, latlon=F, directional=F) {
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  adv <- params[5:6]
-  chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y")]
+# theoretical_chi <- function(params, df_lags, latlon=F, directional=F) {
+#   beta1 <- params[1]
+#   beta2 <- params[2]
+#   alpha1 <- params[3]
+#   alpha2 <- params[4]
+#   adv <- params[5:6]
+#   chi_df <- df_lags[c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y")]
 
-  # Advected coordinates
-  chi_df$s1x_shifted <- chi_df$s1x
-  chi_df$s1y_shifted <- chi_df$s1y
-  chi_df$s2x_shifted <- chi_df$s2x + adv[1] * chi_df$tau
-  chi_df$s2y_shifted <- chi_df$s2y + adv[2] * chi_df$tau
+#   # Advected coordinates
+#   chi_df$s1x_shifted <- chi_df$s1x
+#   chi_df$s1y_shifted <- chi_df$s1y
+#   chi_df$s2x_shifted <- chi_df$s2x + adv[1] * chi_df$tau
+#   chi_df$s2y_shifted <- chi_df$s2y + adv[2] * chi_df$tau
 
-  # Euclidean distance
-  chi_df$hnormV <- sqrt((chi_df$s2x_shifted - chi_df$s1x_shifted)^2 +
-                        (chi_df$s2y_shifted - chi_df$s1y_shifted)^2)
+#   # Euclidean distance
+#   chi_df$hnormV <- sqrt((chi_df$s2x_shifted - chi_df$s1x_shifted)^2 +
+#                         (chi_df$s2y_shifted - chi_df$s1y_shifted)^2)
 
-  # Compute variogram and chi
-  chi_df$vario <- (2 * beta1) * abs(chi_df$hnormV)^alpha1 +
-                  (2 * beta2) * abs(chi_df$tau)^alpha2
+#   # Compute variogram and chi
+#   chi_df$vario <- (2 * beta1) * abs(chi_df$hnormV)^alpha1 +
+#                   (2 * beta2) * abs(chi_df$tau)^alpha2
 
-  chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+#   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
 
-  return(chi_df)
-}
-
-
-neg_ll <- function(params, data, df_lags, quantile, excesses, hmax = NA,
-                  s0 = NA, t0 = NA, threshold = FALSE) {
-  Tmax <- nrow(data) # number of total observations
-  # print(params)
-  if (all(!is.na(s0))) { # if we have a conditioning location
-    p <- 1 # sure excess for r-Pareto process in (s0,t0)
-  } else {
-    # number of marginal excesses
-    nmarg <- get_marginal_excess(data, quantile, threshold)
-    p <- nmarg / Tmax # probability of marginal excesses
-  }
-
-  # # Bounds for the parameters
-  # lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  # upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  # if (length(params) == 6) {
-  #   lower.bound <- c(lower.bound, -Inf, -Inf)
-  #   upper.bound <- c(upper.bound, Inf, Inf)
-  # }
-
-  # # Check if the parameters are in the bounds
-  # if (any(params < lower.bound) || any(params > upper.bound)) {
-  #   return(1e50)
-  # }
-
-  chi <- theoretical_chi(params, df_lags) # get chi matrix
-  ll_df <- df_lags # copy the dataframe
-  ll_df$kij <- excesses$kij # number of excesses
-  ll_df$Tobs <- excesses$Tobs
-  ll_df$hnormV <- chi$hnormV
-  ll_df$chi <- chi$chi
-  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
-  ll_df$pchi <- 1 - p * ll_df$chi
-  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
-
-  # number of non-excesses
-  ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
-  ll_df$ll <- ll_df$kij * log(ll_df$chi) +
-              ll_df$non_excesses * log(ll_df$pchi)
-  if (!is.na(hmax)) {
-    ll_df <- ll_df[ll_df$hnorm <= hmax, ]
-  }
-
-  nll <- -sum(ll_df$ll, na.rm = TRUE)
-  return(nll)
-}
-
-
-neg_ll_composite_simu <- function(params, list_simu, df_lags, quantile,
-                    list_excesses, hmax = NA, s0 = NA,
-                    t0 = NA, threshold = FALSE) {
-  print(params)
-  # Bounds for the parameters
-  lower.bound <- c(1e-6, 1e-6, 1e-6, 1e-6)
-  upper.bound <- c(Inf, Inf, 1.999, 1.999)
-  if (length(params) == 6) {
-    lower.bound <- c(lower.bound, -Inf, -Inf)
-    upper.bound <- c(upper.bound, Inf, Inf)
-  }
-
-  # Check if the parameters are in the bounds
-  if (any(params < lower.bound) || any(params > upper.bound)) {
-    return(1e50)
-  }
-
-  m <- length(list_simu) # number of replicates
-  nll_composite <- 0 # composite negative log-likelihood
-  for (i in 1:m) {
-    # extract simulation data from i-th simulation
-    simu <- list_simu[[i]]
-    excesses <- list_excesses[[i]]
-    nll_i <- neg_ll(params, simu, df_lags, quantile, hmax = hmax,
-                    excesses = excesses, s0 = s0, t0 = t0,
-                    threshold = threshold)
-    nll_composite <- nll_composite + nll_i
-  }
-  return(nll_composite)
-}
-
+#   return(chi_df)
+# }
 
 
 # theoretical_chi <- function(params, df_lags, latlon,

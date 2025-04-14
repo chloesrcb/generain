@@ -8,7 +8,6 @@ neg_ll(
   params,
   df_lags,
   excesses,
-  wind_vect = NA,
   hmax = NA,
   rpar = TRUE,
   threshold = FALSE,
@@ -25,8 +24,6 @@ neg_ll(
 
 \item{excesses}{The excesses dataframe with the number of excesses kij and
 the number of possible excesses Tobs.}
-
-\item{wind_vect}{A vector of wind values. Default is NA.}
 
 \item{hmax}{The maximum spatial lag value. Default is NA.}
 

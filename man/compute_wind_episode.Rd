@@ -4,18 +4,18 @@
 \alias{compute_wind_episode}
 \title{compute_wind_episode function}
 \usage{
-compute_wind_episode(episode, s0, u, wind_df, delta)
+compute_wind_episode(episode, s0, u, wind_df, speed_time)
 }
 \arguments{
 \item{episode}{The extreme episode dataframe.}
 
-\item{s0}{The starting location name.}
+\item{s0}{The conditioning location name.}
 
 \item{u}{The quantile threshold.}
 
 \item{wind_df}{The wind dataframe.}
 
-\item{delta}{The temporal window size.}
+\item{speed_time}{The time index for wind speed.}
 }
 \value{
 The wind episode dataframe.

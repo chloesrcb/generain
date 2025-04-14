@@ -110,7 +110,7 @@ if (!dir.exists(foldername)) {
 # save_simulations(simu, ngrid, nres, folder = foldername,
 #         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
 # get files in the folder
-# foldername = "/home/cserreco/Documents/These/phd_extremes/data/simulations/simulations_rpar/rpar_001_02_15_1_02_01/sim_25s_30t_s0_1_1_t0_14/"
+foldername = "/home/cserreco/Documents/These/phd_extremes/data/simulations/simulations_rpar/rpar_001_02_15_1_02_01/sim_25s_30t_s0_1_1_t0_14/"
 foldername = "/user/cserreco/home/Documents/These/phd_extremes/data/simulations/simulations_rpar/rpar_001_02_15_1_02_01/sim_49s_30t_s0_1_1_t0_0/"
 files <- list.files(foldername, full.names = TRUE)
 length(files)
@@ -130,9 +130,9 @@ colnames(wind_df) <- c("vx", "vy")
 ### Optimization ###############################################################
 library(parallel)
 num_cores <- detectCores() - 1  # Reserve 1 core for the OS
-ngrid <- 7
+ngrid <- 5
 # Parallel execution
-t0 = 0
+t0 = 14
 tau_vect <- 0:10
 sites_coords <- generate_grid_coords(ngrid)
 s0 <- c(1, 1)
@@ -179,8 +179,8 @@ result <- optim(
 result
 
 
-eta1_vals <- seq(0.05, 0.3, length.out = 20)
-eta2_vals <- seq(0.05, 0.2, length.out = 20)
+eta1_vals <- seq(0, 1, length.out = 20)
+eta2_vals <- seq(0, 1, length.out = 20)
 grid_ll <- matrix(NA, nrow = length(eta1_vals), ncol = length(eta2_vals))
 for (i in seq_along(eta1_vals)) {
   for (j in seq_along(eta2_vals)) {

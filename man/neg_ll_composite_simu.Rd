@@ -10,6 +10,7 @@ neg_ll_composite_simu(
   df_lags,
   quantile,
   list_excesses,
+  adv = NA,
   hmax = NA,
   threshold = FALSE,
   directional = FALSE,

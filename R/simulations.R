@@ -245,6 +245,8 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
 #' @return The result of the simulation.
 #'
 #' @import stats
+#' @import RandomFields
+#' @import RandomFieldsUtils
 #'
 #' @export
 sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0), 
@@ -357,6 +359,8 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0),
 #' @return The result of the simulation.
 #' 
 #' @import stats
+#' @import RandomFields
+#' @import RandomFieldsUtils
 #' 
 #' @export
 sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
@@ -453,6 +457,8 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #' @return The result of the simulation.
 #'
 #' @import stats
+#' @import RandomFields
+#' @import RandomFieldsUtils
 #'
 #' @export
 sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
@@ -481,9 +487,9 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     t = t
   )
 
-  grid_with_advection$shifted_x <- grid_with_advection$x +
+  grid_with_advection$shifted_x <- grid_with_advection$x -
                                     grid_with_advection$t * adv[1]
-  grid_with_advection$shifted_y <- grid_with_advection$y +
+  grid_with_advection$shifted_y <- grid_with_advection$y -
                                     grid_with_advection$t * adv[2]
 
   grid <- grid_with_advection
@@ -508,7 +514,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
   gamma_temp <- RandomFields::RFvariogram( # for t0
       modelTime,
-      x = t - grid$t[ind_s0_t0] # Todo: verif t0-t or t-t0 for t0 != 0
+      x = t - grid$t[ind_s0_t0] # t0-t
     )
 
 
@@ -549,6 +555,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' @return The result of the simulation.
 #' 
 #' @import stats
+#' @import RandomFields
+#' @import RandomFieldsUtils
 #' 
 #' @export
 sim_rpareto_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, t,
