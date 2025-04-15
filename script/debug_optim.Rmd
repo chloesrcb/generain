@@ -351,7 +351,7 @@ neg_ll_nopj <- function(params, simu, df_lags, locations,
 
   nj <- excesses$nj # number of marginal excesses
   kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
+  chi <- theoretical_chi(params, df_lags) # get chi matrix
   # transform in chi vector
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
@@ -404,7 +404,7 @@ neg_ll <- function(params, simu, df_lags, locations,
   Tobs <- excesses$Tobs # T - tau
   p <- nj[1] / nrow(simu) # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
+  chi <- theoretical_chi(params, df_lags) # get chi matrix
   # transform in chi vector
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)
@@ -447,7 +447,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 
 tau <- 1
 hnorm <- 2
@@ -488,7 +488,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 
 tau_values <- unique(excesses$tau)
 
@@ -1232,7 +1232,7 @@ neg_ll_par <- function(beta1, beta2, alpha1, alpha2,
   n <- nrow(simu)
   pj <- nj / n
   kij <- excesses$kij # number of joint excesses
-  chi <- theorical_chi(params, df_lags) # get chi matrix
+  chi <- theoretical_chi(params, df_lags) # get chi matrix
   # transform in chi vector
   chi_vect <- as.vector(chi$chi)
   chi_vect <- ifelse(chi_vect <= 0, 0.000001, chi_vect) # avoid log(0)

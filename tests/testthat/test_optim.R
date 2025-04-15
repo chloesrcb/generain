@@ -87,7 +87,7 @@ test_that("neg_ll without advection", {
   # # theorical likelihood
   # nmarg <- get_marginal_excess(simu_df, quantile = q)
   # pmarg <- nmarg / nrow(simu_df)
-  # chi <- theorical_chi(true_param, df_lags)
+  # chi <- theoretical_chi(true_param, df_lags)
 
   # ll_df <- excesses
   # Tmax <- nrow(simu_df)
@@ -151,7 +151,7 @@ test_that("neg_ll with advection", {
   # nmarg <- get_marginal_excess(simu_df, quantile = q)
   # pmarg <- nmarg / nrow(simu_df)
   # excesses_hmax <- excesses[excesses$hnorm <= hmax, ]
-  # chi <- theorical_chi(true_param, excesses_hmax)
+  # chi <- theoretical_chi(true_param, excesses_hmax)
 
   # ll_df <- excesses_hmax
   # Tmax <- nrow(simu_df)
@@ -186,7 +186,7 @@ test_that("neg_ll with advection", {
   # # theorical likelihood
   # nmarg <- get_marginal_excess(simu_df, quantile = q)
   # pmarg <- nmarg / nrow(simu_df)
-  # chi <- theorical_chi(true_param, df_lags)
+  # chi <- theoretical_chi(true_param, df_lags)
 
   # ll_df <- excesses
   # Tmax <- nrow(simu_df)

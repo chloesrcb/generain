@@ -489,7 +489,7 @@ mreplicates <- list_simu[((i - 1) * m + 1):(i * m)]
 
 sites_coords <- generate_grid_coords(ngrid)
 df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect = 0:10)
-th_chi <- theorical_chi(true_param, df_lags)
+th_chi <- theoretical_chi(true_param, df_lags)
 par(mfrow=c(1, 1))
 plot(th_chi$chi[th_chi$hnormV > 1 & th_chi$hnormV < 2])
 # Compute excesses
@@ -728,7 +728,7 @@ plot(simu_df$S25, main = "S20", xlab = "Time", ylab = "Rainfall")
 ```{r}
 sites_coords <- generate_grid_coords(ngrid)
 df_lags <- get_lag_vectors(sites_coords, tau_max = 10)
-th_chi <- theorical_chi(true_param, df_lags)
+th_chi <- theoretical_chi(true_param, df_lags)
 
 q <- 0.99
 excesses <- empirical_excesses(simu_df, q, df_lags, type = "brownresnick")

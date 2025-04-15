@@ -1283,7 +1283,7 @@ neg_ll <- function(params, data, df_lags, quantile, excesses, wind_vect = NA,
     return(1e50)
   }
 
-  chi <- theorical_chi(params, df_lags, wind_vect) # get chi matrix
+  chi <- theoretical_chi(params, df_lags, wind_vect) # get chi matrix
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs

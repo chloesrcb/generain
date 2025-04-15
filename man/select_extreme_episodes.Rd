@@ -7,20 +7,19 @@
 select_extreme_episodes(
   sites_coords,
   data,
-  quantile,
   min_spatial_dist,
   episode_size,
   n_max_episodes = 10000,
   time_ext = 0,
-  latlon = TRUE
+  latlon = TRUE,
+  quantile = NULL,
+  threshold = NULL
 )
 }
 \arguments{
 \item{sites_coords}{The coordinates of the sites.}
 
 \item{data}{The rainfall dataframe.}
-
-\item{quantile}{The quantile value.}
 
 \item{min_spatial_dist}{The minimum spatial distance between two episodes.}
 
@@ -31,6 +30,8 @@ select_extreme_episodes(
 \item{time_ext}{The temporal window extension. Default is 0.}
 
 \item{latlon}{A boolean value to indicate if the locations are in latitude and longitude. Default is TRUE.}
+
+\item{quantile}{The quantile value.}
 }
 \value{
 A list of selected points (s0, t0) and the corresponding threshold value u_s0 for each episode.

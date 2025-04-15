@@ -4,7 +4,15 @@
 \alias{generate_variogram_plots}
 \title{Generate variogram plots}
 \usage{
-generate_variogram_plots(result, df_lags, true_param, tau_values, chi = FALSE)
+generate_variogram_plots(
+  result,
+  df_lags,
+  true_param,
+  tau_values,
+  chi = FALSE,
+  latlon = FALSE,
+  directional = FALSE
+)
 }
 \arguments{
 \item{result}{The result of the variogram estimation.}
@@ -17,11 +25,17 @@ generate_variogram_plots(result, df_lags, true_param, tau_values, chi = FALSE)
 
 \item{chi}{A logical value indicating whether to plot the chi values.
 Default is FALSE.}
+
+\item{latlon}{A logical value indicating whether to use latitude and
+longitude coordinates. Default is FALSE.}
+
+\item{directional}{A logical value indicating whether to use directional
+variogram. Default is FALSE.}
 }
 \value{
 None, but generates plots.
 }
 \description{
-This function generates theoretical and empirical variogram plots for 
+This function generates theoretical and empirical variogram plots for
 multiple tau values.
 }

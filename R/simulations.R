@@ -450,9 +450,11 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #' @param y Vector for the second dimension (spatial y in our case)
 #' @param t Vector for the third dimension (time in our case).
 #' @param adv The advection coordinates vector. Default is c(0, 0).
-#' @param s0 Conditional vector spatial point. Default is c(1, 1).
 #' @param t0 Conditional temporal time. Default is 1.
 #' @param nres The number of simulations to perform. Default is 1.
+#' @param random_s0 Logical value indicating whether to choose a random s0.
+#'                  Default is FALSE.
+#' @param s0 Vector of dimension 2 for the spatial conditioning point.
 #'
 #' @return The result of the simulation.
 #'
@@ -462,7 +464,8 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #'
 #' @export
 sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
-                        adv = c(0, 0), s0 = c(1, 1), t0 = 0, nres = 1) {
+                        adv = c(0, 0), t0 = 0, nres = 1,
+                        random_s0 = FALSE, s0 = c(1, 1)) {
   # beta1, beta2, alpha1, alpha2 are variogram parameters
   # x is the first dimension (spatial x in our case)
   # y is the second dimension (spatial y in our case)
@@ -501,6 +504,12 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     filtered_coords <- coords[!duplicates, ]
     coords <- filtered_coords
   }
+
+  ## Choose random s from grid
+  if (random_s0) {
+    s0 <- c(sample(seq_len(lx), 1), sample(seq_len(ly), 1))
+  } 
+  # s0 <- c(1, 1) # default
 
   ## Variogram for s0, t0
   ind_s0_t0 <- which(grid$x == s0[1] & grid$y == s0[2] &

@@ -110,98 +110,103 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 }
 
 
-# #' Create a GIF from a simulation
-# #'
-# #' This function creates a GIF from a simulation.
-# #'
-# #' @param simulation_data The data from the simulation.
-# #' @param sites_coords The coordinates of the sites.
-# #' @param params The parameters used for the simulation.
-# #' @param type The type of simulation.
-# #' @param forcedtemp The number of time steps to include in the GIF.
-# #'
-# #' @return None, but saves the GIF to a file.
-# #'
-# #' @import ggplot2
-# #' @import reshape2
-# #' @import animation
-# #'
-# #' @export
-# create_simu_gif <- function(simulation_data, sites_coords, params,
-#                             type = "rpar", forcedtemp = NA) {
-#   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
-#   Tmax <- nrow(simulation_data) # Number of time steps
-#   if (is.na(forcedtemp)) {
-#     temp <- 1:Tmax
-#   } else {
-#     temp <- 1:forcedtemp
-#   }
+#' Create a GIF from a simulation
+#'
+#' This function creates a GIF from a simulation.
+#'
+#' @param simulation_data The data from the simulation.
+#' @param sites_coords The coordinates of the sites.
+#' @param params The parameters used for the simulation.
+#' @param foldername The folder where the GIF will be saved.
+#' @param type The type of simulation.
+#' @param forcedtemp The number of time steps to include in the GIF.
+#'
+#' @return None, but saves the GIF to a file.
+#'
+#' @import ggplot2
+#' @import reshape2
+#' @import animation
+#'
+#' @export
+create_simu_gif <- function(simulation_data, sites_coords, params,
+                            foldername, type = "rpar", forcedtemp = NA) {
+  ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
+  Tmax <- nrow(simulation_data) # Number of time steps
+  if (is.na(forcedtemp)) {
+    temp <- 1:Tmax
+  } else {
+    temp <- 1:forcedtemp
+    Tmax <- forcedtemp
+  }
 
-#   beta1 <- params[1]
-#   beta2 <- params[2]
-#   alpha1 <- params[3]
-#   alpha2 <- params[4]
-#   if (length(params) == 6) {
-#     adv <- params[5:6]
-#   } else {
-#     adv <- c(0, 0)
-#   }
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  if (length(params) == 6) {
+    adv <- params[5:6]
+  } else {
+    adv <- c(0, 0)
+  }
 
-#   if (length(params) == 6) {
-#     adv <- params[5:6]
-#   } else {
-#     adv <- c(0, 0)
-#   }
+  simulation_data$Time <- rownames(simulation_data) # Add a time column
+  simulation_data_long <- melt(simulation_data) # Convert to long format
+  simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
 
-#   simulation_data$Time <- rownames(simulation_data) # Add a time column
-#   simulation_data_long <- melt(simulation_data) # Convert to long format
-#   simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
-#   # Create a dataframe to represent grid points
-#   grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+  # simulation_data_long$uniform_value <- ave(
+  #   simulation_data_long$value,
+  #   simulation_data_long$Time,
+  #   FUN = function(x) rank(x) / (length(x) + 1)
+  # )
+  # Create a dataframe to represent grid points
+  grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
 
-#   plots <- list()
-#   cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
-#   # for each time step
-#   for (i in unique(cropped_data$Time)) {
-#     # Add the simulated values to the grid dataframe
-#     grid$value <- cropped_data$value[cropped_data$Time == i]
+  plots <- list()
+  cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
 
-#     # Plot
-#     p <-  ggplot(data = grid, aes(x = x, y = y, fill = value)) +
-#       geom_tile() +
-#       scale_fill_gradient(low = "#70a7ae", high = "#9d503d",
-#                           name = "Rainfall in mm",
-#                           limits = c(min(cropped_data$value),
-#                                      max(cropped_data$value))) +
-#       labs(title = paste0("t =", i, " | Betas: ", beta1, ", ", beta2,
-#                           " | Alphas: ",
-#                           alpha1, ", ", alpha2, " | Advection: ", adv[1],
-#                           ", ", adv[2])) +
-#       theme_minimal() +
-#       theme(plot.background = element_rect(fill = "#F9F8F6",
-#                                          color = "#F9F8F6"),
-#             panel.border = element_blank(),
-#             panel.grid = element_blank(),
-#             axis.text.x = element_blank(),
-#             axis.text.y = element_blank(),
-#             axis.title.x = element_blank(),
-#             axis.title.y = element_blank())
+  threshold <- 1
+  max_val <- max(cropped_data$value)
+  min_val <- min(cropped_data$value)
+  # for each time step
+  for (i in unique(cropped_data$Time)) {
+    # Add the simulated values to the grid dataframe
+    grid$value <- cropped_data$value[cropped_data$Time == i]
+    grid$above <- grid$value > threshold
 
-#     plots[[i]] <- p
-#   }
+    # Plot
+    p <- ggplot(data = grid, aes(x = x, y = y, fill = value)) +
+      geom_tile() +
+      scale_fill_gradientn(
+        colours = c("#70a7ae", "#b8967a", "#9d503d"),
+        values = scales::rescale(c(min_val, threshold, max_val)),
+        name = "Rainfall in mm",
+        limits = c(min_val, max_val)
+      ) +
+      labs(title = paste0("t =", i - 1, " | Betas: ", beta1, ", ", beta2,
+                          " | Alphas: ", alpha1, ", ", alpha2, " | Advection: ",
+                          adv[1], ", ", adv[2])) +
+      theme_minimal() +
+      theme(plot.background = element_rect(fill = "#F9F8F6", color = "#F9F8F6"),
+            panel.border = element_blank(),
+            panel.grid = element_blank(),
+            axis.text = element_blank(),
+            axis.title = element_blank())
 
-#   # Save the plots as a gif
-#   ani.options(interval = 0.5) # time between frames
-#   saveGIF({
-#     for (i in temp) {
-#       print(plots[[i]])
-#     }
-#   }, movie.name = paste0("/user/cserreco/home/Documents/These/generain/images",
-#                          "/simu_gif/simu_", type, "/", type, "_", ngrid^2, "s_",
-#                          Tmax, "t.gif"),
-#   ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo")
+  plots[[i]] <- p
+  }
 
-# }
+  # Save the plots as a gif
+  ani.options(interval = 0.5) # time between frames
+  saveGIF({
+    for (i in temp) {
+      print(plots[[i]])
+    }
+  }, movie.name = file.path(foldername, paste0(type, "_", ngrid^2,
+                            "s_", Tmax, "t.gif")),
+  ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo",
+  ani.dev = "png")
+
+}
 
 #' Generate data for a specific tau value for the variogram plot
 #'
@@ -239,7 +244,7 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 
 #' Generate variogram plots
 #'
-#' This function generates theoretical and empirical variogram plots for 
+#' This function generates theoretical and empirical variogram plots for
 #' multiple tau values.
 #'
 #' @param result The result of the variogram estimation.
@@ -248,6 +253,10 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 #' @param tau_values The values of tau to generate plots for.
 #' @param chi A logical value indicating whether to plot the chi values.
 #'            Default is FALSE.
+#' @param latlon A logical value indicating whether to use latitude and
+#'              longitude coordinates. Default is FALSE.
+#' @param directional A logical value indicating whether to use directional
+#'                   variogram. Default is FALSE.
 #'
 #' @return None, but generates plots.
 #'
@@ -255,7 +264,8 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 #'
 #' @export
 generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
-                                     chi = FALSE) {
+                                     chi = FALSE, latlon = FALSE,
+                                     directional = FALSE) {
   # Get the estimated variogram
   if(typeof(result) == "list" && "beta1" %in% colnames(result)){
     beta1_hat <- result$beta1
@@ -273,9 +283,10 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
     adv2_hat <- result$par[6]
   }
 
-  empirical_df <- theorical_chi(c(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat,
-                                  adv1_hat, adv2_hat), df_lags)
-  theorical_df <- theorical_chi(true_param, df_lags)
+  empirical_df <- theoretical_chi(c(beta1_hat, beta2_hat, alpha1_hat, 
+                                  alpha2_hat, adv1_hat, adv2_hat), df_lags,
+                                  latlon, directional)
+  theorical_df <- theoretical_chi(true_param, df_lags, latlon, directional)
 
   combined_data <- do.call(rbind, lapply(tau_values, generate_data_for_tau,
                             empirical_df, theorical_df))
@@ -377,30 +388,58 @@ generate_variogram_plots_rpareto <- function(result, lags_r, wind_r) {
 }
 
 
-
-# Function to format values correctly, considering decimal places
+#' Format Numeric Values into Custom String Representation
+#'
+#' This function takes a numeric vector and formats each value into a custom
+#' string representation. The formatted values are concatenated with
+#' underscores.
+#'
+#' @param x A numeric vector containing the values to be formatted.
+#'
+#' @return A single string where each formatted value is concatenated with
+#' underscores. The formatting rules are as follows:
+#' - If the value is negative, the string "neg" is prefixed to the formatted
+#'   value.
+#' - If the value is an integer, it is formatted as is.
+#' - If the value is a decimal:
+#'   - For values greater than or equal to 1:
+#'     - If there is 1 decimal place, the value is multiplied by 10 and
+#'       formatted with 2 digits.
+#'     - If there are more than 1 decimal places, the value is multiplied by 100
+#'       and formatted with 3 digits.
+#'   - For values less than 1:
+#'     - If there is 1 decimal place, the value is multiplied by 10 and
+#'       formatted with 2 digits.
+#'     - If there are more than 1 decimal places, the value is multiplied by 100
+#'       and formatted with 3 digits.
+#'
+#' @examples
+#' format_value(c(-1.23, 0.5, 2, -0.01))
+#' # Returns: "neg123_05_200_neg001"
+#'
+#' @export
 format_value <- function(x) {
   formatted_values <- sapply(x, function(val) {
-    # Vérifier si val est négatif
+    # Check if val is negative
     is_negative <- val < 0
-    val <- abs(val)  # Travailler avec la valeur absolue pour le formatage
-    
-    # Vérifier si val est un entier
+    val <- abs(val)  # Work with the absolute value for formatting
+
+    # Check if val is an integer
     if (val == as.integer(val)) {
       formatted_value <- sprintf("%d", val)
     } else {
-      # Compter le nombre de décimales
+      # Count the number of decimals
       num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(val)))
-      
+
       if (val >= 1) {
-        # Si le nombre est supérieur ou égal à 1
+        # If the number is greater than or equal to 1
         if (num_decimals == 1) {
           formatted_value <- sprintf("%02d", round(val * 10))
         } else {
           formatted_value <- sprintf("%03d", round(val * 100))
         }
       } else {
-        # Si le nombre est inférieur à 1
+        # If the number is less than 1
         if (num_decimals == 1) {
           formatted_value <- sprintf("%02d", round(val * 10))
         } else {
@@ -408,15 +447,15 @@ format_value <- function(x) {
         }
       }
     }
-    
-    # Ajouter "neg" devant si le nombre était négatif
+
+    # Add "neg" prefix if the number was negative
     if (is_negative) {
       formatted_value <- paste0("neg", formatted_value)
     }
-    
+
     return(formatted_value)
   })
-  
-  # Concaténer les valeurs avec un underscore "_"
+
+  # Concatenate values
   return(paste(formatted_values, collapse = "_"))
 }

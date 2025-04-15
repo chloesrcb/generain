@@ -13,9 +13,10 @@ sim_rpareto(
   y,
   t,
   adv = c(0, 0),
-  s0 = c(1, 1),
   t0 = 0,
-  nres = 1
+  nres = 1,
+  random_s0 = FALSE,
+  s0 = c(1, 1)
 )
 }
 \arguments{
@@ -35,11 +36,14 @@ sim_rpareto(
 
 \item{adv}{The advection coordinates vector. Default is c(0, 0).}
 
-\item{s0}{Conditional vector spatial point. Default is c(1, 1).}
-
 \item{t0}{Conditional temporal time. Default is 1.}
 
 \item{nres}{The number of simulations to perform. Default is 1.}
+
+\item{random_s0}{Logical value indicating whether to choose a random s0.
+Default is FALSE.}
+
+\item{s0}{Vector of dimension 2 for the spatial conditioning point.}
 }
 \value{
 The result of the simulation.

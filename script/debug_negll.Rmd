@@ -354,7 +354,7 @@ de la loi normale et $\gamma(h, \tau) = 2(\beta_1 ||h||^{\alpha_1} + \beta_2 \ta
 tau_vect <- 0:10
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = tau_vect)
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 print(tail(chi_theorical))
 
 true_param <- c(0.4, 0.2, 1.5, 1)
@@ -464,7 +464,7 @@ Premiere methode de calcul du chi empirique:
 ```{r plotchithemp, fig.height=5, fig.width=5, echo=FALSE}
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 chi <- unique(chi_theorical$chi)
 # print(head(chi_theorical))
 
@@ -497,7 +497,7 @@ for (q in q_values) {
 
 Deuxieme methode de calcul du chi empirique:
 ```{r plotchithemp2, fig.height=5, fig.width=5, echo=FALSE}
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 chi <- unique(chi_theorical$chi)
 # print(head(chi_theorical))
 
@@ -554,7 +554,7 @@ for (q in q_values) {
   Tmax <- nrow(simu_df)
   p_hat <- n_marg / Tmax # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
-  chi_theorical <- theorical_chi(true_param, df_lags)
+  chi_theorical <- theoretical_chi(true_param, df_lags)
 
   tau <- 1
   hnorm <- 2
@@ -591,7 +591,7 @@ Without zeros $k_{ij, \tau} > 0$:
 q_values <- seq(0.9, 0.95, by = 0.01)
 df_lags <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 0:10)
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 
 png("../images/optim/density_25s_300t_byq_without0.png")
 
@@ -604,7 +604,7 @@ for (q in q_values) {
   Tmax <- nrow(simu_df)
   p_hat <- n_marg / Tmax # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
-  chi_theorical <- theorical_chi(true_param, excesses)
+  chi_theorical <- theoretical_chi(true_param, excesses)
 
   tau <- 2
   hnorm <- 2
@@ -651,7 +651,7 @@ for (q in q_values) {
   p_hat <- n_marg / Tmax # probability of marginal excesses
   kij <- excesses$kij # number of joint excesses
 
-  chi_theorical <- theorical_chi(true_param, excesses)
+  chi_theorical <- theoretical_chi(true_param, excesses)
 
   tau <- 3
   hnorm <- 1
@@ -744,7 +744,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_theorical <- theoretical_chi(true_param, df_lags_excesses)
 
 tau_values <- unique(excesses$tau)
 
@@ -814,7 +814,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_theorical <- theoretical_chi(true_param, df_lags_excesses)
 chi_emp <- chispatemp_dt(simu_df, df_lags_excesses, quantile = q)
 tau_values <- unique(excesses$tau)
 
@@ -879,7 +879,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags_excesses)
+chi_theorical <- theoretical_chi(true_param, df_lags_excesses)
 chi_emp <- chispatemp_dt(simu_df, df_lags_excesses, quantile = q)
 tau_values <- unique(excesses$tau)
 
@@ -1413,7 +1413,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, excesses)
+chi_theorical <- theoretical_chi(true_param, excesses)
 
 tau <- 0
 hnorm <- 1
@@ -1446,7 +1446,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 
 tau_values <- unique(excesses$tau)
 

@@ -12,7 +12,7 @@ process_simulation(
   u,
   df_lags,
   t0,
-  true_param,
+  init_params,
   hmax = NA,
   wind_df = NA
 )
@@ -32,7 +32,7 @@ process_simulation(
 
 \item{t0}{The starting time.}
 
-\item{true_param}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
+\item{init_params}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
 
 \item{hmax}{The maximum spatial lag value. Default is NA.}
 }

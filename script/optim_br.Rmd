@@ -130,7 +130,7 @@ Tmax <- nrow(simu_df)
 p_hat <- n_marg / Tmax # probability of marginal excesses
 kij <- excesses$kij # number of joint excesses
 excesses$hnorm <- sqrt(excesses$hx^2 + excesses$hy^2)
-chi_theorical <- theorical_chi(true_param, df_lags)
+chi_theorical <- theoretical_chi(true_param, df_lags)
 
 tau_values <- unique(excesses$tau)
 

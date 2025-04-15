@@ -104,7 +104,7 @@ h_vect <- get_lag_vectors(sites_coords, true_param,
                           hmax = sqrt(17), tau_vect = 1:10) # lag vectors
 
 # chi <- theorical_chi_mat(c(0.4, 0.2, 1.5, 1), h_vect, tau_vect) # chi matrix
-chi <- theorical_chi(true_param, h_vect) # chi matrix
+chi <- theoretical_chi(true_param, h_vect) # chi matrix
 
 # simulate expo and optimize
 n_res <- 100 # number of simulations

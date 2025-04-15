@@ -1123,7 +1123,7 @@ within a replicate (same for all replicates).
 
 ```{r optimrparadv, fig.width = 5, fig.height = 5, echo=FALSE, eval=FALSE}
 df_lags <- get_conditional_lag_vectors(sites_coords, true_param, temp, s0, t0)
-# df_lags_chi <- theorical_chi(true_param, df_lags)
+# df_lags_chi <- theoretical_chi(true_param, df_lags)
 
 u <- 1
 list_excesses <- list()

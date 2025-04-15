@@ -23,22 +23,44 @@
 #' @import geosphere
 #'
 #' @export
-select_extreme_episodes <- function(sites_coords, data, quantile,
-                                    min_spatial_dist, episode_size,
-                                    n_max_episodes = 10000, time_ext = 0,
-                                    latlon = TRUE) {
+select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
+                                    episode_size, n_max_episodes = 10000,
+                                    time_ext = 0, latlon = TRUE,
+                                    quantile = NULL, threshold = NULL) {
   # Convert data to a matrix for fast access
   data <- as.matrix(data)
   site_names <- colnames(data)
 
+  # Validate input
+  if (!is.null(quantile) && !is.null(threshold)) {
+    stop("Specify either 'quantile' or 'threshold', not both.")
+  }
+  if (is.null(quantile) && is.null(threshold)) {
+    stop("You must specify either 'quantile' or 'threshold'.")
+  }
+
   # Compute threshold for each site
-  thresholds_by_site <- apply(data, 2, function(col) quantile(col, probs = quantile, na.rm = TRUE))
+  if (!is.null(quantile)) {
+    thresholds_by_site <- apply(data, 2, function(col) quantile(col,
+                                              probs = quantile, na.rm = TRUE))
+  } else {
+    if (length(threshold) == 1) {
+      thresholds_by_site <- rep(threshold, ncol(data))
+      names(thresholds_by_site) <- site_names
+    } else if (length(threshold) == ncol(data)) {
+      thresholds_by_site <- threshold
+      names(thresholds_by_site) <- site_names
+    } else {
+      stop("Threshold must be either a single numeric value or a vector of the same length as the number of sites.")
+    }
+  }
 
   # Compute distance matrix (ensure named rows/columns)
   if (latlon){
     dist_matrix <- as.matrix(distm(sites_coords[site_names, ], fun = distHaversine)) / 1000
   } else {
-    dist_matrix <- as.matrix(dist(sites_coords[site_names, ])) / 1000
+    # dist_matrix <- as.matrix(dist(sites_coords[site_names, ])) / 1000
+    dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
   }
   rownames(dist_matrix) <- site_names
   colnames(dist_matrix) <- site_names
@@ -503,14 +525,15 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #' @param params A vector of variogram parameters.
 #' @param df_lags A dataframe with spatial and temporal lag values.
 #' @param latlon A boolean value to indicate if the locations are in latitude
-#'             and longitude.
+#'             and longitude. Default is FALSE.
 #' @param directional A boolean value to indicate if the variogram is
-#'                  directional.
+#'                  directional. Default is FALSE.
 #'
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi <- function(params, df_lags, latlon, directional) {
+theoretical_chi <- function(params, df_lags, latlon = FALSE,
+                            directional = FALSE) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
@@ -853,12 +876,6 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   }
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
-  } else if (length(wind_df) == 2) {
-    eta1 <- params[5]
-    eta2 <- params[6]
-    adv_x <- (abs(wind_df[1])^eta1) * sign(wind_df[1]) * eta2
-    adv_y <- (abs(wind_df[2])^eta1) * sign(wind_df[2]) * eta2
-    adv <- cbind(adv_x, adv_y)
   } else {
     eta1 <- params[5]
     eta2 <- params[6]
@@ -867,6 +884,10 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     adv_df <- cbind(adv_x, adv_y)
   }
   
+  if (length(adv_df) == 2) {
+    adv <- as.vector(adv_df)
+  }
+
   print(params)
   # # Ensure list_lags has the same length as list_episodes
   # if (is.data.frame(list_lags)) {
@@ -880,7 +901,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     excesses <- list_excesses[[i]]
     lags <- list_lags[[i]]
 
-    if (!all(is.na(wind_df)) && length(wind_df) != 2) {
+    if (!all(is.na(wind_df)) && length(adv_df) != 2) {
       adv <- as.vector(adv_df[i,])
     }
  

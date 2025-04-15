@@ -531,6 +531,7 @@ excesses$kij
 excesses[1:20, ]
 df_lags <- list_lags[[1]]
 head(df_lags)
+
 # ADD WIND DATA ################################################################
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
