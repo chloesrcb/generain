@@ -73,7 +73,7 @@ select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
   while (nb_episode < n_max_episodes) {
     # Identify all (s0, t0) where data exceeds threshold
     exceed_mask <- sweep(data, 2, thresholds_by_site, FUN = ">")
-    exceed_mask[invalid_time_mask] <- FALSE
+    exceed_mask[invalid_time_mask] <- FALSE # Remove those already selected
     exceed_indices <- which(exceed_mask, arr.ind = TRUE)
 
     if (nrow(exceed_indices) == 0) break
@@ -90,14 +90,15 @@ select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
       u_s0 <- thresholds_by_site[s0_candidate]
 
       if (nrow(selected_points) == 0) {
-        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
+        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate,
+                                      u_s0 = u_s0)
         nb_episode <- nb_episode + 1
         break
       } else {
         selected_sites <- selected_points$s0
         time_differences <- abs(selected_points$t0 - t0_candidate)
         distances <- dist_matrix[selected_sites, s0_candidate, drop = FALSE]
-        valid_pairs <- (distances >= min_spatial_dist) | (time_differences > episode_size + 1)
+        valid_pairs <- (distances >= min_spatial_dist) | (time_differences >= episode_size)
 
         if (all(valid_pairs)) {
           best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
@@ -113,7 +114,7 @@ select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
       # Store the selected episode
       selected_points <- rbindlist(list(selected_points, best_candidate))
       t_inf <- max(1, best_candidate$t0 - time_ext)
-      t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext)
+      t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext - 1)
       invalid_time_mask[t_inf:t_sup, which(site_names == best_candidate$s0)] <- TRUE
     }
   }
@@ -320,9 +321,9 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
     t0 <- selected_points$t0[i]
     # t_inf <- t0 - (delta) - beta
     # t_sup <- t0 + delta + 2 * beta
-    t_inf <- t0 - beta
-    t_sup <- t0 + episode_size + beta
-
+    t_inf <- max(1, t0 - beta)
+    t_sup <- min(nrow(data), t0 + episode_size + beta)
+    # print(i)
     # Check that the episode is the correct size (episode_size)
     episode_size_test <- t_sup - t_inf + 1
     if (episode_size_test == episode_size + 1 + 2 * beta) {
@@ -744,20 +745,20 @@ neg_ll <- function(params, df_lags, excesses,
                       hmax = NA,  rpar = TRUE, threshold = FALSE,
                       latlon = FALSE, quantile = NA, data = NA,
                       directional = TRUE) {
-  # if (rpar) { # if we have a conditioning location
+  if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
-  # } else {
-  #   if (is.na(data)) {
-  #     stop("The data must be provided for the max-stable composite likelihood.")
-  #   } else if (is.na(quantile)) {
-  #     stop("The quantile or threshold must be provided for the
-  #           max-stable composite likelihood.")
-  #   }
-  #   Tmax <- nrow(data) # number of total observations
-  #   # number of marginal excesses
-  #   nmarg <- get_marginal_excess(data, quantile, threshold)
-  #   p <- nmarg / Tmax # probability of marginal excesses
-  # }
+  } else {
+    if (is.na(data)) {
+      stop("The data must be provided for the max-stable composite likelihood.")
+    } else if (is.na(quantile)) {
+      stop("The quantile or threshold must be provided for the
+            max-stable composite likelihood.")
+    }
+    Tmax <- nrow(data) # number of total observations
+    # number of marginal excesses
+    nmarg <- get_marginal_excess(data, quantile, threshold)
+    p <- nmarg / Tmax # probability of marginal excesses
+  }
 
   # compute theoretical chi values
   chi <- theoretical_chi(params, df_lags, latlon, directional)
@@ -882,11 +883,11 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
     adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
     adv_df <- cbind(adv_x, adv_y)
+    if (length(adv_df) == 2) {
+      adv <- as.vector(adv_df)
+    }
   }
-  
-  if (length(adv_df) == 2) {
-    adv <- as.vector(adv_df)
-  }
+
 
   print(params)
   # # Ensure list_lags has the same length as list_episodes
