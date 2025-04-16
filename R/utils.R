@@ -192,17 +192,18 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
             axis.text = element_blank(),
             axis.title = element_blank())
 
-  plots[[i]] <- p
+    plots[[i]] <- p
   }
 
+  param_str <- format_value(params)
   # Save the plots as a gif
   ani.options(interval = 0.5) # time between frames
   saveGIF({
     for (i in temp) {
       print(plots[[i]])
     }
-  }, movie.name = file.path(foldername, paste0(type, "_", ngrid^2,
-                            "s_", Tmax, "t.gif")),
+  }, movie.name = file.path(foldername, paste0(type, "_", param_str, "_",
+                                   ngrid^2, "s_", Tmax, "t", ".gif")),
   ani.width = 700, ani.height = 600, ani.units = "px", ani.type = "cairo",
   ani.dev = "png")
 
