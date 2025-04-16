@@ -73,7 +73,7 @@ If this completes without error, you're good and can upload the library with `li
 
 ### Step 2: Fix for `Werror=format-security` Error (Linux only)
 
-### 1. Create the `.R` configuration directory
+#### 1. Create the `.R` configuration directory
 
 In your terminal:
 
@@ -81,7 +81,7 @@ In your terminal:
 mkdir ~/.R
 ```
 
-### 2. Create or edit the `Makevars` file
+#### 2. Create or edit the `Makevars` file
 
 Open the file with a text editor:
 
@@ -95,6 +95,6 @@ Then add the following line and save the file:
 CXXFLAGS=-O2 -Wall -Wno-error=format-security
 ```
 
-### 3. Retry Installation
+#### 3. Retry Installation
 
 Go back into R and rerun the installation (Step 1).
