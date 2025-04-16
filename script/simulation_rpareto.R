@@ -20,7 +20,7 @@ beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(1, 2)
+adv <- c(6, 1)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
 s0 <- c(1, 1)
 t0 <- 0
@@ -29,6 +29,9 @@ random_s0 <- FALSE
 # Simulate spatio-temporal r-Pareto process
 simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
                           adv, t0, n.res, random_s0, s0)
+
+simu_rpar$Z
+simu_rpar$s0_used
 
 
 # Apply formatting
@@ -52,15 +55,30 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-save_simulations(simu_rpar, ngrid, n.res,
+save_simulations(simu_rpar$Z, ngrid, n.res,
                  folder = foldername,
                  file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
-
-
 
 file_path <- paste0(foldername, "rpar_", ngrid^2, "s_",
                     length(temp), "t_1.csv")
 simulation_data <- read.csv(file_path)
+
+s0_used_list <- simu_rpar$s0_used
+s0_df <- as.data.frame(do.call(rbind, s0_used_list))
+names(s0_df) <- c("x", "y")
+
+
+sites_coords <- generate_grid_coords(ngrid)
+rownames(sites_coords) <- paste0("S", 1:nrow(sites_coords))
+
+# get index of the s0_df sites in the sites_coords
+s0_df$site <- NA
+for (i in 1:nrow(s0_df)) {
+  index <- which(sites_coords$Longitude == s0_df$x[i] &
+                          sites_coords$Latitude == s0_df$y[i])
+  s0_df$site[i] <- rownames(sites_coords)[index]
+}
+head(s0_df)
 
 
 ################################################################################
@@ -92,13 +110,13 @@ plot(simu_df[, 20], main = "rpareto simulation")
 # get grid coordinates
 sites_coords <- generate_grid_coords(sqrt(nsites))
 gif_folder <- "/user/cserreco/home/Documents/These/phd_extremes/thesis/resources/images/simulation/rpar"
+gif_folder <- paste0(gif_folder, "/", s0_str, "/")
 create_simu_gif(simu_df, site_coords, c(param, adv), type = "rpar",
                 foldername = gif_folder)
 
 length(list_rpar)
 # concat all simulations together
 simu_all <- do.call(rbind, list_rpar)
-gif_folder <- "/user/cserreco/home/Documents/These/phd_extremes/thesis/resources/images/simulation/rpar"
 create_simu_gif(simu_all, site_coords, c(param, adv), type = "rpar",
                 foldername = gif_folder, forcedtemp = 200)
 
@@ -108,11 +126,13 @@ params <- c(param, adv)
 # get the lag vectors
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 3 # in km
+min_spatial_dist <- 7  # in km
 delta <- 10 # in hours
-episode_size <- 2 * delta # size of the episode
+episode_size <- length(temp) - 5 # size of the episode
+# episode_size <- 10
 threshold <- 1
 
+length(simu_all$S1)
 # Get the selected episodes
 selected_points <- select_extreme_episodes(sites_coords, simu_all,
                                         min_spatial_dist,
@@ -125,12 +145,13 @@ n_episodes <- length(selected_points$s0)
 print(n_episodes)
 length(unique(selected_points$s0)) # can be same s0
 length(unique(selected_points$t0)) # never same t0?
-print(min(selected_points$u_s0)) # min threshold
+# check the s0 selection with the s0_df used in the simulation
+setequal(unique(s0_df$site), unique(selected_points$s0))
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 list_episodes_points <- get_extreme_episodes(selected_points, simu_all,
-                                     episode_size = episode_size, unif = FALSE,
-                                     beta = 0)
+                                    episode_size = episode_size, unif = FALSE,
+                                    beta = 0)
 
 list_episodes <- list_episodes_points$episodes
 episode <- list_episodes[[1]]
@@ -140,7 +161,7 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
 
 # Convert matrix to data frame
-index <- 3
+index <- 8
 sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
@@ -161,87 +182,93 @@ ggplot(df_long, aes(x = Time, y = Value, group = Pixel)) +
   #          color = "red", vjust = 0, size = 7) +
   theme_minimal()
 
-ggsave("image.png", width = 8, height = 6)
+# ggsave("image.png", width = 8, height = 6)
 
-filename <- paste(im_folder, "optim/simulation/rpar_",
-                  param_str, "/episodes_",
-                  ngrid^2, "s_", length(temp), "t_",
-                  "t0_", t0_str, "_",
-                  s0_list[index], ".png", sep = "")
-# filename <- "test.png"
-ggsave(filename, width = 20, height = 15, units = "cm")
+# filename <- paste(im_folder, "optim/simulation/rpar_",
+#                   param_str, "/episodes_",
+#                   ngrid^2, "s_", length(temp), "t_",
+#                   "t0_", t0_str, "_",
+#                   s0_list[index], ".png", sep = "")
+# # filename <- "test.png"
+# ggsave(filename, width = 20, height = 15, units = "cm")
 
 library(ggplot2)
 library(reshape2)
 
 unique_s0_list <- unique(s0_list)
 
-for (target_s0 in unique_s0_list) {
-  matching_indices <- which(s0_list == target_s0)
+# for (target_s0 in unique_s0_list) {
+#   matching_indices <- which(s0_list == target_s0)
 
-  df_list <- list()
+#   df_list <- list()
 
-  for (i in matching_indices) {
-    episode_test <- list_episodes[[i]]
-    df_episode <- as.data.frame(episode_test)
-    df_episode$Time <- 0:(nrow(df_episode) - 1)
+#   for (i in matching_indices) {
+#     episode_test <- list_episodes[[i]]
+#     df_episode <- as.data.frame(episode_test)
+#     df_episode$Time <- 0:(nrow(df_episode) - 1)
 
-    df_long <- melt(df_episode, id.vars = "Time", variable.name = "Pixel",
-                    value.name = "Value")
-    colnames(df_long) <- c("Time", "Pixel", "Value")
-    df_filtered <- subset(df_long, Pixel == target_s0)
-    df_filtered$Episode <- as.factor(i)
-    df_list[[i]] <- df_filtered
-  }
+#     df_long <- melt(df_episode, id.vars = "Time", variable.name = "Pixel",
+#                     value.name = "Value")
+#     colnames(df_long) <- c("Time", "Pixel", "Value")
+#     df_filtered <- subset(df_long, Pixel == target_s0)
+#     df_filtered$Episode <- as.factor(i)
+#     df_list[[i]] <- df_filtered
+#   }
 
-  df_all <- do.call(rbind, df_list)
-  u_episode <- selected_points$u_s0[matching_indices[1]]
-  p <- ggplot(df_all, aes(x = Time, y = Value, group = Episode)) +
-    geom_line(color = btfgreen, alpha = 0.7) +
-    labs(x = "Time", y = "Rainfall (mm)") +
-    theme_minimal() +
-    geom_hline(yintercept = u_episode, color = "red", linetype = "dashed")
+#   df_all <- do.call(rbind, df_list)
+#   u_episode <- selected_points$u_s0[matching_indices[1]]
+#   p <- ggplot(df_all, aes(x = Time, y = Value, group = Episode)) +
+#     geom_line(color = btfgreen, alpha = 0.7) +
+#     labs(x = "Time", y = "Rainfall (mm)") +
+#     theme_minimal() +
+#     geom_hline(yintercept = u_episode, color = "red", linetype = "dashed")
 
-  # Find the min and max values of the 'Value' for setting the position of the annotation
-  y_min <- min(df_all$Value, na.rm = TRUE)
-  y_max <- max(df_all$Value, na.rm = TRUE)
+#   # Find the min and max values of the 'Value' for setting the position of the annotation
+#   y_min <- min(df_all$Value, na.rm = TRUE)
+#   y_max <- max(df_all$Value, na.rm = TRUE)
 
-  # Set the annotation's y position dynamically based on the min value
-  annotation_y <- y_min - 0.1 * (y_max - y_min)
+#   # Set the annotation's y position dynamically based on the min value
+#   annotation_y <- y_min - 0.1 * (y_max - y_min)
 
-  # Add vertical line at t0 and annotation for t0
-  # p <- p + geom_vline(xintercept = delta, color = "#ff0000a6", linetype = "dashed") +
-  #   annotate("text", x = delta + 0.5, y = annotation_y, label = expression(t[0]),
-  #            color = "red", vjust = 0, size = 5)
+#   # Add vertical line at t0 and annotation for t0
+#   # p <- p + geom_vline(xintercept = delta, color = "#ff0000a6", linetype = "dashed") +
+#   #   annotate("text", x = delta + 0.5, y = annotation_y, label = expression(t[0]),
+#   #            color = "red", vjust = 0, size = 5)
 
-  filename <- paste0(im_folder,
-                     "optim/simulation/rpar_", param_str, "/episodes_",
-                     ngrid^2, "s_", length(temp), "t_",
-                     "t0_", t0_str, "_",
-                     "s0_", target_s0, "_",
-                     "episodes_", n_episodes, "_min",
-                     min_spatial_dist, "km", "_delta_", delta, ".png")
-  ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
+#   filename <- paste0(im_folder,
+#                      "optim/simulation/rpar_", param_str, "/episodes_",
+#                      ngrid^2, "s_", length(temp), "t_",
+#                      "t0_", t0_str, "_",
+#                      "s0_", target_s0, "_",
+#                      "episodes_", n_episodes, "_min",
+#                      min_spatial_dist, "km", "_delta_", delta, ".png")
+#   ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
 
-}
+# }
 
 
 list_episodes_unif_points <- get_extreme_episodes(selected_points, simu_all,
                                 episode_size = episode_size, unif = TRUE)
 
 list_episodes_unif <- list_episodes_unif_points$episodes
-s0_list <- selected_points$s0
-t0_list <- selected_points$t0
-u_list <- selected_points$u_s0
+new_selected_points <- list_episodes_unif_points$selected_points
+s0_list <- new_selected_points$s0
+t0_list <- new_selected_points$t0
+u_list <- new_selected_points$u_s0
+
+list_episodes_points <- get_extreme_episodes(new_selected_points, simu_all,
+                                episode_size = episode_size, unif = FALSE,
+                                beta = 0)
+list_episodes <- list_episodes_points$episodes
 
 
 library(parallel)
 
-rownames(sites_coords) <- paste0("S", 1:nrow(sites_coords))
 tau_vect <- 0:10
 u <- 1
 tmax <- max(tau_vect)
 sites_coords <- as.data.frame(sites_coords)
+rownames(sites_coords) <- paste0("S", 1:nrow(sites_coords))
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -275,11 +302,12 @@ wind_df <- as.data.frame(t(adv))
 colnames(wind_df) <- c("vx", "vy")
 
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+init_param <- params - c(0.1, -0.1, -0.1, 0.1, 0.1, 0.1)
 init_param <- params
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = list_lags, list_episodes = list_episodes,
         list_excesses = list_excesses, hmax = 7,
-        latlon = FALSE,
+        latlon = FALSE, wind_df = wind_df,
         directional = FALSE,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
@@ -291,10 +319,33 @@ result <- optim(par = init_param, fn = neg_ll_composite,
 result
 
 
+s1 <- c(1, 1)
+s2 <- c(2, 2)
+hnorm <- sqrt(sum((s2 - s1)^2))
+t1 <- 0
+t2 <- 1
+tau <- t2 - t1
 
+param_estim <- result$par
 
+# vario <- 2*(param_estim[1] * hnorm^param_estim[3] + param_estim[2] * tau^param_estim[4])
 
+h_adv <- s2 - s1 - param_estim[5:6] * tau
+hnorm_adv <- sqrt(sum(h_adv^2))
+vario_adv <- 2*(param_estim[1] * hnorm_adv^param_estim[3] +
+                      param_estim[2] * tau^param_estim[4])
 
+h_adv_th <- s2 - s1 - params[5:6] * tau
+hnorm_adv_th <- sqrt(sum(h_adv_th^2))
+
+vario_th <- 2*(params[1] * hnorm_adv_th^params[3] + params[2] * tau^params[4])
+
+vario_th 
+vario_adv
+
+################################################################################
+# For a fixed s0
+################################################################################
 
 df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0,
                                         tau_vect = 0:10)
