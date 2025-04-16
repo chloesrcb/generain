@@ -1,4 +1,4 @@
-muse <- TRUE
+muse <- FALSE
 
 if (muse) {
   # Get the muse folder

@@ -52,6 +52,8 @@ location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                                  "crbm", "archiw", "archie", "um35", "chu1",
                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
 
+
+
 # Get distances matrix
 dist_mat_hsm <- get_dist_mat(location_gauges)
 df_dist_hsm <- reshape_distances(dist_mat_hsm)
