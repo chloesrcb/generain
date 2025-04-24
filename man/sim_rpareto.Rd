@@ -16,7 +16,9 @@ sim_rpareto(
   t0 = 0,
   nres = 1,
   random_s0 = FALSE,
-  s0 = c(1, 1)
+  s0 = c(1, 1),
+  s0_radius = NULL,
+  s0_center = NULL
 )
 }
 \arguments{
@@ -43,7 +45,12 @@ sim_rpareto(
 \item{random_s0}{Logical value indicating whether to choose a random s0.
 Default is FALSE.}
 
-\item{s0}{Vector of dimension 2 for the spatial conditioning point.}
+\item{s0}{Vector of dimension 2 for the spatial conditioning point. 
+Default is c(1, 1).}
+
+\item{s0_radius}{The radius for random s0 selection. Default is NULL.}
+
+\item{s0_center}{The center for random s0 selection. Default is NULL.}
 }
 \value{
 The result of the simulation.

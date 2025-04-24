@@ -120,6 +120,7 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #' @param foldername The folder where the GIF will be saved.
 #' @param type The type of simulation.
 #' @param forcedtemp The number of time steps to include in the GIF.
+#' @param s0 The conditional site.
 #'
 #' @return None, but saves the GIF to a file.
 #'
@@ -129,7 +130,8 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #'
 #' @export
 create_simu_gif <- function(simulation_data, sites_coords, params,
-                            foldername, type = "rpar", forcedtemp = NA) {
+                            foldername, type = "rpar", forcedtemp = NA, 
+                            s0 = NULL) {
   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
   Tmax <- nrow(simulation_data) # Number of time steps
   if (is.na(forcedtemp)) {
@@ -159,7 +161,8 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
   #   FUN = function(x) rank(x) / (length(x) + 1)
   # )
   # Create a dataframe to represent grid points
-  grid <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+  grid <- sites_coords
+  colnames(grid) <- c("x", "y")
 
   plots <- list()
   cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
@@ -174,7 +177,7 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
     grid$above <- grid$value > threshold
 
     # Plot
-    p <- ggplot(data = grid, aes(x = x, y = y, fill = value)) +
+    p <- ggplot(data = grid, aes(x = y, y = x, fill = value)) +
       geom_tile() +
       scale_fill_gradientn(
         colours = c("#70a7ae", "#b8967a", "#9d503d"),
@@ -191,6 +194,14 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
             panel.grid = element_blank(),
             axis.text = element_blank(),
             axis.title = element_blank())
+
+    if (!is.null(s0)) {
+      p <- p +
+        geom_text(data = data.frame(x = s0[1], y = s0[2]),
+          mapping = aes(x = x, y = y),
+          label = "s0", color = "black", size = 5, fontface = "bold", 
+          inherit.aes = FALSE)
+    }
 
     plots[[i]] <- p
   }

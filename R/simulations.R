@@ -482,6 +482,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
   lt <- length(st <- seq_along(t))  # temporal
+  site_names <- paste0("S", seq_len(lx * ly))
 
   ## Model-Variogram BuhlCklu
   modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1)
@@ -501,6 +502,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
   grid <- grid_with_advection
 
+  grid$site <- rep(site_names, times = lt)
   coords <- grid[, 4:5]
 
   if (all(adv == 0)) {
@@ -528,30 +530,19 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     # Choose random s from grid
     if (random_s0) {
       if (!is.null(s0_radius) && !is.null(s0_center)) {
-        # Create all grid points
-        grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
-        # Compute distance from s0_center
-        distances <- sqrt((grid_points$x - s0_center[1])^2 +
-                          (grid_points$y - s0_center[2])^2)
-        # Filter points within radius
-        candidate_points <- grid_points[distances <= s0_radius, ]
-
-        if (nrow(candidate_points) == 0) {
-          stop("No grid points found within specified radius of s0_center.")
-        }
-
-        # Sample one from those
         selected_index <- sample(nrow(candidate_points), 1)
         s0 <- as.integer(candidate_points[selected_index, ])
       } else {
         s0 <- c(sample(seq_len(lx), 1), sample(seq_len(ly), 1))
       }
     }
+    s0 <- data.frame(x = s0[1], y = s0[2])
     s0_list <- c(s0_list, list(s0))
     # s0 <- c(1, 1) # default
+   
 
     ## Variogram for s0, t0
-    ind_s0_t0 <- which(grid$x == s0[1] & grid$y == s0[2] &
+    ind_s0_t0 <- which(grid$x == s0$x & grid$y == s0$y &
                               grid$t == t0)
 
     gamma_space <- RandomFields::RFvariogram( # for s0,t0
@@ -585,7 +576,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   # Z
   return(list(
     Z = Z,
-    s0_used = s0_list
+    s0_used = s0_list,
+    grid = grid
   ))
 }
 
@@ -669,7 +661,7 @@ sim_rpareto_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' save them into CSV files rain_BR_i.csv.
 #'
 #' @param simu The BR simulationsas array.
-#' @param ngrid The number of grid points.
+#' @param sites_coords The coordinates of the sites.
 #' @param nsimu The number of BR simulations.
 #' @param folder The folder path.
 #' @param file The filename without extension, default is "rainBR".
@@ -678,38 +670,48 @@ sim_rpareto_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' @return None
 #'
 #' @export
-save_simulations <- function(simu, ngrid, nsimu, folder, file = "rainBR",
+save_simulations <- function(simu, ngrid, folder, file = "rainBR",
                              forcedind = NA) {
-  # Initialize the list to store the dataframes
-  list_dataframes <- list()
+  # Create a data frame with coordinates
+  coord_df <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+  coord_df$point <- paste0("S", seq_along(coord_df$y))
 
-  # Loop over the simulations
-  for (i in 1:nsimu) {
-    # Extract values corresponding to simulation i
-    values <- simu[, , , i]
+  simu_long <- as.data.frame.table(simu, responseName = "value")
+  names(simu_long) <- c("x", "y", "t", "nsimu", "value")
 
-    # Initialize the dataframe with the first column
-    df <- data.frame(values[1, 1, ])
+  simu_long$y <- as.integer(factor(simu_long$y))
+  simu_long$x <- as.integer(factor(simu_long$x))
+  simu_long$t <- as.integer(factor(simu_long$t))
+  simu_long$nsimu <- as.integer(factor(simu_long$nsimu))
+  simu_long <- merge(simu_long, coord_df, by = c("x", "y"))
 
-    # Loop over the other columns for each site
-    for (row in 1:ngrid) {
-      for (col in 1:ngrid) {
-        # Exclude the first column already added
-        if (!(row == 1 && col == 1)) {
-          v <- c(values[row, col, ])  # Values corresponding to this column
-          df <- cbind(df, v)  # Add the column to the dataframe
-        }
-      }
-    }
+  simulations <- sort(unique(simu_long$nsimu))  # List of available simulations
 
-    colnames(df) <- paste0("S", 1:(ngrid^2))  # Rename the columns
-    # Add the dataframe to the list
-    list_dataframes[[i]] <- df
-    if (!is.na(forcedind)) {
-      i <- forcedind
-    }
-    # Save the dataframe in a file
-    filename <- paste0(folder, file, "_", i, ".csv")
+  # Loop over each simulation
+  for (simu in simulations) {
+    # Filter simu_long for this simulation
+    simu_data <- simu_long %>%
+      dplyr::filter(simu_long$nsimu == simu) %>%
+      dplyr::select(x, y, t, value, point)
+
+
+    data_wide <- simu_data %>%
+      dplyr::select(t, value, point) %>%
+      tidyr::pivot_wider(names_from = point, values_from = value)
+  
+
+    # Add the reshaped data to the list with a unique name based on the simulation number
+    df <- as.data.frame(data_wide)
+    # sort by t
+    df <- df[order(df$t), ]
+    # Remove t column
+    df <- df[, -1]
+    colnames(df)
+
+    # list_res[[simu]] <- df
+    # Define filename and write
+    index_to_use <- if (!is.na(forcedind)) forcedind else simu
+    filename <- paste0(folder, file, "_", index_to_use, ".csv")
     write.csv(df, file = filename, row.names = FALSE)
   }
 }

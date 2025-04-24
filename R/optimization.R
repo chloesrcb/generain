@@ -122,6 +122,251 @@ select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
   return(selected_points)
 }
 
+#' select_extreme_episodes function (Optimized)
+#'
+#' This function selects extreme episodes based on a quantile or threshold,
+#' with spatial and temporal exclusion. Optimized for performance.
+#'
+#' @param sites_coords The coordinates of the sites.
+#' @param data The rainfall dataframe.
+#' @param quantile The quantile value.
+#' @param min_spatial_dist The minimum spatial distance between two episodes.
+#' @param episode_size The temporal window size.
+#' @param n_max_episodes Max number of episodes to select. Default 10000.
+#' @param time_ext Temporal window extension. Default 0.
+#' @param latlon TRUE if coordinates are lat/lon. Default TRUE.
+#' @param spatial_window_radius Optional radius (km) for candidate sites.
+#' @param central_site Optional name to center spatial window.
+#' @param threshold Optional fixed threshold(s).
+#' @return data.table with selected episodes: s0, t0, u_s0.
+#'
+#' @import data.table
+#' @import geosphere
+#' @export
+select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
+                                    episode_size, n_max_episodes = 10000,
+                                    time_ext = 0, latlon = TRUE,
+                                    quantile = NULL, threshold = NULL,
+                                    spatial_window_radius = NULL,
+                                    central_site = NULL) {
+  data <- as.matrix(data)
+  site_names <- colnames(data)
+
+  # --- Threshold computation ---
+  if (!is.null(quantile) && !is.null(threshold)) stop("Specify either 'quantile' or 'threshold', not both.")
+  if (is.null(quantile) && is.null(threshold)) stop("Specify 'quantile' or 'threshold'.")
+
+  if (!is.null(quantile)) {
+    thresholds_by_site <- apply(data, 2, function(col) quantile(col, probs = quantile, na.rm = TRUE))
+  } else {
+    if (length(threshold) == 1) {
+      thresholds_by_site <- rep(threshold, ncol(data))
+      names(thresholds_by_site) <- site_names
+    } else if (length(threshold) == ncol(data)) {
+      thresholds_by_site <- threshold
+      names(thresholds_by_site) <- site_names
+    } else {
+      stop("Invalid threshold input.")
+    }
+  }
+
+  # --- Distance matrix ---
+  if (latlon) {
+    dist_matrix <- as.matrix(distm(sites_coords[site_names, ], fun = distHaversine)) / 1000
+  } else {
+    dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
+  }
+  rownames(dist_matrix) <- site_names
+  colnames(dist_matrix) <- site_names
+
+  # --- Spatial window site filtering ---
+  valid_site_mask <- rep(TRUE, length(site_names))
+  if (!is.null(spatial_window_radius)) {
+    if (!is.null(central_site)) {
+      valid_sites <- names(which(dist_matrix[, central_site] <= spatial_window_radius))
+    } else {
+      valid_sites <- names(which(apply(dist_matrix, 2, function(col) any(col <= spatial_window_radius))))
+    }
+    valid_site_mask <- site_names %in% valid_sites
+  }
+
+  # --- Initialization ---
+  selected_points <- data.table(s0 = character(), t0 = integer(), u_s0 = numeric())
+  invalid_time_mask <- matrix(FALSE, nrow = nrow(data), ncol = ncol(data))
+  nb_episode <- 0
+
+  while (nb_episode < n_max_episodes) {
+    exceed_mask <- sweep(data, 2, thresholds_by_site, FUN = ">")
+    exceed_mask[invalid_time_mask] <- FALSE
+    exceed_indices <- which(exceed_mask, arr.ind = TRUE)
+
+    # Apply spatial mask
+    exceed_indices <- exceed_indices[exceed_indices[, 2] %in% which(valid_site_mask), , drop = FALSE]
+    if (nrow(exceed_indices) == 0) break
+
+    # Sort by exceedance value (descending), keep top 200
+    exceed_values <- data[exceed_indices]
+    ord <- order(exceed_values, decreasing = TRUE)
+    exceed_indices <- exceed_indices[ord[1:min(200, length(ord))], , drop = FALSE]
+
+    selected <- FALSE
+
+    for (i in seq_len(nrow(exceed_indices))) {
+      t0 <- exceed_indices[i, 1]
+      s0_idx <- exceed_indices[i, 2]
+      s0 <- site_names[s0_idx]
+      u_s0 <- thresholds_by_site[s0]
+
+      if (nrow(selected_points) == 0) {
+        selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, u_s0 = u_s0))
+        nb_episode <- nb_episode + 1
+        selected <- TRUE
+        break
+      }
+
+      selected_sites <- selected_points$s0
+      time_diffs <- abs(selected_points$t0 - t0)
+      spatial_dists <- dist_matrix[selected_sites, s0]
+
+      if (all(spatial_dists >= min_spatial_dist | time_diffs >= episode_size)) {
+        selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, u_s0 = u_s0))
+        nb_episode <- nb_episode + 1
+        selected <- TRUE
+        break
+      } else {
+        invalid_time_mask[t0, s0_idx] <- TRUE
+      }
+    }
+
+    if (selected) {
+      t_inf <- max(1, t0 - time_ext)
+      t_sup <- min(nrow(data), t0 + episode_size + time_ext - 1)
+      invalid_time_mask[t_inf:t_sup, s0_idx] <- TRUE
+    } else {
+      break
+    }
+  }
+
+  return(selected_points)
+}
+
+
+
+select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
+                                    episode_size, n_max_episodes = 10000,
+                                    time_ext = 0, latlon = TRUE,
+                                    quantile = NULL, threshold = NULL,
+                                    s0_radius = NULL, central_s0 = NULL) {
+  # Convert data to a matrix for fast access
+  data <- as.matrix(data)
+  site_names <- colnames(data)
+
+  # Validate input
+  if (!is.null(quantile) && !is.null(threshold)) {
+    stop("Specify either 'quantile' or 'threshold', not both.")
+  }
+  if (is.null(quantile) && is.null(threshold)) {
+    stop("You must specify either 'quantile' or 'threshold'.")
+  }
+
+  # Compute threshold for each site
+  if (!is.null(quantile)) {
+    thresholds_by_site <- apply(data, 2, function(col) quantile(col,
+                                              probs = quantile, na.rm = TRUE))
+  } else {
+    if (length(threshold) == 1) {
+      thresholds_by_site <- rep(threshold, ncol(data))
+      names(thresholds_by_site) <- site_names
+    } else if (length(threshold) == ncol(data)) {
+      thresholds_by_site <- threshold
+      names(thresholds_by_site) <- site_names
+    } else {
+      stop("Threshold must be either a single numeric value or a vector of the same length as the number of sites.")
+    }
+  }
+
+  # Compute distance matrix
+  if (latlon){
+    dist_matrix <- as.matrix(distm(sites_coords[site_names, ],
+                                                    fun = distHaversine)) / 1000
+  } else {
+    dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
+  }
+  rownames(dist_matrix) <- site_names
+  colnames(dist_matrix) <- site_names
+
+  # Optional filtering of allowed sites
+  if (!is.null(s0_radius) && !is.null(central_s0)) {
+    s0_name <- rownames(sites_coords[sites_coords$Longitude == central_s0[1] &
+                                     sites_coords$Latitude == central_s0[2], ])
+    allowed_s0_sites <- names(which(dist_matrix[, s0_name] <= s0_radius))
+    valid_site_mask <- site_names %in% allowed_s0_sites
+    allowed_site_indices <- which(valid_site_mask)
+  } else {
+    allowed_site_indices <- seq_along(site_names)
+  }
+
+  # Initialize
+  selected_points <- data.table(s0 = character(),
+                                t0 = integer(), u_s0 = numeric())
+  invalid_time_mask <- matrix(FALSE, nrow = nrow(data), ncol = ncol(data))
+  nb_episode <- 0
+
+  while (nb_episode < n_max_episodes) {
+    # Identify all (s0, t0) where data exceeds threshold
+    exceed_mask <- sweep(data, 2, thresholds_by_site, FUN = ">")
+    exceed_mask[invalid_time_mask] <- FALSE
+    exceed_indices <- which(exceed_mask, arr.ind = TRUE)
+
+    if (nrow(exceed_indices) == 0) break
+
+    # Restrict exceedances to allowed sites only
+    exceed_indices <- exceed_indices[exceed_indices[, 2] %in% 
+                                           allowed_site_indices, , drop = FALSE]
+    if (nrow(exceed_indices) == 0) break
+
+    # Sort by time
+    exceed_indices <- exceed_indices[order(exceed_indices[, 1]), , drop = FALSE]
+
+    best_candidate <- NULL
+
+    for (idx in seq_len(nrow(exceed_indices))) {
+      t0_candidate <- exceed_indices[idx, 1]
+      s0_col_index <- exceed_indices[idx, 2]
+      s0_candidate <- site_names[s0_col_index]
+      u_s0 <- thresholds_by_site[s0_candidate]
+
+      if (nrow(selected_points) == 0) {
+        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
+        nb_episode <- nb_episode + 1
+        break
+      } else {
+        selected_sites <- selected_points$s0
+        time_differences <- abs(selected_points$t0 - t0_candidate)
+        distances <- dist_matrix[selected_sites, s0_candidate, drop = FALSE]
+        valid_pairs <- (distances >= min_spatial_dist) | (time_differences >= episode_size)
+
+        if (all(valid_pairs)) {
+          best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
+          nb_episode <- nb_episode + 1
+          break
+        } else {
+          invalid_time_mask[t0_candidate, s0_col_index] <- TRUE
+        }
+      }
+    }
+
+    if (!is.null(best_candidate)) {
+      selected_points <- rbindlist(list(selected_points, best_candidate))
+      t_inf <- max(1, best_candidate$t0 - time_ext)
+      t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext - 1)
+      invalid_time_mask[t_inf:t_sup, which(site_names == best_candidate$s0)] <- TRUE
+    }
+  }
+
+  return(selected_points)
+}
+
 
 #' select_max_extreme_episodes function
 #'
@@ -322,11 +567,11 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
     # t_inf <- t0 - (delta) - beta
     # t_sup <- t0 + delta + 2 * beta
     t_inf <- max(1, t0 - beta)
-    t_sup <- min(nrow(data), t0 + episode_size + beta)
+    t_sup <- min(nrow(data), t0 + episode_size - 1 + beta)
     # print(i)
     # Check that the episode is the correct size (episode_size)
     episode_size_test <- t_sup - t_inf + 1
-    if (episode_size_test == episode_size + 1 + 2 * beta) {
+    if (episode_size_test == episode_size + 2 * beta) {
       episode <- data[t_inf:t_sup, , drop = FALSE] # Get the episode
       episodes <- append(episodes, list(episode))
       valid_indices <- c(valid_indices, i) # Mark this index as valid
@@ -422,6 +667,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 
       # shifted data
       X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
+
       nmargin <- sum(X_s_t > quantile) # 0 or 1
 
       # store the number of excesses and T - tau
@@ -546,7 +792,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
     # Compute spatial distance in km (already in km in df_lags)
     haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
                                       chi_df$s2y, chi_df$s2x, adv,
-                                      (chi_df$tau)* 3600) # seconds
+                                      (chi_df$tau) * 3600) # seconds
     chi_df$hnormV <- haversine_df$distance # km
     chi_df$theta <- haversine_df$theta
 
@@ -868,6 +1114,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                              rpar = TRUE) {
   # params[1:4] <-  c(0.01, 0.2, 1.5, 1)
   # Add default values for advection parameters
+  # print(params)
   if (length(params) == 4) {
     params <- c(params, 0, 0) # No advection
   }
@@ -887,9 +1134,10 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
       adv <- as.vector(adv_df)
     }
   }
+  print(adv)
 
 
-  print(params)
+  # print(params)
   # # Ensure list_lags has the same length as list_episodes
   # if (is.data.frame(list_lags)) {
   #   list_lags <- list(list_lags)

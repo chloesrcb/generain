@@ -13,7 +13,21 @@ select_extreme_episodes(
   time_ext = 0,
   latlon = TRUE,
   quantile = NULL,
-  threshold = NULL
+  threshold = NULL,
+  allowed_s0_sites = NULL
+)
+
+select_extreme_episodes(
+  sites_coords,
+  data,
+  min_spatial_dist,
+  episode_size,
+  n_max_episodes = 10000,
+  time_ext = 0,
+  latlon = TRUE,
+  quantile = NULL,
+  threshold = NULL,
+  allowed_s0_sites = NULL
 )
 }
 \arguments{
@@ -23,18 +37,26 @@ select_extreme_episodes(
 
 \item{min_spatial_dist}{The minimum spatial distance between two episodes.}
 
-\item{episode_size}{The temporal window size, i.e. the size of the episode.}
+\item{episode_size}{The temporal window size.}
 
-\item{n_max_episodes}{The maximum number of episodes to select. Default is 10000.}
+\item{n_max_episodes}{Max number of episodes to select. Default 10000.}
 
-\item{time_ext}{The temporal window extension. Default is 0.}
+\item{time_ext}{Temporal window extension. Default 0.}
 
-\item{latlon}{A boolean value to indicate if the locations are in latitude and longitude. Default is TRUE.}
+\item{latlon}{TRUE if coordinates are lat/lon. Default TRUE.}
 
 \item{quantile}{The quantile value.}
+
+\item{threshold}{Optional fixed threshold(s).}
+
+\item{spatial_window_radius}{Optional radius (km) for candidate sites.}
+
+\item{central_site}{Optional name to center spatial window.}
 }
 \value{
 A list of selected points (s0, t0) and the corresponding threshold value u_s0 for each episode.
+
+data.table with selected episodes: s0, t0, u_s0.
 }
 \description{
 This function selects extreme episodes based on the given data and a 
@@ -42,4 +64,7 @@ quantile. A spatio-temporal specific neighborhood is considered to avoid
 selecting nearby episodes. Each episode is selected according to a 
 r-Pareto process with r(X) = X(s0, t0). Each episode will have a size of
 episode_size.
+
+This function selects extreme episodes based on a quantile or threshold,
+with spatial and temporal exclusion. Optimized for performance.
 }

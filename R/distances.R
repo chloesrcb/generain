@@ -338,9 +338,10 @@ distances_regular_grid <- function(nsites, adv = c(0, 0), tau = 1:10) {
 generate_grid_coords <- function(grid_size) {
   # Generate x and y coordinates for the grid points
   sites_coords <- data.frame(
-    Longitude = rep(1:grid_size, each = grid_size),   # X
-    Latitude = rep(1:grid_size, times = grid_size)  # Y
+    Longitude = rep(1:grid_size, times = grid_size), # X
+    Latitude = rep(1:grid_size, each = grid_size)  # Y
   )
+  rownames(sites_coords) <- paste0("S", 1:(grid_size^2))
   return(sites_coords)
 }
 
