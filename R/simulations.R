@@ -454,10 +454,9 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #' @param nres The number of simulations to perform. Default is 1.
 #' @param random_s0 Logical value indicating whether to choose a random s0.
 #'                  Default is FALSE.
-#' @param s0 Vector of dimension 2 for the spatial conditioning point. 
+#' @param s0 Vector of dimension 2 for the spatial conditioning point.
 #'           Default is c(1, 1).
-#' @param s0_radius The radius for random s0 selection. Default is NULL.
-#' @param s0_center The center for random s0 selection. Default is NULL.
+#' @param s0_radius The radius for random s0 selection. Default is Inf.
 #'
 #' @return The result of the simulation.
 #'
@@ -469,15 +468,15 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
                         adv = c(0, 0), t0 = 0, nres = 1,
                         random_s0 = FALSE, s0 = c(1, 1),
-                        s0_radius = NULL, s0_center = NULL) {
+                        s0_radius = Inf) {
   # beta1, beta2, alpha1, alpha2 are variogram parameters
   # x is the first dimension (spatial x in our case)
   # y is the second dimension (spatial y in our case)
   # z is the third dimension (time in our case)
   # (adv1, adv2) advection coordinates vector
-  ## Setups
+  ## Setups 
   # RandomFields::RFoptions(spConform = FALSE, install = "no")
-  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
+  # RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
 
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
@@ -485,8 +484,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   site_names <- paste0("S", seq_len(lx * ly))
 
   ## Model-Variogram BuhlCklu
-  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1)
-  modelTime <- RandomFields::RMfbm(alpha = alpha2, var = 2*beta2)
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+  modelTime <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
 
   ## Construct grid
   grid_with_advection <- expand.grid(
@@ -511,7 +510,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     coords <- filtered_coords
   }
   # Possible random s0
-  if (random_s0 && !is.null(s0_radius) && !is.null(s0_center)) {
+  s0_center <- s0
+  if (random_s0) {
     grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
     distances <- sqrt((grid_points$x - s0_center[1])^2 + (grid_points$y -
                                                             s0_center[2])^2)
@@ -576,8 +576,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   # Z
   return(list(
     Z = Z,
-    s0_used = s0_list,
-    grid = grid
+    s0_used = s0_list
   ))
 }
 

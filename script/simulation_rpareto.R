@@ -7,20 +7,27 @@ library(RandomFields)
 library(RandomFieldsUtils)
 source("./script/load_libraries.R")
 
+# Get all files in the folder "R"
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
+# load all functions in files
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
+library(latex2exp)
+
 ################################################################################
 # Simulate data using the rpareto model
-ngrid <- 5
+ngrid <- 7
 spa <- 1:ngrid
 temp <- 0:30
 m <- 500 # number of episodes
-M <- 1 # number of simulations
+M <- 10 # number of simulations
 n.res <- m * M
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(0.1, 0.2)
+adv <- c(5, 2)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
 s0 <- c(2, 1)
 s0_center <- s0
@@ -28,15 +35,112 @@ s0_radius <- 7
 t0 <- 0
 random_s0 <- TRUE
 
-# Simulate spatio-temporal r-Pareto process
-simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
-                          adv, t0, n.res, random_s0, s0,
-                          s0_center = s0_center, s0_radius = s0_radius)
+# # Simulate spatio-temporal r-Pareto process
+# simu_rpar <- sim_rpareto(param[1], param[2], param[3], param[4], spa, spa, temp,
+#                          adv, t0, n.res, random_s0, s0)
 
-Z_rpar <- simu_rpar$Z
-s0_list <- simu_rpar$s0_used
 
-# all(simu_rpar$Z[s0[1],s0[2], t0 + 1, ] > 1)
+library(parallel)
+num_cores <- detectCores() - 1
+RFoptions(
+  spConform = FALSE,
+  allow_duplicated_locations = TRUE,
+  storing = FALSE,
+  install = "no",
+  printlevel = 0
+)
+
+
+
+# Formatage des paramètres pour la sauvegarde
+param_str <- format_value(true_param)
+adv_str <- format_value(adv)
+s0_str <- format_value(s0)
+t0_str <- format_value(t0)
+
+if (random_s0) {
+  s0_str <- "random_s0"
+} else {
+  s0_str <- paste0("s0_", s0_str)
+}
+
+# Créer le dossier de sauvegarde dans chaque worker
+foldername <- paste0(data_folder, "simulations/simulations_rpar/rpar_",
+                      param_str, "/sim_", ngrid^2, "s_", length(temp), "t_",
+                      s0_str, "_t0_", t0_str, "/")
+
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+num_cores <- detectCores() - 1
+cl <- makeCluster(num_cores)
+
+# Exporter toutes les variables nécessaires dans les workers
+clusterExport(cl, varlist = c(
+  "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
+  "spa", "temp", "adv", "t0", "m", "random_s0", "s0",
+  "compute_gamma_point", "compute_W_s_t",
+  "foldername", "generate_grid_coords", "save_simulations",
+  "ngrid"
+))
+
+# Charger RandomFields et configurer les options dans chaque worker
+clusterEvalQ(cl, {
+  library(RandomFields)
+  library(dplyr)
+  library(tidyr)
+  RandomFields::RFoptions(
+    spConform = FALSE,
+    allow_duplicated_locations = TRUE,
+    storing = FALSE,
+    printlevel = 0
+  )
+})
+
+# Lancer les simulations en parallèle (PSOCK)
+result_list <- parLapply(cl, 1:M, function(i) {
+  simu <- sim_rpareto(
+    beta1 = beta1,
+    beta2 = beta2,
+    alpha1 = alpha1,
+    alpha2 = alpha2,
+    x = spa,
+    y = spa,
+    t = temp,
+    adv = adv,
+    t0 = t0,
+    nres = m,
+    random_s0 = random_s0,
+    s0 = s0
+  )
+
+  # Après la simulation, sauvegarde des résultats dans le worker
+  Z_rpar <- simu$Z
+  s0_used_list <- simu$s0_used
+
+  # Sauvegarder les résultats pour chaque itération
+  save_simulations(Z_rpar, ngrid,
+                   folder = foldername,
+                   file = paste0("rpar_", ngrid^2, "s_", length(temp),
+                   "t_simu", i))
+
+  return(list(Z = Z_rpar, s0_used = s0_used_list))
+})
+
+stopCluster(cl)
+
+Z_list <- lapply(result_list, function(res) res$Z)
+
+# Combine them along the 4th dimension (simulation axis)
+Z_rpar <- abind::abind(Z_list, along = 4)  # requires 'abind' package
+
+# Combine all s0_used lists into one big list
+s0_list <- do.call(c, lapply(result_list, function(res) res$s0_used))
+
+# s0_df <- do.call(rbind, lapply(s0_list, function(s0_used) {
+#   data.frame(x = s0_used$x, y = s0_used$y, t = s0_used$t)
+# }))
 
 # verify for all episode that Z_s0,t0 > 1
 check_Z_gt1 <- sapply(seq_along(s0_list), function(i) {
@@ -46,91 +150,25 @@ check_Z_gt1 <- sapply(seq_along(s0_list), function(i) {
 
 all(check_Z_gt1)
 
+sites_coords <- generate_grid_coords(ngrid)
 
-grid <- simu_rpar$grid
-head(grid)
-sites_coords_raw <- grid[, c("x", "y", "t", "site")]
-sites_coords_raw <- sites_coords_raw[sites_coords_raw$t == 0, ]
-sites_coords <- sites_coords_raw[, c("x", "y", "site")]
-rownames(sites_coords) <- sites_coords$site
-sites_coords <- sites_coords[, c("x", "y")]
-colnames(sites_coords) <- c("Latitude", "Longitude")
-
-# Apply formatting
-param_str <- format_value(true_param)
-adv_str <- format_value(adv)
-s0_str <- format_value(s0)
-t0_str <- format_value(t0)
-
-# Save the data
-if (random_s0) {
-  s0_str <- "random_s0"
-} else {
-  s0_str <- paste0("s0_", s0_str)
-}
-
-foldername <- paste0(data_folder, "simulations/simulations_rpar/rpar_",
-                    param_str, "/sim_", ngrid^2, "s_", length(temp), "t_",
-                    s0_str, "_t0_", t0_str, "/")
-
-if (!dir.exists(foldername)) {
-  print("Creating folder")
-  dir.create(foldername, recursive = TRUE)
-}
-
-# Save the simulation data
-save_simulations(simu_rpar$Z, ngrid,
-                 folder = foldername,
-                 file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
-
-s0_used_list <- simu_rpar$s0_used
-s0_df <- as.data.frame(do.call(rbind, s0_used_list))
-
-# sites_coords2 <- generate_grid_coords(ngrid)
-
-# get index of the s0_df sites in the sites_coords
-s0_df$site <- NA
-for (i in 1:nrow(s0_df)) {
-  index <- which(sites_coords$Latitude == s0_df$x[i] &
-                          sites_coords$Longitude == s0_df$y[i])
-  s0_df$site[i] <- rownames(sites_coords)[index]
-}
-head(s0_df)
-unique(s0_df$site)
 
 ################################################################################
 # Simulation
 files <- list.files(foldername, full.names = TRUE)
 length(files)
 list_rpar <- list()
-for (i in 1:n.res) {
-  file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
-                    length(temp), "t_", i, ".csv")
-  list_rpar[[i]] <- read.csv(file_name)
+for (i in 1:M) {
+  for (j in 1:m) {
+    file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                        length(temp), "t_simu", i, "_", j, ".csv")
+    list_rpar[[((i-1) * m + j)]] <- read.csv(file_name)
+  }
 }
-
-
-all_s0_gt_1 <- sapply(seq_along(list_rpar), function(i) {
-  site_name <- s0_df$site[i]       # le nom de la colonne à extraire
-  df <- list_rpar[[i]]             # le data frame courant
-  df[1, site_name] > 1             # condition à tester
-})
-all(all_s0_gt_1)
-
-
-# files <- list.files(foldername, full.names = TRUE)
-# length(files)
-# list_simuM <- list()
-# m <- 500
-# nres <- m*M
-# for (i in 1:nres) {
-#   file_name <- files[i]
-#   list_simuM[[i]] <- read.csv(file_name)
-# }
 
 # dependece buhl
 simu_df <- list_rpar[[1]] # first simulation
-s0_used <- simu_rpar$s0_used[[1]]
+s0_used <- s0_list[[1]]
 nsites <- ncol(simu_df) # number of sites
 par(mfrow = c(1, 1))
 plot(simu_df[, 1], main = "rpareto simulation")
@@ -146,85 +184,110 @@ simu_all <- do.call(rbind, list_rpar)
 create_simu_gif(simu_all, sites_coords, c(param, adv), type = "rpar",
                 foldername = gif_folder, forcedtemp = 200)
 
-simu_all$S1[1:10] == list_rpar[[1]]$S1[1:10]
 
 params <- c(param, adv)
 
-
-
 # Test directly on list_rpar
 # compute excesses and lags
-
-library(parallel)
 
 tau_vect <- 0:10
 u <- 1
 tmax <- max(tau_vect)
 sites_coords <- as.data.frame(sites_coords)
-list_episodes <- list_rpar
-s0_list <- s0_df$site
-colnames(s0_df) <- c("Longitude", "Latitude", "site")
-# Compute the lags and excesses for each conditional point
-list_results <- mclapply(1:length(s0_list), function(i) {
-  s0_name <- s0_list[i]
-  s0_coords <- s0_df[i, c("Longitude", "Latitude")]
-  # t0 <- t0_list[i]
-  episode <- list_episodes[[i]]
-  ind_t0_ep <- 0 # index of t0 in the episode
-  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = FALSE)
-  # lags$hnorm <- lags$hnorm / 1000 # convert to km
-  excesses <- empirical_excesses(episode, u, lags, type = "rpareto",
-                                t0 = ind_t0_ep, threshold = TRUE)
-  list(lags = lags, excesses = excesses)
-}, mc.cores = detectCores() - 1)
 
+# Compute lags and excesses for each episode inside the simulation
+list_results <- mclapply(1:n.res, function(i) {
+  s0_x <- s0_list[[i]]$x
+  s0_y <- s0_list[[i]]$y
+  s0_coords <- sites_coords[sites_coords$Longitude == s0_x &
+                              sites_coords$Latitude == s0_y, ]
+  episode <- list_rpar[[i]]
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
+                                      tau_vect, latlon = FALSE)
+  excesses <- empirical_excesses(episode, u, lags, type = "rpareto",
+                                  t0 = t0, threshold = TRUE)
+  list(lags = lags, excesses = excesses)
+}, mc.cores = num_cores)
+
+# Extract lags and excesses from the list of results
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
+result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+                        list_simu = list_rpar, u = u,
+                        list_lags = list_lags,
+                        list_excesses = list_excesses,
+                        init_params = params,
+                        hmax = 7, wind_df = NA,
+                        mc.cores = num_cores)
 
-check_excesses <- sapply(seq_along(list_excesses), function(i) {
-  s0_name <- s0_list[[i]]
-  s0_idx <- which(rownames(sites_coords) == s0_name)
-  excess <- list_excesses[[i]]
-  excess$kij[excess$s1 == s0_idx & excess$t1 == s0_idx & excess$tau == 0] = 1
-})
+# Combine results int a data frame
+df_result_all <- do.call(rbind, result_list)
+colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
+                             "alpha2", "adv1", "adv2")
 
-all(check_excesses)
+df_bplot <- as.data.frame(df_result_all)
 
-init_param <- params
-init_param <- params + c(0.1, 0.1, -0.1, 0.1, 0.1, 0.1)
-result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = list_lags, list_episodes = list_episodes,
-        list_excesses = list_excesses, hmax = 7,
-        latlon = FALSE, wind_df = NA,
-        directional = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = F)
-result
+# save data in csv
+foldername <- "./data/optim/rpar/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
+                "s_", length(temp), "t_", param_str, "_",
+                adv_str, ".csv")
+write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
+
+
+# Plot results
+df_bplot <- stack(df_bplot)
+
+labels_latex <- c(
+  beta1 = TeX("$\\beta_1$"),
+  beta2 = TeX("$\\beta_2$"),
+  alpha1 = TeX("$\\alpha_1$"),
+  alpha2 = TeX("$\\alpha_2$"),
+  vx = TeX("$v_x$"),
+  vy = TeX("$v_y$")
+)
+
+ggplot(df_bplot, aes(x = ind, y = values)) +
+  geom_boxplot() +
+  labs(title = "",
+    x = "Parameters", y = "Estimated values") +
+  theme_minimal() +
+  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) +
+  scale_x_discrete(labels = labels_latex) 
+
+
+# save plot
+foldername <- "./images/optim/rpar/"
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+
+# Save the plot
+name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
+                "s_", length(temp), "t_", param_str, "_",
+                adv_str, ".png")
+
+ggsave(paste0(foldername, name_file), width = 5, height = 5)
+
 
 
 # With wind == adv
 wind_df <- data.frame(vx = adv[1], vy = adv[2])
 
 init_param <- c(params[1:4], 1, 1)
-result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = list_lags, list_episodes = list_episodes,
-        list_excesses = list_excesses, hmax = 7,
-        latlon = FALSE, wind_df = wind_df,
-        directional = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-        control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = F)
+result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+                        list_simu = list_rpar, u = u,
+                        list_lags = list_lags,
+                        list_excesses = list_excesses,
+                        init_params = params,
+                        hmax = 7, wind_df = wind_df,
+                        mc.cores = num_cores)
 result
 
 

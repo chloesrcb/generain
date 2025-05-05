@@ -252,120 +252,120 @@ select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
 
 
 
-select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
-                                    episode_size, n_max_episodes = 10000,
-                                    time_ext = 0, latlon = TRUE,
-                                    quantile = NULL, threshold = NULL,
-                                    s0_radius = NULL, central_s0 = NULL) {
-  # Convert data to a matrix for fast access
-  data <- as.matrix(data)
-  site_names <- colnames(data)
+# select_extreme_episodes <- function(sites_coords, data, min_spatial_dist,
+#                                     episode_size, n_max_episodes = 10000,
+#                                     time_ext = 0, latlon = TRUE,
+#                                     quantile = NULL, threshold = NULL,
+#                                     s0_radius = NULL, central_s0 = NULL) {
+#   # Convert data to a matrix for fast access
+#   data <- as.matrix(data)
+#   site_names <- colnames(data)
 
-  # Validate input
-  if (!is.null(quantile) && !is.null(threshold)) {
-    stop("Specify either 'quantile' or 'threshold', not both.")
-  }
-  if (is.null(quantile) && is.null(threshold)) {
-    stop("You must specify either 'quantile' or 'threshold'.")
-  }
+#   # Validate input
+#   if (!is.null(quantile) && !is.null(threshold)) {
+#     stop("Specify either 'quantile' or 'threshold', not both.")
+#   }
+#   if (is.null(quantile) && is.null(threshold)) {
+#     stop("You must specify either 'quantile' or 'threshold'.")
+#   }
 
-  # Compute threshold for each site
-  if (!is.null(quantile)) {
-    thresholds_by_site <- apply(data, 2, function(col) quantile(col,
-                                              probs = quantile, na.rm = TRUE))
-  } else {
-    if (length(threshold) == 1) {
-      thresholds_by_site <- rep(threshold, ncol(data))
-      names(thresholds_by_site) <- site_names
-    } else if (length(threshold) == ncol(data)) {
-      thresholds_by_site <- threshold
-      names(thresholds_by_site) <- site_names
-    } else {
-      stop("Threshold must be either a single numeric value or a vector of the same length as the number of sites.")
-    }
-  }
+#   # Compute threshold for each site
+#   if (!is.null(quantile)) {
+#     thresholds_by_site <- apply(data, 2, function(col) quantile(col,
+#                                               probs = quantile, na.rm = TRUE))
+#   } else {
+#     if (length(threshold) == 1) {
+#       thresholds_by_site <- rep(threshold, ncol(data))
+#       names(thresholds_by_site) <- site_names
+#     } else if (length(threshold) == ncol(data)) {
+#       thresholds_by_site <- threshold
+#       names(thresholds_by_site) <- site_names
+#     } else {
+#       stop("Threshold must be either a single numeric value or a vector of the same length as the number of sites.")
+#     }
+#   }
 
-  # Compute distance matrix
-  if (latlon){
-    dist_matrix <- as.matrix(distm(sites_coords[site_names, ],
-                                                    fun = distHaversine)) / 1000
-  } else {
-    dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
-  }
-  rownames(dist_matrix) <- site_names
-  colnames(dist_matrix) <- site_names
+#   # Compute distance matrix
+#   if (latlon){
+#     dist_matrix <- as.matrix(distm(sites_coords[site_names, ],
+#                                                     fun = distHaversine)) / 1000
+#   } else {
+#     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
+#   }
+#   rownames(dist_matrix) <- site_names
+#   colnames(dist_matrix) <- site_names
 
-  # Optional filtering of allowed sites
-  if (!is.null(s0_radius) && !is.null(central_s0)) {
-    s0_name <- rownames(sites_coords[sites_coords$Longitude == central_s0[1] &
-                                     sites_coords$Latitude == central_s0[2], ])
-    allowed_s0_sites <- names(which(dist_matrix[, s0_name] <= s0_radius))
-    valid_site_mask <- site_names %in% allowed_s0_sites
-    allowed_site_indices <- which(valid_site_mask)
-  } else {
-    allowed_site_indices <- seq_along(site_names)
-  }
+#   # Optional filtering of allowed sites
+#   if (!is.null(s0_radius) && !is.null(central_s0)) {
+#     s0_name <- rownames(sites_coords[sites_coords$Longitude == central_s0[1] &
+#                                      sites_coords$Latitude == central_s0[2], ])
+#     allowed_s0_sites <- names(which(dist_matrix[, s0_name] <= s0_radius))
+#     valid_site_mask <- site_names %in% allowed_s0_sites
+#     allowed_site_indices <- which(valid_site_mask)
+#   } else {
+#     allowed_site_indices <- seq_along(site_names)
+#   }
 
-  # Initialize
-  selected_points <- data.table(s0 = character(),
-                                t0 = integer(), u_s0 = numeric())
-  invalid_time_mask <- matrix(FALSE, nrow = nrow(data), ncol = ncol(data))
-  nb_episode <- 0
+#   # Initialize
+#   selected_points <- data.table(s0 = character(),
+#                                 t0 = integer(), u_s0 = numeric())
+#   invalid_time_mask <- matrix(FALSE, nrow = nrow(data), ncol = ncol(data))
+#   nb_episode <- 0
 
-  while (nb_episode < n_max_episodes) {
-    # Identify all (s0, t0) where data exceeds threshold
-    exceed_mask <- sweep(data, 2, thresholds_by_site, FUN = ">")
-    exceed_mask[invalid_time_mask] <- FALSE
-    exceed_indices <- which(exceed_mask, arr.ind = TRUE)
+#   while (nb_episode < n_max_episodes) {
+#     # Identify all (s0, t0) where data exceeds threshold
+#     exceed_mask <- sweep(data, 2, thresholds_by_site, FUN = ">")
+#     exceed_mask[invalid_time_mask] <- FALSE
+#     exceed_indices <- which(exceed_mask, arr.ind = TRUE)
 
-    if (nrow(exceed_indices) == 0) break
+#     if (nrow(exceed_indices) == 0) break
 
-    # Restrict exceedances to allowed sites only
-    exceed_indices <- exceed_indices[exceed_indices[, 2] %in% 
-                                           allowed_site_indices, , drop = FALSE]
-    if (nrow(exceed_indices) == 0) break
+#     # Restrict exceedances to allowed sites only
+#     exceed_indices <- exceed_indices[exceed_indices[, 2] %in% 
+#                                            allowed_site_indices, , drop = FALSE]
+#     if (nrow(exceed_indices) == 0) break
 
-    # Sort by time
-    exceed_indices <- exceed_indices[order(exceed_indices[, 1]), , drop = FALSE]
+#     # Sort by time
+#     exceed_indices <- exceed_indices[order(exceed_indices[, 1]), , drop = FALSE]
 
-    best_candidate <- NULL
+#     best_candidate <- NULL
 
-    for (idx in seq_len(nrow(exceed_indices))) {
-      t0_candidate <- exceed_indices[idx, 1]
-      s0_col_index <- exceed_indices[idx, 2]
-      s0_candidate <- site_names[s0_col_index]
-      u_s0 <- thresholds_by_site[s0_candidate]
+#     for (idx in seq_len(nrow(exceed_indices))) {
+#       t0_candidate <- exceed_indices[idx, 1]
+#       s0_col_index <- exceed_indices[idx, 2]
+#       s0_candidate <- site_names[s0_col_index]
+#       u_s0 <- thresholds_by_site[s0_candidate]
 
-      if (nrow(selected_points) == 0) {
-        best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
-        nb_episode <- nb_episode + 1
-        break
-      } else {
-        selected_sites <- selected_points$s0
-        time_differences <- abs(selected_points$t0 - t0_candidate)
-        distances <- dist_matrix[selected_sites, s0_candidate, drop = FALSE]
-        valid_pairs <- (distances >= min_spatial_dist) | (time_differences >= episode_size)
+#       if (nrow(selected_points) == 0) {
+#         best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
+#         nb_episode <- nb_episode + 1
+#         break
+#       } else {
+#         selected_sites <- selected_points$s0
+#         time_differences <- abs(selected_points$t0 - t0_candidate)
+#         distances <- dist_matrix[selected_sites, s0_candidate, drop = FALSE]
+#         valid_pairs <- (distances >= min_spatial_dist) | (time_differences >= episode_size)
 
-        if (all(valid_pairs)) {
-          best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
-          nb_episode <- nb_episode + 1
-          break
-        } else {
-          invalid_time_mask[t0_candidate, s0_col_index] <- TRUE
-        }
-      }
-    }
+#         if (all(valid_pairs)) {
+#           best_candidate <- data.table(s0 = s0_candidate, t0 = t0_candidate, u_s0 = u_s0)
+#           nb_episode <- nb_episode + 1
+#           break
+#         } else {
+#           invalid_time_mask[t0_candidate, s0_col_index] <- TRUE
+#         }
+#       }
+#     }
 
-    if (!is.null(best_candidate)) {
-      selected_points <- rbindlist(list(selected_points, best_candidate))
-      t_inf <- max(1, best_candidate$t0 - time_ext)
-      t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext - 1)
-      invalid_time_mask[t_inf:t_sup, which(site_names == best_candidate$s0)] <- TRUE
-    }
-  }
+#     if (!is.null(best_candidate)) {
+#       selected_points <- rbindlist(list(selected_points, best_candidate))
+#       t_inf <- max(1, best_candidate$t0 - time_ext)
+#       t_sup <- min(nrow(data), best_candidate$t0 + episode_size + time_ext - 1)
+#       invalid_time_mask[t_inf:t_sup, which(site_names == best_candidate$s0)] <- TRUE
+#     }
+#   }
 
-  return(selected_points)
-}
+#   return(selected_points)
+# }
 
 
 #' select_max_extreme_episodes function
@@ -1539,47 +1539,49 @@ get_results_optim <- function(filename, data_folder = NA) {
 #' @param i The index of the simulation.
 #' @param M The number of simulations.
 #' @param m The number of simulations to process.
-#' @param list_simuM The list of simulations.
-#' @param u The quantile value.
-#' @param df_lags The dataframe with spatial and temporal lag values.
-#' @param t0 The starting time.
-#' @param init_params The true variogram parameter (beta1, beta2, alpha1, alpha2)
+#' @param list_simu The list of simulations.
+#' @param u The quantile threshold.
+#' @param list_lags The list of lags.
+#' @param list_excesses The list of excesses.
+#' @param init_params The initial parameters for optimization.
 #' @param hmax The maximum spatial lag value. Default is NA.
+#' @param wind_df The wind dataframe. Default is NA.
+#' @param directional Directional variogram or not. Default is FALSE.
 #'
 #' @return The optimized parameters.
 #'
 #' @export
-process_simulation <- function(i, M, m, list_simuM, u, df_lags, t0,
-                              init_params, hmax = NA, wind_df = NA) {
+process_simulation <- function(i, M, m, list_simu, u, list_lags,
+                               list_excesses,
+                               init_params, hmax = NA, wind_df = NA,
+                               directional = FALSE) {
+  # Bounds
+  lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
+  upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+  if (!is.na(wind_df)) {
+    lower_bounds[5:6] <- c(1e-8, 1e-8)
+  }
   # Get the m corresponding simulations from list_simu inside a list
-  list_episodes <- list_simuM[((i - 1) * m + 1):(i * m)]
-  # Compute excesses
-  list_excesses <- lapply(list_episodes, function(episode) {
-    empirical_excesses_rpar(episode, u, df_lags, threshold = TRUE, t0 = t0)
-  })
-
-  list_lags <- lapply(1:m, function(i) {
-   df_lags
-})
+  list_episodes <- list_simu[((i - 1) * m + 1):(i * m)]
+  lags_episodes <- list_lags[((i - 1) * m + 1):(i * m)]
+  excesses_episodes <- list_excesses[((i - 1) * m + 1):(i * m)]
 
   # Optimize
   result <- optim(
     par = init_params,
     fn = neg_ll_composite,
     list_episodes = list_episodes,
-    list_lags = list_lags,
-    list_excesses = list_excesses,
+    list_lags = lags_episodes,
+    list_excesses = excesses_episodes,
     hmax = hmax,
     wind_df = wind_df,
     threshold = TRUE,
     latlon = FALSE,
-    directional = TRUE,
+    directional = directional,
     method = "L-BFGS-B",
-    lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
-    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-    control = list(maxit = 10000,
-                   parscale = c(0.1, 0.1, 1, 1, 1, 1),
-                   fnscale = -1)
+    lower = lower_bounds,
+    upper = upper_bounds,
+    control = list(maxit = 10000)
   )
 
   estimates <- result$par
