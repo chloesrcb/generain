@@ -184,12 +184,7 @@ result_list <- mclapply(1:M, process_simulation, M = M, m = m,
 df_result_all <- do.call(rbind, result_list)
 colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                              "alpha2", "adv1", "adv2")
-# Convert in latex
-colnames(df_result_all) <- c(
-  TeX("$\\beta_1$"), TeX("$\\beta_2$"),
-  TeX("$\\alpha_1$"), TeX("$\\alpha_2$"),
-  TeX("$v_x$"), TeX("$v_y$")
-)
+
 df_bplot <- as.data.frame(df_result_all)
 
 # save data in csv
@@ -222,7 +217,7 @@ bplot <- ggplot(df_bplot, aes(x = ind, y = values)) +
     x = "Parameters", y = "Estimated values") +
   theme_minimal() +
   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) +
-  scale_x_discrete(labels = labels_latex) 
+  scale_x_discrete(labels = labels_latex)
 
 
 # folder to save the plot

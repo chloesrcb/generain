@@ -6,7 +6,9 @@ rm(list = ls())
 cat("\014")
 
 # LOAD LIBRARIES ###############################################################
-muse <- FALSE
+library(parallel)
+library(abind)
+muse <- TRUE
 
 if (muse) {
   # Get the muse folder
@@ -15,7 +17,6 @@ if (muse) {
   # Load libraries and set theme
   source("load_libraries.R")
   source("config.R")
-  data_folder <- "./data/"
 } else {
   # Load libraries and set theme
   source("./script/load_libraries.R")
@@ -30,7 +31,7 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
 # SIMULATION ###################################################################
-result_folder <- paste0(data_folder, "simulations/simulations_rpar/")
+result_folder <- "./data/simulations_rpar/"
 if (!dir.exists(result_folder)) {
   dir.create(result_folder, recursive = TRUE)
 }
@@ -45,52 +46,7 @@ spa <- 1:ngrid
 nsites <- ngrid^2 # if the grid is squared
 
 # Number of realizations
-M <- 1 # number of simulations
-m <- 500 # number of extreme episodes
 nres <- M * m
-
-# Function to format values correctly, considering decimal places
-format_value <- function(x) {
-  formatted_values <- sapply(x, function(val) {
-    # Vérifier si val est négatif
-    is_negative <- val < 0
-    val <- abs(val)  # Travailler avec la valeur absolue pour le formatage
-    
-    # Vérifier si val est un entier
-    if (val == as.integer(val)) {
-      formatted_value <- sprintf("%d", val)
-    } else {
-      # Compter le nombre de décimales
-      num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(val)))
-      
-      if (val >= 1) {
-        # Si le nombre est supérieur ou égal à 1
-        if (num_decimals == 1) {
-          formatted_value <- sprintf("%02d", round(val * 10))
-        } else {
-          formatted_value <- sprintf("%03d", round(val * 100))
-        }
-      } else {
-        # Si le nombre est inférieur à 1
-        if (num_decimals == 1) {
-          formatted_value <- sprintf("%02d", round(val * 10))
-        } else {
-          formatted_value <- sprintf("%03d", round(val * 100))
-        }
-      }
-    }
-    
-    # Ajouter "neg" devant si le nombre était négatif
-    if (is_negative) {
-      formatted_value <- paste0("neg", formatted_value)
-    }
-    
-    return(formatted_value)
-  })
-  
-  # Concaténer les valeurs avec un underscore "_"
-  return(paste(formatted_values, collapse = "_"))
-}
 
 # Apply formatting
 param_str <- format_value(true_param)
@@ -99,7 +55,7 @@ s0_str <- format_value(s0)
 t0_str <- format_value(t0)
 
 # Save the data
-foldername <- paste0(data_folder, "simulations/simulations_rpar/rpar_", param_str, 
+foldername <- paste0("./data/simulations_rpar/rpar_", param_str, "_", adv_str,
                    "/sim_", ngrid^2, "s_", length(temp), "t_s0_",
                     s0_str, "_t0_", t0_str, "/")
 
@@ -107,149 +63,131 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-# save_simulations(simu, ngrid, nres, folder = foldername,
-#         file = paste0("rpar_", ngrid^2, "s_", length(temp), "t"))
-# get files in the folder
-foldername = "/home/cserreco/Documents/These/phd_extremes/data/simulations/simulations_rpar/rpar_001_02_15_1_02_01/sim_25s_30t_s0_1_1_t0_14/"
-foldername = "/user/cserreco/home/Documents/These/phd_extremes/data/simulations/simulations_rpar/rpar_001_02_15_1_02_01/sim_49s_30t_s0_1_1_t0_0/"
+
+# Parallel configuration
+num_cores <- detectCores() - 1
+cl <- makeCluster(num_cores)
+
+# Export variables and functions to the cluster
+clusterExport(cl, varlist = c(
+  "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
+  "spa", "temp", "adv", "t0", "m", "random_s0", "s0",
+  "compute_gamma_point", "compute_W_s_t",
+  "foldername", "generate_grid_coords", "save_simulations",
+  "ngrid"
+))
+
+# Load libraries in the cluster
+clusterEvalQ(cl, {
+  library(RandomFields)
+  library(dplyr)
+  library(tidyr)
+  RandomFields::RFoptions(
+    spConform = FALSE,
+    allow_duplicated_locations = TRUE,
+    storing = FALSE,
+    printlevel = 0
+  )
+})
+
+# Simulate the process in parallel
+result_list <- parLapply(cl, 1:M, function(i) {
+  simu <- sim_rpareto(
+    beta1 = beta1,
+    beta2 = beta2,
+    alpha1 = alpha1,
+    alpha2 = alpha2,
+    x = spa,
+    y = spa,
+    t = temp,
+    adv = adv,
+    t0 = t0,
+    nres = m,
+    random_s0 = random_s0,
+    s0 = s0
+  )
+
+  # Save the simulation
+  Z_rpar <- simu$Z
+  s0_used_list <- simu$s0_used
+
+  save_simulations(Z_rpar, ngrid,
+                   folder = foldername,
+                   file = paste0("rpar_", ngrid^2, "s_", length(temp),
+                   "t_simu", i))
+
+  return(list(Z = Z_rpar, s0_used = s0_used_list))
+})
+
+stopCluster(cl) # Stop the cluster
+
+# Combine all Z_rpar matrices into one big 4D array
+Z_list <- lapply(result_list, function(res) res$Z)
+
+# Combine them along the 4th dimension (simulation axis)
+Z_rpar <- abind::abind(Z_list, along = 4)
+
+# Combine all s0_used lists into one big list
+s0_list <- do.call(c, lapply(result_list, function(res) res$s0_used))
+
+sites_coords <- generate_grid_coords(ngrid)
+
+# Save the data
 files <- list.files(foldername, full.names = TRUE)
 length(files)
-list_simuM <- list()
-m <- 500
-nres <- m*M
-for (i in 1:nres) {
-  file_name <- files[i]
-  list_simuM[[i]] <- read.csv(file_name)
-}
-
-adv <- c(0.2, 0.1)
-true_param <- c(0.01, 0.2, 1.5, 1, adv)
-# create a wind dataframe with m rows and adv at each row
-wind_df <- data.frame(matrix(rep(adv, m), nrow = m, byrow = TRUE))
-colnames(wind_df) <- c("vx", "vy")
-### Optimization ###############################################################
-library(parallel)
-num_cores <- detectCores() - 1  # Reserve 1 core for the OS
-ngrid <- 5
-# Parallel execution
-t0 = 14
-tau_vect <- 0:10
-sites_coords <- generate_grid_coords(ngrid)
-s0 <- c(1, 1)
-df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0, tau_vect)
-# init_param <- true_param
-# init_param[5:6] <- c(1, 1)
-u <- 1 # threshold corresponding to the r-pareto simulation
-
-i=1
-# Get the m corresponding simulations from list_simu inside a list
-list_episodes <- list_simuM[((i - 1) * m + 1):(i * m)]
-# Compute excesses
-list_excesses <- lapply(list_episodes, function(episode) {
-empirical_excesses_rpar(episode, u, df_lags, threshold = TRUE, t0 = t0)
-})
-
-episode <- list_episodes[[1]]
-excesses <- list_excesses[[1]]
-excesses$kij
-hmax <- sqrt(17)
-# create a list of lags with df_lags for all 1:m
-list_lags <- lapply(1:m, function(i) {
-  df_lags
-})
-list_lags[[1]]
-
-# Optimize
-result <- optim(
-    par = c(0.01, 0.2, 1.5, 1, 0.5, 1),
-    fn = neg_ll_composite,
-    list_episodes = list_episodes,
-    list_lags = list_lags,
-    list_excesses = list_excesses,
-    hmax = hmax,
-    wind_df = adv,
-    threshold = TRUE,
-    latlon = FALSE,
-    directional = FALSE,
-    method = "L-BFGS-B",
-    lower = c(1e-8, 1e-8, 1e-8, 1e-8, 1e-8,  1e-8),
-    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-    control = list(maxit = 10000)
-)
-result
-
-
-eta1_vals <- seq(0, 1, length.out = 20)
-eta2_vals <- seq(0, 1, length.out = 20)
-grid_ll <- matrix(NA, nrow = length(eta1_vals), ncol = length(eta2_vals))
-for (i in seq_along(eta1_vals)) {
-  for (j in seq_along(eta2_vals)) {
-    p_try <- c(true_param[1:4], eta1_vals[i], eta2_vals[j])
-    grid_ll[i, j] <- neg_ll_composite(p_try, list_episodes, list_excesses, list_lags,
-                                      threshold = TRUE, latlon = FALSE,
-                                      directional = FALSE)
+list_rpar <- list()
+for (i in 1:M) {
+  for (j in 1:m) {
+    file_name <- paste0(foldername, "rpar_", ngrid^2, "s_",
+                        length(temp), "t_simu", i, "_", j, ".csv")
+    list_rpar[[((i-1) * m + j)]] <- read.csv(file_name)
   }
 }
 
-contour(eta1_vals, eta2_vals, grid_ll, xlab = "eta1", ylab = "eta2", main = "Profile likelihood")
+### Optimization ###############################################################
+library(parallel)
+num_cores <- detectCores() - 1  # Reserve 1 core for the OS
 
+# Parallel execution
+tau_vect <- 0:10
+u <- 1
+tmax <- max(tau_vect)
+sites_coords <- as.data.frame(sites_coords)
 
-# Optim with eta1 and eta2
-result <- optim(
-    par = c(0.01, 0.2, 1.5, 1, 1, 1),
-    fn = neg_ll_composite,
-    list_episodes = list_episodes,
-    list_lags = list_lags,
-    list_excesses = list_excesses,
-    hmax = hmax,
-    wind_df = adv,
-    threshold = TRUE,
-    latlon = FALSE,
-    directional = TRUE,
-    method = "L-BFGS-B",
-    lower = c(1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8),
-    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-    control = list(maxit = 10000)
-)
-result
+# Compute lags and excesses for each episode inside the simulation
+list_results <- mclapply(1:nres, function(i) {
+  s0_x <- s0_list[[i]]$x
+  s0_y <- s0_list[[i]]$y
+  s0_coords <- sites_coords[sites_coords$Longitude == s0_x &
+                            sites_coords$Latitude == s0_y, ]
+  episode <- list_rpar[[i]]
+  lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
+                                      tau_vect, latlon = FALSE)
+  excesses <- empirical_excesses(episode, u, lags, type = "rpareto",
+                                 t0 = t0, threshold = TRUE)
+  list(lags = lags, excesses = excesses)
+}, mc.cores = num_cores)
 
-params <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
-df_chi = theoretical_chi(params, df_lags, latlon =FALSE, directional = FALSE)
+# Extract lags and excesses from the list of results
+list_lags <- lapply(list_results, `[[`, "lags")
+list_excesses <- lapply(list_results, `[[`, "excesses")
 
-
-result <- optim(
-    par = c(0.01, 0.2, 1.5, 1, 0.3, 0.1),
-    fn = neg_ll_composite_simu,
-    list_simu = list_episodes,
-    df_lags = df_lags,
-    list_excesses = list_excesses,
-    quantile = 1,
-    hmax = hmax,
-    adv = NA,
-    threshold = TRUE,
-    method = "L-BFGS-B",
-    lower = c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf),
-    upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-    control = list(maxit = 10000)
-)
-
-
-
-
-
-
-
+# With wind data == adv to estimate eta1 and eta2 to 1
+wind_df <- data.frame(vx = adv[1], vy = adv[2])
+init_param <- c(params[1:4], 1, 1)
 result_list <- mclapply(1:M, process_simulation, M = M, m = m,
-                        list_simuM = list_simuM, u = u, df_lags = df_lags,
-                        t0 = t0, true_param = init_param,
-                        wind_df = wind_df, hmax = sqrt(17),
+                        list_simu = list_rpar, u = u,
+                        list_lags = list_lags,
+                        list_excesses = list_excesses,
+                        init_params = init_param,
+                        hmax = 7, wind_df = wind_df,
                         mc.cores = num_cores)
 
-# Combine results into a data frame
+# Combine results int a data frame
 df_result_all <- do.call(rbind, result_list)
 colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
-                             "alpha2", "adv1", "adv2")
-
+                             "alpha2", "eta1", "eta2")
+# Convert in latex
 df_bplot <- as.data.frame(df_result_all)
 
 # save data in csv
@@ -267,15 +205,25 @@ write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
 # Plot results
 df_bplot <- stack(df_bplot)
 
-ggplot(df_bplot, aes(x = ind, y = values)) +
+labels_latex <- c(
+  beta1 = TeX("$\\beta_1$"),
+  beta2 = TeX("$\\beta_2$"),
+  alpha1 = TeX("$\\alpha_1$"),
+  alpha2 = TeX("$\\alpha_2$"),
+  vx = TeX("$\\eta_1$"),
+  vy = TeX("$\\eta_2$")
+)
+
+bplot <- ggplot(df_bplot, aes(x = ind, y = values)) +
   geom_boxplot() +
   labs(title = "",
     x = "Parameters", y = "Estimated values") +
   theme_minimal() +
-  geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) 
+  geom_point(aes(y = init_param[as.numeric(ind)]), color = "red", pch=4) +
+  scale_x_discrete(labels = labels_latex)
 
 
-# save plot
+# folder to save the plot
 foldername <- "./images/optim/rpar/"
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
@@ -283,8 +231,9 @@ if (!dir.exists(foldername)) {
 
 
 # Save the plot
-name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
+name_file <- paste0("bp_optim_eta_", M, "simu_", m, "rep_", ngrid^2,
                 "s_", length(temp), "t_", param_str, "_",
                 adv_str, ".png")
 
-ggsave(paste0(foldername, name_file), width = 5, height = 5)
+ggsave(plot = bplot, filename = paste0(foldername, name_file),
+       width = 5, height = 5)

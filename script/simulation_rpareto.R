@@ -20,7 +20,7 @@ ngrid <- 7
 spa <- 1:ngrid
 temp <- 0:30
 m <- 500 # number of episodes
-M <- 10 # number of simulations
+M <- 2 # number of simulations
 n.res <- m * M
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
@@ -80,7 +80,7 @@ cl <- makeCluster(num_cores)
 clusterExport(cl, varlist = c(
   "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
   "spa", "temp", "adv", "t0", "m", "random_s0", "s0",
-  "compute_gamma_point", "compute_W_s_t",
+  "compute_gamma_point", "compute_W_s_t", "sim_rpareto_dir",
   "foldername", "generate_grid_coords", "save_simulations",
   "ngrid"
 ))
@@ -98,9 +98,13 @@ clusterEvalQ(cl, {
   )
 })
 
+
+old_str_opts <- options("str")
+options(str = list(strict.width = "cut"))
+
 # Lancer les simulations en parallèle (PSOCK)
 result_list <- parLapply(cl, 1:M, function(i) {
-  simu <- sim_rpareto(
+  simu <- sim_rpareto_dir(
     beta1 = beta1,
     beta2 = beta2,
     alpha1 = alpha1,
@@ -219,6 +223,7 @@ result_list <- mclapply(1:M, process_simulation, M = M, m = m,
                         list_excesses = list_excesses,
                         init_params = params,
                         hmax = 7, wind_df = NA,
+                        directional = T,
                         mc.cores = num_cores)
 
 # Combine results int a data frame

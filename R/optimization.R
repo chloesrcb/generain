@@ -804,30 +804,39 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
    # s_shifted = s - adv * t, s0_shifted = s0 - adv * t0, h = s - s0
    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau # m/s * s = m
    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
-
+   
+   chi_df$hx <- chi_df$s2xv - chi_df$s1xv # m
+   chi_df$hy <- chi_df$s2yv - chi_df$s1yv # m
    # Recompute distance and angle regardless of advection
    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
                         (chi_df$s2yv - chi_df$s1yv)^2) # m
    # Convert to km
-   chi_df$hnormV <- chi_df$hnormV # km
+  #  chi_df$hnormV <- chi_df$hnormV # km
 
-   chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
+  #  chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
 
   }
 
   if (directional) {
-      # Apply directional distance adjustment
-      chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
-      chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
-      chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
+      # # Apply directional distance adjustment
+      # chi_df$x_polar <- chi_df$hnormV * cos(chi_df$theta)
+      # chi_df$y_polar <- chi_df$hnormV * sin(chi_df$theta)
+      # # chi_df$hlag <- chi_df$x_polar + chi_df$y_polar
+
+      # chi_df$hx <- chi_df$hnormV * cos(chi_df$theta)
+      # chi_df$hy <- chi_df$hnormV * sin(chi_df$theta)
+      chi_df$vario <- (2 * beta1) * abs(chi_df$hx)^alpha1 +
+                  (2 * beta1) * abs(chi_df$hy)^alpha1 +
+                  (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
   } else {
       # Only distance lag
       chi_df$hlag <-  chi_df$hnormV
+      chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
+                  (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
   }
 
   # Compute variogram and chi
-  chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
-                  (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
+  
 
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
   # print only chi > 0
@@ -1134,7 +1143,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
       adv <- as.vector(adv_df)
     }
   }
-  print(adv)
+  print(params)
 
 
   # print(params)
