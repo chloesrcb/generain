@@ -135,25 +135,20 @@ advected_variogram <- function(x, y, z, grid, model, adv) {
 #' @return The spatio-temporal variogram for the given point.
 #'
 #' @export
-compute_gamma_point <- function(grid, gamma_space, gamma_temp,
-                                adv, gamma_space_2 = NA, s=NA, t=NA) {
+compute_gamma_point <- function(grid, gamma_space, gamma_temp, adv, s=NA, t=NA) {
   # Get length of unique values
   lx <- length(unique(grid$x))
   ly <- length(unique(grid$y))
   lt <- length(unique(grid$t))
 
-  if (all(is.na(gamma_space_2))) {
-    gamma_space_2 <- rep(0, length(gamma_space))
-  }
-
   # Get spatial variogram for s
   if(all(!(is.na(s)) & !(is.na(t)))) {
     index_grid <- which(grid$shifted_x == s[1] & grid$shifted_y == s[2] &
                           grid$t == t)
-    gamma_s <- gamma_space[[index_grid]] + gamma_space_2[[index_grid]]
+    gamma_s <- gamma_space[[index_grid]]
     gamma_t <- gamma_temp[[t + 1]]
   } else {
-    gamma_s <- gamma_space + gamma_space_2
+    gamma_s <- gamma_space
     gamma_t <- gamma_temp
   }
 
@@ -187,6 +182,77 @@ compute_gamma_point <- function(grid, gamma_space, gamma_temp,
 }
 
 
+#' compute_st_variogram function (supports isotropic and anisotropic variograms)
+#'
+#' Computes the spatio-temporal variogram over a grid.
+#'
+#' @param grid The grid data.frame with columns x, y, t, shifted_x, shifted_y.
+#' @param gamma_space The isotropic spatial variogram (optional).
+#' @param gamma_space_x The spatial variogram in the x direction (optional).
+#' @param gamma_space_y The spatial variogram in the y direction (optional).
+#' @param gamma_temp The temporal variogram.
+#' @param adv The advection vector (length 2 numeric).
+#'
+#' @return A 3D array with the spatio-temporal variogram values over the grid.
+#'
+#' @export
+compute_st_variogram <- function(grid,
+                                 gamma_space = NULL,
+                                 gamma_space_x = NULL,
+                                 gamma_space_y = NULL,
+                                 gamma_temp,
+                                 adv) {
+  lx <- length(unique(grid$x))
+  ly <- length(unique(grid$y))
+  lt <- length(unique(grid$t))
+
+  # Determine isotropic or anisotropic
+  is_anisotropic <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
+  is_isotropic <- !is.null(gamma_space)
+
+  if (!is_isotropic && !is_anisotropic) {
+    stop("Provide either gamma_space for isotropic or gamma_space_x and gamma_space_y for anisotropic case.")
+  }
+
+  # Determine gamma components
+  if (!any(is.na(adv)) && all(adv == 0)) {
+    coords <- cbind(grid$shifted_x, grid$shifted_y)
+    coords <- coords[!duplicated(coords), ]
+  } else {
+    coords <- cbind(grid$shifted_x, grid$shifted_y)
+  }
+  if (is.vector(coords)) {
+    coords <- matrix(coords, nrow = 1)
+  }
+  nsites <- nrow(coords)
+  t_index <- grid$t + 1
+  gamma <- array(NA, dim = c(lx, ly, lt))
+
+  for (i in seq_along(t_index)) {
+    if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
+      ind_g_s <- if (i %% nsites == 0) {
+        i - nsites * (i %/% nsites - 1)
+      } else {
+        i - nsites * (i %/% nsites)
+      }
+    } else {
+      ind_g_s <- i
+    }
+
+    if (is_anisotropic) {
+      vario <- gamma_space_x[[ind_g_s]] + gamma_space_y[[ind_g_s]] +
+                                                      gamma_temp[[t_index[i]]]
+    } else {
+      vario <- gamma_space[[ind_g_s]] + gamma_temp[[t_index[i]]]
+    }
+
+    gamma[grid$x[i], grid$y[i], t_index[i]] <- vario
+  }
+
+  return(gamma)
+}
+
+
 #' compute_W_s_t function
 #'
 #' This function computes the spatio-temporal gaussian random field given the
@@ -200,16 +266,11 @@ compute_gamma_point <- function(grid, gamma_space, gamma_temp,
 #' @return The spatio-temporal gaussian random field.
 #'
 #' @export
-compute_W_s_t <- function(grid, W_s, W_t, adv, W_s_2 = NA) {
+compute_W_s_t <- function(grid, W_s, W_t, adv) {
   lx <- length(unique(grid$x))
   ly <- length(unique(grid$y))
   lt <- length(unique(grid$t))
   coords <- cbind(grid$shifted_x, grid$shifted_y)
-
-  if (all(is.na(W_s_2))) {
-    W_s_2 <- rep(0, length(W_s))
-  }
-
   if (all(adv == 0)) {
     duplicates <- duplicated(coords)
     filtered_coords <- coords[!duplicates, ]
@@ -231,11 +292,92 @@ compute_W_s_t <- function(grid, W_s, W_t, adv, W_s_2 = NA) {
       } else {
         ind_W_s <- i
       }
-      W_s_t[s[1], s[2], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]] +
-                                                          W_s_2[ind_W_s]
+      W_s_t[s[1], s[2], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
   }
   return(W_s_t)
 }
+
+
+#' compute_st_gaussian_process function
+#'
+#' This function computes the spatio-temporal Gaussian random field given the
+#' spatial and temporal Gaussian random fields and the advection.
+#'
+#' @param grid The grid matrix.
+#' @param W_s The spatial Gaussian random field (for isotropic case).
+#' @param W_s_x The spatial Gaussian random field in the x direction (for anisotropic case).
+#' @param W_s_y The spatial Gaussian random field in the y direction (for anisotropic case).
+#' @param W_t The temporal Gaussian random field.
+#' @param adv The advection coordinates vector.
+#'
+#' @return The spatio-temporal Gaussian random field.
+#'
+#' @export
+compute_st_gaussian_process <- function(grid, W_s = NULL, 
+                                        W_s_x = NULL, W_s_y = NULL, W_t,
+                                        adv) {
+  lx <- length(unique(grid$x))
+  ly <- length(unique(grid$y))
+  lt <- length(unique(grid$t))
+  coords <- cbind(grid$shifted_x, grid$shifted_y)
+  
+
+  # Determine isotropic or anisotropic
+  is_anisotropic <- !is.null(W_s_x) && !is.null(W_s_y)
+  is_isotropic <- !is.null(W_s)
+
+  if (!is_isotropic && !is_anisotropic) {
+    stop("Provide either W_s for isotropic or W_s_x and W_s_y for anisotropic case.")
+  }
+
+  # Remove duplicates if no advection
+  if (!any(is.na(adv)) && all(adv == 0)) {
+    duplicates <- duplicated(coords)
+    filtered_coords <- coords[!duplicates, ]
+    coords <- filtered_coords
+  }
+
+  if (is.vector(coords)) {
+    coords <- matrix(coords, nrow = 1)
+  }
+  nsites <- nrow(coords)
+
+  W_s_t <- array(NA, dim = c(lx, ly, lt))  # Initialize the 3D array for results
+  t_index <- grid$t + 1  # Adjust for indexing (R is 1-based)
+  
+  # Loop over each grid point
+  for (i in seq_along(t_index)) {
+    s_x <- grid$x[i]
+    s_y <- grid$y[i]
+    t_idx <- t_index[i]
+    
+    # Handle advection: adjust the index based on the grid size
+    if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
+      if (i %% nsites == 0) {
+        ind_W_s <- i - nsites * (i %/% nsites - 1)
+      } else {
+        ind_W_s <- i - nsites * (i %/% nsites)
+      }
+    } else {
+      ind_W_s <- i
+    }
+
+    # Check if anisotropic or isotropic, and handle accordingly
+    if (is_anisotropic) {
+      # Anisotropic case: Combine W_s_x and W_s_y
+      W_s_t_point <- W_s_x[ind_W_s] + W_s_y[ind_W_s] + W_t[t_index[i]]
+    } else {
+      # Isotropic case: Use W_s directly
+      W_s_t_point <- W_s[ind_W_s] + W_t[t_index[i]]
+    }
+    # Store the result in the 3D array
+    W_s_t[s_x, s_y, t_idx] <- W_s_t_point
+  }
+
+
+  return(W_s_t)
+}
+
 
 
 #' sim_BR function
@@ -570,7 +712,12 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
 
     # Get gamma spatio-temporal for s0, t0
-    gamma_0 <- compute_gamma_point(grid, gamma_space, gamma_temp, adv)
+    gamma_0 <- compute_st_variogram(
+      grid,
+      gamma_space = gamma_space,
+      gamma_temp = gamma_temp,
+      adv = adv
+    )
 
 
     # Spatial gaussian random field on shifted coords
@@ -579,7 +726,9 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     # Temporal gaussian random field
     W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
     # Spatio-temporal random field
-    W <- compute_W_s_t(grid, W_s, W_t, adv)
+    W <- compute_st_gaussian_process(grid,
+                                     W_s = W_s, W_t = W_t,
+                                     adv = adv)
     Y <- exp(W - W[ind_s0_t0] - gamma_0)
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1) # simple Pareto
     Z[,,, i] <- R * Y
@@ -591,7 +740,6 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     s0_used = s0_list
   ))
 }
-
 
 
 #' sim_rpareto function
@@ -633,7 +781,7 @@ sim_rpareto_dir <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   # (adv1, adv2) advection coordinates vector
   ## Setups 
   # RandomFields::RFoptions(spConform = FALSE, install = "no")
-  # RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = T)
 
   lx <- length(sx <- seq_along(x))  # spatial
   ly <- length(sy <- seq_along(y))  # spatial
@@ -718,9 +866,11 @@ sim_rpareto_dir <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
 
     # Get gamma spatio-temporal for s0, t0
-    gamma_0 <- compute_gamma_point(grid, gamma_space_x, gamma_temp, adv,
-                                   gamma_space_y)
-
+    gamma_0 <- compute_st_variogram(grid,
+                               gamma_space_x = gamma_space_x,
+                               gamma_space_y = gamma_space_y,
+                               gamma_temp = gamma_temp,
+                               adv = adv)
 
     # Spatial gaussian random field on shifted coords
     W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1],
@@ -730,7 +880,8 @@ sim_rpareto_dir <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     # Temporal gaussian random field
     W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
     # Spatio-temporal random field
-    W <- compute_W_s_t(grid, W_s_x, W_t, adv, W_s_y)
+    W <- compute_st_gaussian_process(grid = grid, W_s_x = W_s_x,
+                                    W_s_y = W_s_y, W_t = W_t, adv = adv)
     Y <- exp(W - W[ind_s0_t0] - gamma_0)
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1) # simple Pareto
     Z[,,, i] <- R * Y
@@ -745,77 +896,142 @@ sim_rpareto_dir <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
 
 
-#' Simulate the spatio-temporal r-Pareto process with anisotropy
-#' and advection.
+#' sim_rpareto function
 #'
-#' @param beta1 The value of beta1.
-#' @param beta2 The value of beta2.
-#' @param alpha1 The value of alpha1.
-#' @param alpha2 The value of alpha2.
-#' @param x Vector for the first dimension (spatial x in our case).
-#' @param y Vector for the second dimension (spatial y in our case)
-#' @param t Vector for the third dimension (time in our case).
-#' @param adv The advection coordinates vector. Default is c(0, 0).
+#' This function simulates a spatio-temporal r-Pareto process using either 
+#' an isotropic or anisotropic fractional Brownian motion model. It is a unified 
+#' version of sim_rpareto (isotropic) and sim_rpareto_dir (anisotropic).
 #'
-#' @return The result of the simulation.
+#' @param beta1, beta2 Variogram scale parameters for space and time.
+#' @param alpha1, alpha2 Variogram smoothness parameters for space and time.
+#' @param x, y, t Vectors representing spatial (x, y) and temporal (t) grids.
+#' @param adv Advection vector (default = c(0, 0)).
+#' @param t0 Time point at which the process is conditioned.
+#' @param nres Number of simulations to perform.
+#' @param random_s0 If TRUE, selects conditioning point s0 randomly within radius.
+#' @param s0 Conditioning spatial location (default = c(1, 1)).
+#' @param s0_radius Radius used if random_s0 is TRUE.
+#' @param anisotropic If TRUE, uses directional (anisotropic) model.
 #'
-#' @import stats
-#' @import RandomFields
-#' @import RandomFieldsUtils
-#'
+#' @return A list with simulated field Z and list of conditioning points s0_used.
 #' @export
-sim_rpareto_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, t,
-                        adv = c(0, 0), s0 = c(1, 1), t0 = 1, nres = 1) {
-  # beta1, beta2, alpha1, alpha2 are variogram parameters
-  # x is the first dimension (spatial x in our case)
-  # y is the second dimension (spatial y in our case)
-  # z is the third dimension (time in our case)
-  # (adv1, adv2) advection coordinates vector
-  ## Setup
-  RandomFields::RFoptions(spConform = FALSE, install = "no")
-  lx <- length(sx <- seq_along(x))  # spatial
-  ly <- length(sy <- seq_along(y))  # spatial
-  lt <- length(st <- seq_along(t))  # temporal
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
+                                adv = c(0, 0), t0 = 0, nres = 1,
+                                random_s0 = FALSE, s0 = c(1, 1),
+                                s0_radius = Inf,
+                                anisotropic = FALSE) {
+  # Ensure RandomFields works with duplicated coordinates if needed
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE)
 
-  ## Model-Variogram BuhlCklu
-  modelBuhlCklu <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 1) +
-                   RandomFields::RMfbm(alpha = alpha1, var = 2*beta1, proj = 2) +
-                   RandomFields::RMfbm(alpha = alpha2, var = 2*beta2, proj = 3)
+  # Dimensions
+  lx <- length(x)
+  ly <- length(y)
+  lt <- length(t)
+  site_names <- paste0("S", seq_len(lx * ly))
 
-  ## Construct grid
-  Nxy <- lx * ly # spatial grid size
-  N <- Nxy * lt # spatio-temporal grid size
-  grid <- matrix(0, nrow=N, ncol=3) # (N,3)-matrix
+  # Define fractional Brownian motion models
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
 
-  for (i in sx)
-    for (j in seq_len(ly*lt))
-      grid[i+(j-1)*ly, 1] <- i
+  # Create spatio-temporal grid with advection
+  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = t)
+  grid$shifted_x <- grid$x - grid$t * adv[1]
+  grid$shifted_y <- grid$y - grid$t * adv[2]
+  grid$site <- rep(site_names, times = lt)
+  coords <- grid[, c("shifted_x", "shifted_y")]
 
-  for (i in sy)
-    for (j in sx)
-      for(k in st)
-        grid[j+lx*(i-1)+(k-1)*Nxy, 2] <- i
-
-  for (i in st)
-    for (j in seq_len(Nxy))
-      grid[j+Nxy*(i-1), 3] <- i
-
-  # Construct shifted variogram for conditional spatio-temporal point
-  gamma <-  conditional_variogram(x, y, t, s0, t0, grid, modelBuhlCklu, adv)
-  # params <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
-  # gamma <- conditional_variogram_hand(x, y, t, s0, t0, params)
-
-  # Main
-  Z <- array(, dim = c(lx, ly, lt, nres)) # 3d array
-  for (i in seq_len(nres)) {
-    W <- RandomFields::RFsimulate(modelBuhlCklu, x, y, t) # GP
-    Y <- exp(W - W[s0[2], s0[1], t0] - gamma)
-    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1) # simple Pareto
-    Z[,,, i] <- R * Y
+  # Remove duplicate coordinates if no advection
+  if (all(adv == 0)) {
+    coords <- coords[!duplicated(coords), ]
   }
-  # Return
-  Z
+
+  # If random s0, precompute possible points within radius
+  s0_center <- s0
+  if (random_s0) {
+    grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
+    distances <- sqrt((grid_points$x - s0_center[1])^2 + 
+                      (grid_points$y - s0_center[2])^2)
+    candidate_points <- grid_points[distances <= s0_radius, ]
+    if (nrow(candidate_points) == 0) {
+      stop("No grid points found within specified radius of s0_center.")
+    }
+  }
+
+  s0_list <- list()  # To store all s0 used
+  Z <- array(NA, dim = c(lx, ly, lt, nres))  # 4D output array
+
+  for (i in seq_len(nres)) {
+    # Select s0 (random or fixed)
+    if (random_s0) {
+      selected_index <- sample(nrow(candidate_points), 1)
+      s0 <- as.integer(candidate_points[selected_index, ])
+    }
+    s0 <- data.frame(x = s0[1], y = s0[2])
+    s0_list[[i]] <- s0
+
+    # Identify index in grid for conditioning point at time t0
+    ind_s0_t0 <- which(grid$x == s0$x & grid$y == s0$y & grid$t == t0)
+
+    # Temporal variogram centered at t0
+    gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+
+    if (anisotropic) {
+      # Anisotropic: separate space into x and y directions
+      gamma_space_x <- RandomFields::RFvariogram(modelSpace,
+                                x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
+      gamma_space_y <- RandomFields::RFvariogram(modelSpace,
+                                x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+      # Combine variograms
+      gamma_0 <- compute_st_variogram(
+        grid,
+        gamma_space_x = gamma_space_x,
+        gamma_space_y = gamma_space_y,
+        gamma_temp = gamma_temp,
+        adv = adv
+      )
+
+      # Simulate independent Gaussian fields in each spatial direction
+      W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
+      W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
+      W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+      # Combine spatial and temporal processes
+      W <- compute_st_gaussian_process(
+        grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
+      )
+    } else {
+      # Isotropic case: compute single spatial variogram
+      gamma_space <- RandomFields::RFvariogram(modelSpace,
+                          x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+                          y = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+      gamma_0 <- compute_st_variogram(
+        grid,
+        gamma_space = gamma_space,
+        gamma_temp = gamma_temp,
+        adv = adv
+      )
+
+      # Simulate isotropic spatial Gaussian field
+      W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
+      W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+      # Combine spatial and temporal processes
+      W <- compute_st_gaussian_process(
+        grid, W_s = W_s, W_t = W_t, adv = adv
+      )
+    }
+
+    # Construct Pareto process
+    Y <- exp(W - W[ind_s0_t0] - gamma_0)  # Normalize and shift
+    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)  # Generate radial component
+    Z[,,, i] <- R * Y  # Final field
+  }
+
+  return(list(Z = Z, s0_used = s0_list))
 }
+
 
 
 #' save_simulations function
@@ -861,7 +1077,7 @@ save_simulations <- function(simu, ngrid, folder, file = "rainBR",
     data_wide <- simu_data %>%
       dplyr::select(t, value, point) %>%
       tidyr::pivot_wider(names_from = point, values_from = value)
-  
+
 
     # Add the reshaped data to the list with a unique name based on the simulation number
     df <- as.data.frame(data_wide)
@@ -877,4 +1093,49 @@ save_simulations <- function(simu, ngrid, folder, file = "rainBR",
     filename <- paste0(folder, file, "_", index_to_use, ".csv")
     write.csv(df, file = filename, row.names = FALSE)
   }
+}
+
+
+
+#' Convert simulations from array to list of data.frames
+#'
+#' @param simu The simulation array (x, y, t, nsimu)
+#' @param ngrid Size of spatial grid (used to build coordinates)
+#'
+#' @return A list of data.frames, one per episode
+#' @export
+convert_simulations_to_list <- function(simu, ngrid) {
+  coord_df <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+  coord_df$point <- paste0("S", seq_len(nrow(coord_df)))
+
+  # Flatten the 4D array
+  simu_long <- as.data.frame.table(simu, responseName = "value")
+  names(simu_long) <- c("x", "y", "t", "nsimu", "value")
+
+  # Ensure factors are integers
+  simu_long$y <- as.integer(factor(simu_long$y))
+  simu_long$x <- as.integer(factor(simu_long$x))
+  simu_long$t <- as.integer(factor(simu_long$t))
+  simu_long$nsimu <- as.integer(factor(simu_long$nsimu))
+
+  # Merge to get point names
+  simu_long <- merge(simu_long, coord_df, by = c("x", "y"))
+
+  simulations <- sort(unique(simu_long$nsimu))  # simulation indices
+
+  list_res <- vector("list", length(simulations))
+
+  for (i in simulations) {
+    df_i <- simu_long %>%
+      dplyr::filter(nsimu == i) %>%
+      dplyr::select(t, value, point) %>%
+      tidyr::pivot_wider(names_from = point, values_from = value) %>%
+      arrange(t)
+
+    # remove 't' column, keep only data
+    df_i <- df_i[, -1]
+    list_res[[i]] <- as.data.frame(df_i)
+  }
+
+  return(list_res)
 }

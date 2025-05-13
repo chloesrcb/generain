@@ -27,9 +27,9 @@ beta1 <- param[1]
 beta2 <- param[2]
 alpha1 <- param[3]
 alpha2 <- param[4]
-adv <- c(5, 2)
+adv <- c(0.5, 2)
 true_param <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
-s0 <- c(2, 1)
+s0 <- c(1, 1)
 s0_center <- s0
 s0_radius <- 7
 t0 <- 0
@@ -76,7 +76,6 @@ if (!dir.exists(foldername)) {
 num_cores <- detectCores() - 1
 cl <- makeCluster(num_cores)
 
-# Exporter toutes les variables nécessaires dans les workers
 clusterExport(cl, varlist = c(
   "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
   "spa", "temp", "adv", "t0", "m", "random_s0", "s0",
@@ -85,7 +84,6 @@ clusterExport(cl, varlist = c(
   "ngrid"
 ))
 
-# Charger RandomFields et configurer les options dans chaque worker
 clusterEvalQ(cl, {
   library(RandomFields)
   library(dplyr)
@@ -102,9 +100,8 @@ clusterEvalQ(cl, {
 old_str_opts <- options("str")
 options(str = list(strict.width = "cut"))
 
-# Lancer les simulations en parallèle (PSOCK)
 result_list <- parLapply(cl, 1:M, function(i) {
-  simu <- sim_rpareto_dir(
+  simu <- sim_rpareto(
     beta1 = beta1,
     beta2 = beta2,
     alpha1 = alpha1,
@@ -119,11 +116,9 @@ result_list <- parLapply(cl, 1:M, function(i) {
     s0 = s0
   )
 
-  # Après la simulation, sauvegarde des résultats dans le worker
   Z_rpar <- simu$Z
   s0_used_list <- simu$s0_used
 
-  # Sauvegarder les résultats pour chaque itération
   save_simulations(Z_rpar, ngrid,
                    folder = foldername,
                    file = paste0("rpar_", ngrid^2, "s_", length(temp),
@@ -217,13 +212,13 @@ list_results <- mclapply(1:n.res, function(i) {
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
-result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
                         init_params = params,
                         hmax = 7, wind_df = NA,
-                        directional = T,
+                        directional = FALSE,
                         mc.cores = num_cores)
 
 # Combine results int a data frame

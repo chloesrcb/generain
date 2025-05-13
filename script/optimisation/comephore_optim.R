@@ -18,9 +18,9 @@ load("workspace.RData")
 # library(generain)
 
 # LOAD DATA ####################################################################
-filename_com <- paste0(data_folder, "comephore/zoom_3km.csv")
+filename_com <- paste0(data_folder, "comephore/zoom_5km.csv")
 comephore_raw <- read.csv(filename_com, sep = ",")
-filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_3km.csv")
+filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_5km.csv")
 loc_px <- read.csv(filename_loc, sep = ",")
 
 df_comephore <- comephore_raw
@@ -320,11 +320,37 @@ rownames(sites_coords) <- loc_px$pixel_name
 
 q <- 0.998 # quantile
 
+# get central site from sites_coords
+
+# Step 1: Calculate the centroid
+centroid_lon <- mean(sites_coords$Longitude)
+centroid_lat <- mean(sites_coords$Latitude)
+
+# Step 2: Calculate Euclidean distance to the centroid
+sites_coords$dist_to_centroid <- sqrt((sites_coords$Longitude - centroid_lon)^2 +
+                                      (sites_coords$Latitude - centroid_lat)^2)
+
+# Step 3: Find the most central site
+most_central_site <- sites_coords[which.min(sites_coords$dist_to_centroid), ]
+
+# Output the most central site
+print(most_central_site)
+
+# remove dist_to_centroid column
+sites_coords <- sites_coords[, -ncol(sites_coords)]
+
+central_site <- rownames(most_central_site)
+central_site_coords <- most_central_site[1:2]
+
 # Get the selected episodes
-selected_points <- select_extreme_episodes(sites_coords, comephore, q,
-                                        min_spatial_dist,
+selected_points <- select_extreme_episodes(sites_coords,
+                                        data = comephore,
+                                        min_spatial_dist = min_spatial_dist,
                                         episode_size = episode_size,
                                         n_max_episodes = 10000,
+                                        quantile = q,
+                                        spatial_window_radius = 10,
+                                        central_site = central_site,
                                         time_ext = 0, latlon = TRUE)
 
 n_episodes <- length(selected_points$s0)
@@ -711,7 +737,7 @@ save.image("workspace.RData")
 # wind_df_test$vx <- 0.1
 # wind_df_test$vy <- 0.1
 # load("workspace.RData")
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+init_param <- c(beta1, beta2, alpha1, alpha2, 1.3, 1)
 # init_param <- c(beta1, beta2, alpha1, alpha2, mean_vx, mean_vy)
 # init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1

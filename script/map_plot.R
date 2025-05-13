@@ -13,7 +13,8 @@ library(sf)
 
 # LOAD DATA ####################################################################
 # Meteo France COMEPHORE data
-loc_px <- read.csv("./data/comephore/coords_pixels.csv", sep = ",")
+filepath <- paste0(data_folder, "/comephore/")
+loc_px <- read.csv(paste0(filepath, "coords_pixels.csv"), sep=",")
 colnames(loc_px) <- c("pixel_name", "Longitude", "Latitude")
 
 # Get distances matrix
@@ -21,12 +22,33 @@ dist_mat_com <- get_dist_mat(loc_px)
 df_dist_com <- reshape_distances(dist_mat_com)
 
 # OMSEV HSM rainfall data
-load("./data/PluvioMontpellier_1min/rain_mtp_5min_2019_2022.RData")
-location_gauges <- read.csv("./data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
-location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                                 "crbm", "archiw", "archie", "um35", "chu1",
-                                 "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
+location_gauges <- read.csv(paste0(data_folder, "/omsev/loc_rain_gauges.csv"), sep=";")
+# location_gauges <- read.csv(paste0(data_folder, "/omsev/pluvio_mtp_loc_till_2022.csv"))
+location_gauges$codestation <- c("gimel", "archie", "archiw", "cefe", "chu1",
+                                "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
+                                "cines", "cnrs",  "crbm", "hydro", "iem",
+                                "mse", "poly", "brives", "um25", "um35")
+# location_gauges$y <- -location_gauges$y
+# Convert distances lambert93 to WGS84
+location_gauges <- st_as_sf(location_gauges, coords = c("y", "x"), crs = 27572)
+location_gauges <- st_transform(location_gauges, crs = 4326)
 
+location_gauges$y <- -location_gauges$y
+
+# Créer un objet spatial en Lambert II étendu
+location_sf <- st_as_sf(location_gauges, coords = c("x", "y"), crs = 2154)
+
+# Transformer en WGS84
+location_wgs84 <- st_transform(location_sf, crs = 4326)
+# Get lat lon coordinates
+loc_gauges <- data.frame(
+  codestation = location_gauges$codestation,
+  Longitude = st_coordinates(location_gauges)[, 1],
+  Latitude = st_coordinates(location_gauges)[, 2]
+)
+
+
+library(generain)
 # Get distances matrix
 dist_mat_hsm <- get_dist_mat(location_gauges)
 df_dist_hsm <- reshape_distances(dist_mat_hsm)

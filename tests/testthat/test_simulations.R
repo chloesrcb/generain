@@ -442,3 +442,95 @@ if (!dir.exists(foldername)) {
   unlink(foldername, recursive = TRUE)
 
 })
+
+
+
+test_that("compute_st_variogram returns gamma_s + gamma_t (isotropic)", {
+  # Define a simple 1x1x1 grid (only one point in space and time)
+  grid <- data.frame(
+    x = 1, y = 1, t = 0,
+    shifted_x = 1, shifted_y = 1
+  )
+
+  # Dummy variograms
+  gamma_space <- list(2)   # gamma_s = 2
+  gamma_temp <- list(3)    # gamma_t = 3
+  adv <- c(0, 0)           # No advection
+
+  # Run the function
+  result <- compute_st_variogram(
+    grid = grid,
+    gamma_space = gamma_space,
+    gamma_temp = gamma_temp,
+    adv = adv
+  )
+
+  # Expect gamma_s + gamma_t = 2 + 3 = 5
+  expect_equal(result[1, 1, 1], 5)
+})
+
+
+test_that("compute_st_variogram returns gamma_s + gamma_t (anisotropic)", {
+  # Define a simple 1x1x1 grid (only one point in space and time)
+  grid <- data.frame(
+    x = 1, y = 1, t = 0,
+    shifted_x = 1, shifted_y = 1
+  )
+
+  # Dummy variograms
+  gamma_space_x <- list(2)   # gamma_sx = 2
+  gamma_space_y <- list(1)   # gamma_sy = 1
+  gamma_temp <- list(3)    # gamma_t = 3
+  adv <- c(0, 0)           # No advection
+
+  # Run the function
+  result <- compute_st_variogram(
+    grid = grid,
+    gamma_space_x = gamma_space_x,
+    gamma_space_y = gamma_space_y,
+    gamma_temp = gamma_temp,
+    adv = adv
+  )
+
+  # Expect gamma_s + gamma_t = 2 + 1 + 3 = 6
+  expect_equal(result[1, 1, 1], 6)
+})
+
+
+
+test_that("compute_st_gaussian_process works for isotropic and anisotropic cases", {
+  # Define mock data for isotropic case
+  spa <- 1:3
+  temp <- 0:2
+
+  # Create a grid with 3x3 points in space and 3 points in time
+  grid <- expand.grid(x = spa, y = spa, t = temp)
+  grid$shifted_x <- grid$x
+  grid$shifted_y <- grid$y
+
+  # Spatial gaussian process vector of size spa^2
+  W_s <- seq(1, 2, length.out = length(spa)^2)  # 1 to 2 over space
+  # Temporal gaussian process vector of size temp
+  W_t <- seq(1, 3, length.out = length(temp))  # 1 to 3 over time
+  adv <- c(0, 0)  # No advection
+
+  # Run isotropic case
+  result_isotropic <- compute_st_gaussian_process(grid, W_s = W_s, W_t = W_t, adv = adv)
+  
+  # Check that the result is a 3D array with appropriate dimensions
+  expect_equal(dim(result_isotropic), c(3, 3, 3))
+  
+  # For anisotropic case
+  W_s_x <- seq(1, 2, length.out = length(spa)^2)
+  W_s_y <- seq(1, 5, length.out = length(spa)^2)
+  
+  result_anisotropic <- compute_st_gaussian_process(grid, 
+                            W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv)
+  
+  # Check that the result is a 3D array with appropriate dimensions
+  expect_equal(dim(result_anisotropic), c(3, 3, 3))
+  
+  # Ensure that the anisotropic result is the sum of W_s_x, W_s_y, and W_t
+  expect_equal(result_anisotropic[1,1,1], W_s_x[1] + W_s_y[1] + W_t[1])
+  expect_equal(result_isotropic[1,1,1], W_s[1] + W_t[1])
+})
