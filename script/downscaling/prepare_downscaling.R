@@ -43,8 +43,8 @@ dist_mat_com <- get_dist_mat(loc_px)
 df_dist_com <- reshape_distances(dist_mat_com)
 
 # OMSEV HSM rainfall data
-filename_rain <- paste0(data_folder, 
-                              "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+filename_rain <- paste0(data_folder,
+                        "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
 load(filename_rain)
 rain_hsm <- rain.all5[c(1, 6:ncol(rain.all5))]
 location_gauges <- read.csv("./data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")

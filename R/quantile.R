@@ -24,7 +24,7 @@
 #'
 #' @export
 quantile_matrix <- function(q, data_rain, count_min = 80, step = 0.005,
-                            zeros = TRUE, qlim = TRUE) {
+                            remove_zeros = TRUE, qlim = TRUE) {
     N <- ncol(data_rain)
     quant_mat <- matrix(NA, nrow = N, ncol = N)
     count_excess <- matrix(NA, nrow = N, ncol = N)
@@ -34,8 +34,8 @@ quantile_matrix <- function(q, data_rain, count_min = 80, step = 0.005,
         # without NA values
         # if (i != j) {
         data_pair <- drop_na(data_rain[c(i, j)]) # for all pairs
-        if (!zeros) {
-          data_pair <- data_pair[rowSums(data, na.rm = TRUE) > 0, ]
+        if (remove_zeros) {
+          data_pair <- data_pair[data_pair[, 1] > 0 & data_pair[, 2] > 0, ]
         }
         n <- nrow(data_pair)
         data_pair <- cbind(rank(data_pair[, 1]) / (n + 1),
@@ -53,15 +53,15 @@ quantile_matrix <- function(q, data_rain, count_min = 80, step = 0.005,
             count <- sum(cp_cond[, 1] > q_modif)
         }
         quant_mat[i, j] <- q_modif
-        if (q != q_modif) {
-            if (qlim) {
-              chiplot(data_pair, qlim = c(0.9, 0.999), xlim = c(0.9, 0.999),
-                  which = 1) # to check on plot
-            } else {
-              chiplot(data_pair, which = 1)
-            }
-            abline(v = q_modif)
-        }
+        # if (q != q_modif) {
+        #     if (qlim) {
+        #       chiplot(data_pair, qlim = c(0.9, 0.999), xlim = c(0.9, 0.999),
+        #           which = 1) # to check on plot
+        #     } else {
+        #       chiplot(data_pair, which = 1)
+        #     }
+        #     abline(v = q_modif)
+        # }
         count_excess[i, j] <- count
         # }
         }

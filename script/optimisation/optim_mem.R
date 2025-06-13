@@ -4,7 +4,7 @@ rm(list = ls())
 
 # clear console
 cat("\014")
-
+Rprofmem("mem_profile.out")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
@@ -144,7 +144,6 @@ simulate_and_save_batch <- function(i) {
   return(NULL)
 }
 
-# Lancement parallèle
 parLapply(cl, 1:M, simulate_and_save_batch)
 stopCluster(cl)
 
@@ -182,7 +181,7 @@ result_list <- mclapply(1:M, function(i) {
     list_lags = list_lags,
     list_excesses = list_excesses,
     init_params = true_param,
-    directional = directional,
+    directional = F,
     hmax = 7,
     wind_df = NA
   )
@@ -193,238 +192,242 @@ df_result_all <- do.call(rbind, result_list)
 colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                              "alpha2", "adv1", "adv2")
 
-# Combine results int a data frame
-df_result_all <- do.call(rbind, result_list)
-colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
-                             "alpha2", "adv1", "adv2")
 
-df_bplot <- as.data.frame(df_result_all)
+Rprofmem(NULL)
+# # Combine results int a data frame
+# df_result_all <- do.call(rbind, result_list)
+# colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
+#                              "alpha2", "adv1", "adv2")
 
-# save data in csv
-foldername <- "./data/optim/rpar/"
-if (random_s0) {
-  foldername <- paste0(foldername, "random_s0/")
-} else {
-  foldername <- paste0(foldername, "fixed_s0/")
-}
+# df_bplot <- as.data.frame(df_result_all)
 
-if(is_anisotropic) {
-  foldername <- paste0(foldername, "anisotropic/")
-} else {
-  foldername <- paste0(foldername, "isotropic/")
-}
+# # save data in csv
+# foldername <- "./data/optim/rpar/"
+# if (random_s0) {
+#   foldername <- paste0(foldername, "random_s0/")
+# } else {
+#   foldername <- paste0(foldername, "fixed_s0/")
+# }
 
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
+# if(is_anisotropic) {
+#   foldername <- paste0(foldername, "anisotropic/")
+# } else {
+#   foldername <- paste0(foldername, "isotropic/")
+# }
 
-name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
-                "s_", length(temp), "t_", param_str, "_",
-                adv_str, ".csv")
-write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
 
-df_bplot <- stack(df_bplot)
+# name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
+#                 "s_", length(temp), "t_", param_str, "_",
+#                 adv_str, ".csv")
+# write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
 
-# Plot results
-labels_latex <- c(
-  beta1 = TeX("$\\beta_1$"),
-  beta2 = TeX("$\\beta_2$"),
-  alpha1 = TeX("$\\alpha_1$"),
-  alpha2 = TeX("$\\alpha_2$"),
-  eta1 = TeX("$\\eta_1$"),
-  eta2 = TeX("$\\eta_2$"),
-  adv1 = TeX("$v_x$"),
-  adv2 = TeX("$v_y$")
-)
+# df_bplot <- stack(df_bplot)
 
-initial_param <- c(
-  beta1 = beta1,
-  beta2 = beta2,
-  alpha1 = alpha1,
-  alpha2 = alpha2,
-  eta1 = NA,
-  eta2 = NA,
-  adv1 = adv[1],
-  adv2 = adv[2]
-)
+# # Plot results
+# labels_latex <- c(
+#   beta1 = TeX("$\\beta_1$"),
+#   beta2 = TeX("$\\beta_2$"),
+#   alpha1 = TeX("$\\alpha_1$"),
+#   alpha2 = TeX("$\\alpha_2$"),
+#   eta1 = TeX("$\\eta_1$"),
+#   eta2 = TeX("$\\eta_2$"),
+#   adv1 = TeX("$v_x$"),
+#   adv2 = TeX("$v_y$")
+# )
 
-params_group1 <- c("beta1", "beta2", "alpha1", "alpha2")
-params_group2 <- c("adv1", "adv2")
+# initial_param <- c(
+#   beta1 = beta1,
+#   beta2 = beta2,
+#   alpha1 = alpha1,
+#   alpha2 = alpha2,
+#   eta1 = NA,
+#   eta2 = NA,
+#   adv1 = adv[1],
+#   adv2 = adv[2]
+# )
 
-bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = values)) +
-  geom_boxplot() +
-  geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
-  scale_x_discrete(labels = labels_latex[params_group1]) +
-  labs(x = "Parameters", y = "Estimated values") +
-  theme_minimal()
+# params_group1 <- c("beta1", "beta2", "alpha1", "alpha2")
+# params_group2 <- c("adv1", "adv2")
 
-bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
-  geom_boxplot() +
-  geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
-  scale_x_discrete(labels = labels_latex[params_group2]) +
-  labs(x = "Parameters", y = "Estimated values") +
-  theme_minimal()
+# bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = values)) +
+#   geom_boxplot() +
+#   geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
+#   scale_x_discrete(labels = labels_latex[params_group1]) +
+#   labs(x = "Parameters", y = "Estimated values") +
+#   theme_minimal()
 
-
-# folder to save the plot
-foldername <- "./images/optim/rpar/"
-if (random_s0) {
-  foldername <- paste0(foldername, "random_s0/")
-} else {
-  foldername <- paste0(foldername, "fixed_s0/")
-}
-
-if(is_anisotropic) {
-  foldername <- paste0(foldername, "anisotropic/")
-} else {
-  foldername <- paste0(foldername, "isotropic/")
-}
-
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-  print(paste0("Folder created: ", foldername))
-}
-
-# Save the plot
-name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
-                "s_", length(temp), "t_", param_str, "_beta_alpha.png")
-
-ggsave(plot = bplot1, filename = paste0(foldername, name_file),
-       width = 5, height = 5)
-
-# Save the plot
-name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
-              "s_", length(temp), "t_", param_str, "_adv.png")
-
-ggsave(plot = bplot2, filename = paste0(foldername, name_file),
-       width = 5, height = 5)
+# bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
+#   geom_boxplot() +
+#   geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
+#   scale_x_discrete(labels = labels_latex[params_group2]) +
+#   labs(x = "Parameters", y = "Estimated values") +
+#   theme_minimal()
 
 
-# With wind data == adv to estimate eta1 and eta2 to 1
-cat("Running optimization with wind...\n")
-wind_df <- data.frame(vx = adv[1], vy = adv[2])
-result_list <- mclapply(1:M, function(i) {
-  process_simulation(
-    i = i,
-    m = m,
-    list_simu = list_episodes,
-    u = u,
-    list_lags = list_lags,
-    list_excesses = list_excesses,
-    init_params = true_param,
-    directional = directional,
-    hmax = 7,
-    wind_df = wind_df
-  )
-}, mc.cores = detectCores() - 1)
+# # folder to save the plot
+# foldername <- "./images/optim/rpar/"
+# if (random_s0) {
+#   foldername <- paste0(foldername, "random_s0/")
+# } else {
+#   foldername <- paste0(foldername, "fixed_s0/")
+# }
 
-# Combine results int a data frame
-df_result_all <- as.data.frame(do.call(rbind, result_list))
-colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
-                             "alpha2", "eta1", "eta2")
+# if(is_anisotropic) {
+#   foldername <- paste0(foldername, "anisotropic/")
+# } else {
+#   foldername <- paste0(foldername, "isotropic/")
+# }
 
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+#   print(paste0("Folder created: ", foldername))
+# }
 
-df_result_all$adv1 <- df_result_all$eta1 * abs(adv[1])^df_result_all$eta2 * sign(adv[1])
-df_result_all$adv2 <- df_result_all$eta1 * abs(adv[2])^df_result_all$eta2 * sign(adv[2])
+# # Save the plot
+# name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
+#                 "s_", length(temp), "t_", param_str, "_beta_alpha.png")
 
+# ggsave(plot = bplot1, filename = paste0(foldername, name_file),
+#        width = 5, height = 5)
 
-# Convert in latex
-df_bplot <- as.data.frame(df_result_all)
+# # Save the plot
+# name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
+#               "s_", length(temp), "t_", param_str, "_adv.png")
 
-# save data in csv
-foldername <- "./data/optim/rpar/eta/"
-if (random_s0) {
-  foldername <- paste0(foldername, "random_s0/")
-} else {
-  foldername <- paste0(foldername, "fixed_s0/")
-}
-
-if(is_anisotropic) {
-  foldername <- paste0(foldername, "anisotropic/")
-} else {
-  foldername <- paste0(foldername, "isotropic/")
-}
-
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
-
-name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
-                "s_", length(temp), "t_", param_str, ".csv")
-write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
-
-# Plot results
-df_bplot <- stack(df_bplot)
-
-labels_latex <- c(
-  beta1 = TeX("$\\beta_1$"),
-  beta2 = TeX("$\\beta_2$"),
-  alpha1 = TeX("$\\alpha_1$"),
-  alpha2 = TeX("$\\alpha_2$"),
-  eta1 = TeX("$\\eta_1$"),
-  eta2 = TeX("$\\eta_2$"),
-  adv1 = TeX("$v_x$"),
-  adv2 = TeX("$v_y$")
-)
-
-params_group1 <- c("beta1", "beta2", "alpha1", "alpha2")
-params_group2 <- c("eta1", "eta2", "adv1", "adv2")
-
-true_param <- c(
-  beta1 = beta1,
-  beta2 = beta2,
-  alpha1 = alpha1,
-  alpha2 = alpha2,
-  eta1 = 1,
-  eta2 = 1,
-  adv1 = adv[1],
-  adv2 = adv[2]
-)
-
-bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = values)) +
-  geom_boxplot() +
-  geom_point(aes(y = true_param[match(ind, names(true_param))]), color = "red", pch = 4) +
-  scale_x_discrete(labels = labels_latex[params_group1]) +
-  labs(x = "Parameters", y = "Estimated values") +
-  theme_minimal()
-
-bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
-  geom_boxplot() +
-  geom_point(aes(y = true_param[match(ind, names(true_param))]), color = "red", pch = 4) +
-  scale_x_discrete(labels = labels_latex[params_group2]) +
-  labs(x = "Parameters", y = "Estimated values") +
-  theme_minimal()
+# ggsave(plot = bplot2, filename = paste0(foldername, name_file),
+#        width = 5, height = 5)
 
 
-# folder to save the plot
-foldername <- "./images/optim/rpar/"
-if (random_s0) {
-  foldername <- paste0(foldername, "random_s0/")
-} else {
-  foldername <- paste0(foldername, "fixed_s0/")
-}
+# # With wind data == adv to estimate eta1 and eta2 to 1
+# cat("Running optimization with wind...\n")
+# wind_df <- data.frame(vx = adv[1], vy = adv[2])
+# result_list <- mclapply(1:M, function(i) {
+#   process_simulation(
+#     i = i,
+#     m = m,
+#     list_simu = list_episodes,
+#     u = u,
+#     list_lags = list_lags,
+#     list_excesses = list_excesses,
+#     init_params = true_param,
+#     directional = directional,
+#     hmax = 7,
+#     wind_df = wind_df
+#   )
+# }, mc.cores = detectCores() - 1)
 
-if(is_anisotropic) {
-  foldername <- paste0(foldername, "anisotropic/")
-} else {
-  foldername <- paste0(foldername, "isotropic/")
-}
+# # Combine results int a data frame
+# df_result_all <- as.data.frame(do.call(rbind, result_list))
+# colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
+#                              "alpha2", "eta1", "eta2")
 
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-  print(paste0("Folder created: ", foldername))
-}
 
-# Save the plot
-name_file <- paste0("bp_optim_eta_", M, "simu_", m, "rep_", ngrid^2,
-                "s_", length(temp), "t_", param_str, "_beta_alpha.png")
+# df_result_all$adv1 <- df_result_all$eta1 * abs(adv[1])^df_result_all$eta2 * sign(adv[1])
+# df_result_all$adv2 <- df_result_all$eta1 * abs(adv[2])^df_result_all$eta2 * sign(adv[2])
 
-ggsave(plot = bplot1, filename = paste0(foldername, name_file),
-       width = 5, height = 5)
 
-# Save the plot
-name_file <- paste0("bp_optim_eta_", M, "simu_", m, "rep_", ngrid^2,
-              "s_", length(temp), "t_", param_str, "_eta_adv.png")
+# # Convert in latex
+# df_bplot <- as.data.frame(df_result_all)
 
-ggsave(plot = bplot2, filename = paste0(foldername, name_file),
-       width = 5, height = 5)
+# # save data in csv
+# foldername <- "./data/optim/rpar/eta/"
+# if (random_s0) {
+#   foldername <- paste0(foldername, "random_s0/")
+# } else {
+#   foldername <- paste0(foldername, "fixed_s0/")
+# }
+
+# if(is_anisotropic) {
+#   foldername <- paste0(foldername, "anisotropic/")
+# } else {
+#   foldername <- paste0(foldername, "isotropic/")
+# }
+
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
+
+# name_file <- paste0("optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
+#                 "s_", length(temp), "t_", param_str, ".csv")
+# write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
+
+# # Plot results
+# df_bplot <- stack(df_bplot)
+
+# labels_latex <- c(
+#   beta1 = TeX("$\\beta_1$"),
+#   beta2 = TeX("$\\beta_2$"),
+#   alpha1 = TeX("$\\alpha_1$"),
+#   alpha2 = TeX("$\\alpha_2$"),
+#   eta1 = TeX("$\\eta_1$"),
+#   eta2 = TeX("$\\eta_2$"),
+#   adv1 = TeX("$v_x$"),
+#   adv2 = TeX("$v_y$")
+# )
+
+# params_group1 <- c("beta1", "beta2", "alpha1", "alpha2")
+# params_group2 <- c("eta1", "eta2", "adv1", "adv2")
+
+# true_param <- c(
+#   beta1 = beta1,
+#   beta2 = beta2,
+#   alpha1 = alpha1,
+#   alpha2 = alpha2,
+#   eta1 = 1,
+#   eta2 = 1,
+#   adv1 = adv[1],
+#   adv2 = adv[2]
+# )
+
+# bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = values)) +
+#   geom_boxplot() +
+#   geom_point(aes(y = true_param[match(ind, names(true_param))]), color = "red", pch = 4) +
+#   scale_x_discrete(labels = labels_latex[params_group1]) +
+#   labs(x = "Parameters", y = "Estimated values") +
+#   theme_minimal()
+
+# bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
+#   geom_boxplot() +
+#   geom_point(aes(y = true_param[match(ind, names(true_param))]), color = "red", pch = 4) +
+#   scale_x_discrete(labels = labels_latex[params_group2]) +
+#   labs(x = "Parameters", y = "Estimated values") +
+#   theme_minimal()
+
+
+# # folder to save the plot
+# foldername <- "./images/optim/rpar/"
+# if (random_s0) {
+#   foldername <- paste0(foldername, "random_s0/")
+# } else {
+#   foldername <- paste0(foldername, "fixed_s0/")
+# }
+
+# if(is_anisotropic) {
+#   foldername <- paste0(foldername, "anisotropic/")
+# } else {
+#   foldername <- paste0(foldername, "isotropic/")
+# }
+
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+#   print(paste0("Folder created: ", foldername))
+# }
+
+# # Save the plot
+# name_file <- paste0("bp_optim_eta_", M, "simu_", m, "rep_", ngrid^2,
+#                 "s_", length(temp), "t_", param_str, "_beta_alpha.png")
+
+# ggsave(plot = bplot1, filename = paste0(foldername, name_file),
+#        width = 5, height = 5)
+
+# # Save the plot
+# name_file <- paste0("bp_optim_eta_", M, "simu_", m, "rep_", ngrid^2,
+#               "s_", length(temp), "t_", param_str, "_eta_adv.png")
+
+# ggsave(plot = bplot2, filename = paste0(foldername, name_file),
+#        width = 5, height = 5)
+
+Rprofmem(NULL)

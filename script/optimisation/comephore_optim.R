@@ -35,7 +35,6 @@ rownames(df_comephore) <- df_comephore$date
 comephore <- df_comephore[-1] # remove dates column
 # Get distances matrix
 dist_mat <- get_dist_mat(loc_px)
-df_dist <- reshape_distances(dist_mat)
 nsites <- nrow(loc_px)
 
 
@@ -191,8 +190,10 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 
 
 # Mean of chi
+tmax = 10
+q_no0_temp = 0.9
 chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q_no0_temp,
-                               mean = TRUE, zeros = FALSE)
+                               mean = TRUE, zeros = F)
 df_chi <- data.frame(lag = c(0:tmax), chi = chimat_dt_mean)
 # chitemp_plot <- ggplot(df_chi, aes(x = lag, y = chi)) +
 #   geom_point(color = btfgreen) +
@@ -230,11 +231,60 @@ filename <- paste(im_folder, "WLSE/comephore/full_temporal_chi_eta_estim_",
                 q_no0_temp, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
+
+# Get coords
+sites_coords <- loc_px[, c("Longitude", "Latitude")]
+rownames(sites_coords) <- loc_px$pixel_name
+
+
+
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+
+sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 4326)
+
+sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
+
+coords_m <- st_coordinates(sites_coords_sf)
+
+grid_coords <- sites_coords
+grid_coords$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
+grid_coords$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"])) / 1000
+
+
+p1 <- ggplot(grid_coords, aes(x = Longitude, y = Latitude)) +
+  geom_point(color = "blue", size = 2) +
+  geom_text(aes(label = rownames(grid_coords)), hjust = -0.2, size = 1.5) +
+  coord_fixed() +
+  ggtitle("GPS coordinates WGS84") +
+  theme_minimal()
+
+p2 <- ggplot(grid_coords, aes(x = x_km, y = y_km)) +
+  geom_point(color = "red") +
+  geom_text(aes(label = rownames(sites_coords)), size = 1.5, hjust = -0.2) +
+  coord_fixed() +
+  theme_minimal() +
+  ggtitle("Transformed coordinates in km")
+
+a <- grid.arrange(p1, p2, ncol = 2)
+
+# save plot
+filename <- paste(im_folder, "optim/comephore/coords_transformation.png", sep = "")
+ggsave(plot= a, filename = filename, width = 20, height = 15, units = "cm")
+
+# get distance matrix
+grid_coords <- grid_coords[, c("x_km", "y_km")]
+colnames(grid_coords) <- c("Longitude", "Latitude")
+dist_mat <- get_dist_mat(grid_coords, latlon = FALSE)
+
 # Spatial chi
 df_dist <- reshape_distances(dist_mat)
-df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
+# df_dist$value <- ceiling(df_dist$value / 100) * 100  # / 1000 in km
 df_dist_km <- df_dist
-df_dist_km$value <- df_dist$value / 1000
+df_dist_km$value <- ceiling(round(df_dist$value, 1) * 1000 ) /1000
+# df_dist_km$value <- df_dist$value / 1000
 
 h_vect <- sort(unique(df_dist_km$value))
 h_vect <- h_vect[h_vect > 0]  # remove 0
@@ -242,12 +292,18 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q <- q_no0_spa
+q_no0_spa <- 0.98
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
-                                 quantile = q, hmax = hmax, zeros = FALSE)
+                              quantile = q_no0_spa, hmax = hmax, zeros = FALSE)
 
+spatial_chi_plot(chispa_df, hmax = hmax, q = q_no0_spa)
+# chispa_df$lagspa <- chispa_df$lagspa 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
+
+chispa_df <- spatial_chi_extremogram(df_dist_km, comephore, q_no0_spa,
+                        hmax = hmax, zeros = FALSE)
+
 
 chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
   btf_theme +
@@ -301,57 +357,74 @@ save.image("workspace.RData")
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-# Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5 # in km
-delta <- 12 # in hours
-episode_size <- 2 * delta # size of the episode
-# Get coords
-sites_coords <- loc_px[, c("Longitude", "Latitude")]
-rownames(sites_coords) <- loc_px$pixel_name
-
-# library(sf)
-# sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 4326)  # WGS84
-# sites_coords_utm <- st_transform(sites_coords_sf, crs = 32633)  # UTM zone 33N (système de coordonnées cartésiennes)
-# sites_coords_cartesian <- st_coordinates(sites_coords_utm)
-# head(sites_coords_cartesian)
-# rownames(sites_coords_cartesian) <- rownames(sites_coords)
-# colnames(sites_coords_cartesian) <- c("Longitude", "Latitude")
-# sites_coords <- sites_coords_cartesian
-
 q <- 0.998 # quantile
-
 # get central site from sites_coords
 
-# Step 1: Calculate the centroid
-centroid_lon <- mean(sites_coords$Longitude)
-centroid_lat <- mean(sites_coords$Latitude)
+set_st_excess <- get_spatiotemp_excess(comephore, q)
 
-# Step 2: Calculate Euclidean distance to the centroid
-sites_coords$dist_to_centroid <- sqrt((sites_coords$Longitude - centroid_lon)^2 +
-                                      (sites_coords$Latitude - centroid_lat)^2)
+list_s <- set_st_excess$list_s
+unique(unlist(list_s))
+list_t <- set_st_excess$list_t
 
-# Step 3: Find the most central site
-most_central_site <- sites_coords[which.min(sites_coords$dist_to_centroid), ]
+comephore[list_t[[1]], list_s[[1]]]
 
-# Output the most central site
-print(most_central_site)
+list_u <- set_st_excess$list_u
+list_u[[1]]
 
-# remove dist_to_centroid column
-sites_coords <- sites_coords[, -ncol(sites_coords)]
+# Spatio-temporal neighborhood parameters
+min_spatial_dist <- 3 # in km
+delta <- 30 # in hours
+episode_size <- delta # size of the episode
+s0t0_set <- get_s0t0_pairs(grid_coords, comephore,
+                            min_spatial_dist = min_spatial_dist,
+                            episode_size = episode_size,
+                            set_st_excess = set_st_excess,
+                            n_max_episodes = 10000,
+                            latlon = FALSE)
 
-central_site <- rownames(most_central_site)
-central_site_coords <- most_central_site[1:2]
+selected_points <- s0t0_set
 
-# Get the selected episodes
-selected_points <- select_extreme_episodes(sites_coords,
-                                        data = comephore,
-                                        min_spatial_dist = min_spatial_dist,
-                                        episode_size = episode_size,
-                                        n_max_episodes = 10000,
-                                        quantile = q,
-                                        spatial_window_radius = 10,
-                                        central_site = central_site,
-                                        time_ext = 0, latlon = TRUE)
+# check that for all s0, t0 we have an excess above corresponding threshold
+for (i in 1:length(selected_points$s0)) {
+  s0 <- selected_points$s0[i]
+  t0 <- selected_points$t0[i]
+  u_s0 <- selected_points$u_s0[i]
+  # check that the excess is above the threshold
+  if (comephore[t0, s0] <= u_s0) {
+    stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
+  }
+}
+
+
+# sites_coords <- grid_coords
+# # Step 1: Calculate the centroid
+# centroid_lon <- mean(sites_coords$Longitude)
+# centroid_lat <- mean(sites_coords$Latitude)
+
+# # Step 2: Calculate Euclidean distance to the centroid
+# sites_coords$dist_to_centroid <- sqrt((sites_coords$Longitude - centroid_lon)^2 +
+#                                       (sites_coords$Latitude - centroid_lat)^2)
+
+# # Step 3: Find the most central site
+# most_central_site <- sites_coords[which.min(sites_coords$dist_to_centroid), ]
+
+# # Output the most central site
+# print(most_central_site)
+
+# # remove dist_to_centroid column
+# sites_coords <- sites_coords[, -ncol(sites_coords)]
+
+# central_site <- rownames(most_central_site)
+# central_site_coords <- most_central_site[1:2]
+
+# # Get the selected episodes
+# selected_points <- select_extreme_episodes(sites_coords,
+#                                         data = comephore,
+#                                         min_spatial_dist = min_spatial_dist,
+#                                         episode_size = episode_size,
+#                                         n_max_episodes = 10000,
+#                                         quantile = q,
+#                                         time_ext = 0, latlon = FALSE)
 
 n_episodes <- length(selected_points$s0)
 print(n_episodes)
@@ -372,7 +445,7 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
 
 # Convert matrix to data frame
-index <- 3
+index <- 10
 sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
@@ -532,7 +605,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   u <- u_list[i]
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(sites_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = TRUE)
+                                tau_vect, latlon = FALSE)
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
   excesses <- empirical_excesses(episode, q, lags, type = "rpareto",
                                 t0 = ind_t0_ep)
@@ -552,7 +625,6 @@ s0 <- s0_list[1]
 s0_coords <- sites_coords[s0, ]
 excesses <- list_excesses[[1]]
 # sort excesses by hnorm from smallest to largest
-excesses <- excesses[order(excesses$hnorm), ]
 excesses$kij
 excesses[1:20, ]
 df_lags <- list_lags[[1]]
@@ -737,52 +809,174 @@ save.image("workspace.RData")
 # wind_df_test$vx <- 0.1
 # wind_df_test$vy <- 0.1
 # load("workspace.RData")
-init_param <- c(beta1, beta2, alpha1, alpha2, 1.3, 1)
+init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 # init_param <- c(beta1, beta2, alpha1, alpha2, mean_vx, mean_vy)
 # init_param <- c(0.01, 0.2, 1.5, 1, 0.2, 0.1)
 # q <- 1
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = lags_opt, list_episodes = episodes_opt,
-        list_excesses = excesses_opt, hmax = 7,
+        list_excesses = excesses_opt, hmax = NA,
         wind_df = wind_df,
-        latlon = TRUE,
+        latlon = FALSE,
         directional = TRUE,
         method = "L-BFGS-B",
+        fixed_eta1 = TRUE,
+        fixed_eta2 = TRUE,
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
+        upper = c(10, 10, 1.999, 1.999, 10, 10),
         control = list(maxit = 10000,
                       trace = 1,
                       parscale = c(1, 1, 1, 1, 1, 1)),
         hessian = F)
 result
 
-# test_param <- init_param
-# test_param[5] <- 2
-# df_chi <- theoretical_chi(test_param, lags_opt[[10]], latlon = TRUE,
-#                 directional = TRUE)
+nll_list <- c()
+beta1_list <- seq(0.0005, 0.1, length.out = 50)
+for (beta in beta1_list) {
+  params <- c(beta, beta2, alpha1, alpha2, 1, 1)
+  nll <- neg_ll_composite(params, list_lags = lags_opt,
+                          list_episodes = episodes_opt,
+                          list_excesses = excesses_opt,
+                          hmax = NA,
+                          wind_df = wind_df,
+                          latlon = FALSE,
+                          directional = TRUE)
+  nll_list <- c(nll_list, nll)
+}
 
-# 839832.4
-# neg_ll_composite(test_param, list_lags = lags_opt, list_episodes = episodes_opt,
-#         list_excesses = excesses_opt, hmax = 7,
-#         wind_df = wind_df,
-#         latlon = TRUE,
-#         directional = TRUE)
 
-# plot(df_chi$chi)
+min_beta1 <- beta1_list[which.min(nll_list)]
+min_nll <- min(nll_list)
 
-# result <- optim(par = init_param, fn = neg_ll_composite,
-#         list_lags = lags_opt,
-#         list_excesses = excesses_opt, hmax = 7,
-#         wind_df = NA,
-#         latlon = F,
-#         directional = F,
-#         method = "L-BFGS-B",
-#         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-#         upper = c(Inf, Inf, 1.999, 1.999, Inf, Inf),
-#         control = list(maxit = 10000,
-#                       trace = 1),
-#         hessian = F)
-# result
+df_plot <- data.frame(beta1 = beta1_list, nll = nll_list)
+# Plot
+p <- ggplot(df_plot, aes(x = beta1, y = nll)) +
+  geom_line(color = "#4b4b8a", linewidth = 1.2) +
+  geom_point(aes(x = min_beta1, y = min_nll), color = "red", size = 3) +
+  geom_vline(xintercept = min_beta1, linetype = "dashed", color = "red") +
+  geom_label(aes(x = min_beta1, y = min_nll, 
+                 label = sprintf("minimum in %.4f", min_beta1)),
+             vjust = -1.2, hjust = 0, size = 4, fill = "white", color = "red") +
+  labs(x = expression(beta[1]), y = "- Log-likelihood") +
+  theme_minimal()
+
+p
+
+# Save the plot
+end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
+                      "h_delta_", delta, ".pdf", sep = "")
+filename <- paste0(im_folder, "optim/comephore/neg_ll_beta1_", end_filename, sep = "")
+ggsave(plot= p, filename = filename, width = 20, height = 15, units = "cm")
+
+
+nll_list <- c()
+beta2_list <- seq(0.1, 0.8, length.out = 50)
+for (beta in beta2_list) {
+  params <- c(beta1, beta, alpha1, alpha2, 1, 1)
+  nll <- neg_ll_composite(params, list_lags = lags_opt,
+                          list_episodes = episodes_opt,
+                          list_excesses = excesses_opt,
+                          hmax = NA,
+                          wind_df = wind_df,
+                          latlon = FALSE,
+                          directional = TRUE)
+  nll_list <- c(nll_list, nll)
+}
+
+
+min_beta2 <- beta2_list[which.min(nll_list)]
+min_nll <- min(nll_list)
+
+df_plot <- data.frame(beta2 = beta2_list, nll = nll_list)
+# Plot
+p <- ggplot(df_plot, aes(x = beta2, y = nll)) +
+  geom_line(color = "#4b4b8a", linewidth = 1.2) +
+  geom_point(aes(x = min_beta2, y = min_nll), color = "red", size = 3) +
+  geom_vline(xintercept = min_beta2, linetype = "dashed", color = "red") +
+  geom_label(aes(x = min_beta2, y = min_nll, 
+                 label = sprintf("minimum in %.4f", min_beta2)),
+             vjust = -1.2, hjust = 0, size = 4, fill = "white", color = "red") +
+  labs(x = expression(beta[2]), y = "- Log-likelihood") +
+  theme_minimal()
+
+p
+
+# Save the plot
+end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
+                      "h_delta_", delta, ".pdf", sep = "")
+filename <- paste0(im_folder, "optim/comephore/neg_ll_beta2_", end_filename, sep = "")
+ggsave(plot= p, filename = filename, width = 20, height = 15, units = "cm")
+
+
+
+
+# Séquence des beta > 0 (échelle naturelle)
+beta1_seq <- seq(1e-4, 0.2, length.out = 50)
+beta2_seq <- seq(0.1, 1, length.out = 50)
+
+# Matrice pour stocker les valeurs NLL
+nll_grid <- matrix(NA, nrow = length(beta1_seq), ncol = length(beta2_seq))
+
+# Paramètres fixes
+alpha1 <- 1.5
+alpha2 <- 0.8
+eta1 <- 1
+eta2 <- 1
+
+for (i in seq_along(beta1_seq)) {
+  for (j in seq_along(beta2_seq)) {
+    params_test <- c(beta1_seq[i], alpha1, beta2_seq[j], alpha2, eta1, eta2)
+    
+    nll_val <- tryCatch({
+      neg_ll_composite(
+        params = params_test,
+        list_episodes = list_episodes,
+        list_excesses = list_excesses,
+        list_lags = list_lags,
+        wind_df = NA,
+        hmax = hmax,
+        latlon = TRUE,
+        directional = TRUE,
+        rpar = TRUE
+      )
+    }, error = function(e) NA)
+    
+    nll_grid[i, j] <- nll_val
+  }
+}
+
+
+
+library(reshape2)
+library(ggplot2)
+
+df_plot <- melt(nll_grid)
+df_plot$beta1 <- rep(beta1_seq, each = length(beta2_seq))
+df_plot$beta2 <- rep(beta2_seq, times = length(beta1_seq))
+
+ggplot(df_plot, aes(x = beta1, y = beta2, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "NLL", na.value = "white") +
+  labs(
+    x = expression(beta[1]),
+    y = expression(beta[2]),
+    title = "Profil de -log vraisemblance"
+  ) +
+  theme_minimal()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

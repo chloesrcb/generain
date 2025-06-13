@@ -1139,3 +1139,39 @@ convert_simulations_to_list <- function(simu, ngrid) {
 
   return(list_res)
 }
+
+
+#' Convert a single simulation (3D array) to a data.frame
+#'
+#' @param simu_i A 3D array of dimensions (x, y, t) corresponding to one simulation
+#' @param ngrid The size of the spatial grid
+#'
+#' @return A data.frame with each column being a spatial point and rows as time steps
+#' @export
+convert_single_simulation_to_df <- function(simu_i, ngrid) {
+  coord_df <- expand.grid(x = 1:ngrid, y = 1:ngrid)
+  coord_df$point <- paste0("S", seq_len(nrow(coord_df)))
+
+  # Flatten the 3D array into a long data.frame
+  simu_long <- as.data.frame.table(simu_i, responseName = "value")
+  names(simu_long) <- c("x", "y", "t", "value")
+
+  # Ensure proper types
+  simu_long$y <- as.integer(factor(simu_long$y))
+  simu_long$x <- as.integer(factor(simu_long$x))
+  simu_long$t <- as.integer(factor(simu_long$t))
+
+  # Merge with coordinates to get point labels
+  simu_long <- merge(simu_long, coord_df, by = c("x", "y"))
+
+  # Pivot to wide format: one column per spatial point
+  df <- simu_long %>%
+    dplyr::select(t, value, point) %>%
+    tidyr::pivot_wider(names_from = point, values_from = value) %>%
+    dplyr::arrange(t)
+
+  # Remove time column and return just the matrix of values
+  df <- df[, -1]
+  return(as.data.frame(df))
+}
+

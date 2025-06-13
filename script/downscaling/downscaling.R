@@ -3,6 +3,7 @@ muse <- FALSE
 if (muse) {
   # Get the muse folder
   folder_muse <- "/home/serrec/work_rainstsimu/downscaling"
+  path_to_python <- "/home/serrec/.pyenv/versions/3.9.18/bin/python3.9"
   setwd(folder_muse)
   # Load libraries and set theme
   source("load_libraries.R")
@@ -12,12 +13,14 @@ if (muse) {
   # Load libraries and set theme
   source("./script/load_libraries.R")
   source("./script/downscaling/pinnEV.R")
-
+  path_to_python <- "/home/cserreco/.pyenv/versions/3.9.18/bin/python3.9"
 }
 
 library(sf)
 library(sp)
 library(geosphere)
+library(reticulate)
+library(lubridate)
 
 
 # LOAD DOWNSCALING TABLE #######################################################
@@ -25,14 +28,6 @@ library(geosphere)
 output_file <- paste0(data_folder, "downscaling/downscaling_table.csv")
 
 df_Y_X_raw <- read.csv(output_file, sep = ";", header = TRUE)
-head(df_Y_X_raw)
-# colnames(df_Y_X_raw) <- c("time", "lon_Y", "lat_Y", "lon_X", "lat_X", "Y_obs",
-#                           paste0("X", 1:27))
-
-# Rename X_obs to X
-# colnames(df_Y_X_raw)[which(colnames(df_Y_X_raw) == "X_obs")] <- "X"
-nrow(df_Y_X_raw)
-# head(df_Y_X_raw)
 
 # first line
 df_Y_X_raw[1,]
@@ -42,7 +37,6 @@ df_Y_X <- df_Y_X_raw
 df_Y_X$time <- as.POSIXct(df_Y_X$time,
                          format = "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
-library(lubridate)
 df_Y_X$hour <- hour(df_Y_X$time)
 df_Y_X$minute <- minute(df_Y_X$time)
 df_Y_X$day <- day(df_Y_X$time)
@@ -50,17 +44,16 @@ df_Y_X$month <- month(df_Y_X$time)
 df_Y_X$year <- year(df_Y_X$time)
 head(df_Y_X)
 
-
-library(keras)
-library(tensorflow)
-library(reticulate)
 py_version <- "3.9.18"
 path <- paste0(reticulate::virtualenv_root(), "/pinnEV_env/bin/python")
-Sys.setenv(RETICULATE_PYTHON = "/home/serrec/.virtualenvs/pinnEV_env/bin/python")
+Sys.setenv(RETICULATE_PYTHON =  path_to_python)
 # Sys.setenv(RETICULATE_PYTHON = path) # Set Python interpreter
 Sys.setenv(RETICULATE_LOG_LEVEL = "DEBUG")
 tf_version = "2.13.1"
 reticulate::use_virtualenv("pinnEV_env", required = T)
+
+library(keras)
+library(tensorflow)
 
 df_downscaling_all <- df_Y_X
 # Remove rows with Y_obs = 0 for model EGPD of positive rainfall
@@ -75,9 +68,9 @@ n_predictors <- ncol(df_downscaling_nn) - 2
 df_downscaling_nn <- df_downscaling_nn[, -1]
 
 # Standardize data
-df_standardized <- df_downscaling_nn %>%
-  mutate(across(where(is.numeric), scale))
-head(df_standardized)
+# df_standardized <- df_downscaling_nn %>%
+#   mutate(across(where(is.numeric), scale))
+# head(df_standardized)
 
 df_standardized <- df_downscaling_nn %>%
   # Convert time variables to cyclical features
@@ -95,9 +88,9 @@ df_standardized <- df_downscaling_nn %>%
   # Standardize all numerical predictors (except cyclical time features)
   mutate(across(c(starts_with("X"), "Y_obs", "lon_X",
                         "lon_Y", "lat_X", "lat_Y"), scale))
-head(df_standardized)
-head(df_downscaling_nn)
 
+# head(df_standardized)
+# head(df_downscaling_nn)
 
 X_all <- df_standardized[, -c(which(names(df_standardized) == "Y_obs"),
                            which(names(df_standardized) == "time"))]
@@ -123,25 +116,25 @@ X_all_clean_flat <- array(X_all_clean, dim = c(n_obs, n_sites * n_predictors))
 dim(X_all_clean_flat)
 
 # Fit a LASSO model to select the most important predictors
-library(glmnet)
-fit_lasso <- cv.glmnet(as.matrix(X_all_clean_flat), Y_obs_clean, alpha = 1)
+# library(glmnet)
+# fit_lasso <- cv.glmnet(as.matrix(X_all_clean_flat), Y_obs_clean, alpha = 1)
 
+# # Coefficients pour lambda.min (le meilleur lambda)
+# coef_lambda_min <- coef(fit_lasso, s = "lambda.min")
+# print(coef_lambda_min)
+# # Coefficients pour lambda.1se (le lambda à 1 écart-type)
+# coef(fit_lasso, s = "lambda.1se")
 
-# Coefficients pour lambda.min (le meilleur lambda)
-coef_lambda_min <- coef(fit_lasso, s = "lambda.min")
-print(coef_lambda_min)
-# Coefficients pour lambda.1se (le lambda à 1 écart-type)
-coef(fit_lasso, s = "lambda.1se")
-
-selected_predictors <- which(coef(fit_lasso, s = "lambda.min") != 0)
-# Exclude intercept (index 1)
-selected_predictors <- selected_predictors[selected_predictors > 1] - 1
-X_all_clean_selected_flat <- X_all_clean_flat[, selected_predictors]
+# selected_predictors <- which(coef(fit_lasso, s = "lambda.min") != 0)
+# # Exclude intercept (index 1)
+# selected_predictors <- selected_predictors[selected_predictors > 1] - 1
+# X_all_clean_selected_flat <- X_all_clean_flat[, selected_predictors]
 
 
 # Retransform the selected predictors into a 3D array
-X_all_clean_selected <- array(X_all_clean_selected_flat, dim = c(n_obs, n_sites, length(selected_predictors)))
-head(X_all_clean_selected)
+X_all_clean_selected <- array(X_all_clean_selected_flat, dim = c(n_obs, n_sites, n_predictors))
+# X_all_clean_selected <- array(X_all_clean_selected_flat, dim = c(n_obs, n_sites, length(selected_predictors)))
+# head(X_all_clean_selected)
 
 
 # # Hyperparameter tuning for the neural network
@@ -197,23 +190,68 @@ X.s <- list("X.nn.s" = X.nn.s)
 X.k <- list("X.nn.k" = X.nn.k)
 
 
-length(Y.train)
+# length(Y.train)
+
+
+# get rain data from omsev
+filename_omsev <- paste0(data_folder,
+                         "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
+
+load(filename_omsev)
+
+# get location of each rain gauge
+filename_loc <- paste0(data_folder, "omsev/loc_rain_gauges.csv")
+location_gauges <- read.csv(filename_loc)
+location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
+                             "crbm", "archiw", "archie", "um35", "chu1",
+                             "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
+                             "cines", "brives", "hydro")
+rain <- rain.all5[, c(1, 6:(ncol(rain.all5) - 1))]
 
 # initialize the neural network model EGPD fitting
 # get censoring
-censores <- seq(0.25, 0.35, 0.001)
-rain_new <- rain_hsm[-1] # remove the first column date
+# censores <- seq(0.25, 0.35, 0.001)
+rain_new <- rain[-1] # remove the first column date
 # rain_cp <- rain_new[, c(5,6)]
-df_score_ohsm <- choose_censore(rain_new, censores, n_samples = 100)
 
-params_subrain <- get_egpd_estimates(rain_new,
-                      left_censoring = 0.3)
 
+results <- list()
+
+sites_name <- colnames(rain_new)
+
+for (site_name in sites_name) {
+  cat("Processing:", site_name, "\n")
+  y_raw <- na.omit(rain[[site_name]])
+  site_result <- tryCatch({
+    fit_egpd_site(y_raw, site_name)
+  }, error = function(e) {
+    warning(paste("Failed for site:", site_name))
+    NULL
+  })
+  if (!is.null(site_result)) {
+    results[[site_name]] <- site_result
+  }
+}
+
+params_subrain <- do.call(rbind, results)
 
 mean_kappa <- mean(params_subrain$kappa)
 mean_sigma <- mean(params_subrain$sigma)
 mean_xi <- mean(params_subrain$xi)
 
+
+path <- paste0(reticulate::virtualenv_root(),"/pinnEV_env/bin/python")
+Sys.setenv(RETICULATE_PYTHON = path)
+# Sys.setenv(RETICULATE_PYTHON = "/user/cserreco/home/.virtualenvs/pinnEV_env/bin/python")
+reticulate::use_virtualenv("pinnEV_env", required = TRUE)
+reticulate::py_module_available("tensorflow")
+# Importe tensorflow
+library(tensorflow)
+library(keras)
+
+# Test basique
+tf <- import("tensorflow", delay_load = FALSE)
+tf$random$uniform(shape = list(2L, 2L))  # test final
 # Train the neural network model
 NN.fit <- eGPD.NN.train(Y.train, Y.valid, X.s, X.k, type = "MLP",
       n.ep = 200, batch.size = 10, init.scale = mean_sigma,
@@ -240,6 +278,84 @@ sigma_site1_2019 <- sigma_site1[year_idx]
 kappa_site1_2019 <- kappa_site1[year_idx]
 print("Sigma for site 1 in 2019: ")
 print(sigma_site1_2019)
+
+## Get final table with downscaling results 
+# Noms de stations
+station_names <- colnames(rain_new)
+# remove brives hydro and cines
+station_names <- station_names[!station_names %in% c("brives", "hydro", "cines")]
+
+# Dates d'observation
+timestamps <- df_downscaling_nn$time[!rows_with_na]  # sans les lignes supprimées
+
+# Vérifie dimensions
+n_obs_final <- length(timestamps)
+n_sites_final <- length(station_names)
+stopifnot(nrow(out$pred.sigma) == n_obs_final)
+stopifnot(ncol(out$pred.sigma) == n_sites_final)
+
+# Création du tableau final long format
+library(tidyr)
+library(dplyr)
+
+# Transforme les matrices en long format
+df_sigma <- as.data.frame(out$pred.sigma)
+colnames(df_sigma) <- station_names
+df_sigma <- df_sigma %>% mutate(timestamp = timestamps) %>%
+  pivot_longer(-timestamp, names_to = "station", values_to = "sigma")
+
+df_kappa <- as.data.frame(out$pred.kappa)
+colnames(df_kappa) <- station_names
+df_kappa <- df_kappa %>% mutate(timestamp = timestamps) %>%
+  pivot_longer(-timestamp, names_to = "station", values_to = "kappa")
+
+df_xi <- as.data.frame(out$pred.xi)
+colnames(df_xi) <- station_names
+df_xi <- df_xi %>% mutate(timestamp = timestamps) %>%
+  pivot_longer(-timestamp, names_to = "station", values_to = "xi")
+
+# Fusion des trois paramètres
+df_downscaling_final <- df_sigma %>%
+  left_join(df_kappa, by = c("timestamp", "station")) %>%
+  left_join(df_xi, by = c("timestamp", "station"))
+
+# Ajout des coordonnées (si disponibles dans location_gauges)
+colnames(location_gauges) <- c("station", "lat", "lon")
+
+df_downscaling_final <- df_downscaling_final %>%
+  left_join(location_gauges, by = "station")
+
+# Vérification
+head(df_downscaling_final)
+
+# Generate EGPD rainfall
+
+df_downscaling_final$Y_est <- NA
+
+
+for (i in seq_len(nrow(df_downscaling_final))) {
+  row <- df_downscaling_final[i, ]
+  if (!is.na(row$sigma) && !is.na(row$kappa)) {
+    df_downscaling_final$Y_est[i] <- reGPD(
+      sigma = row$sigma,
+      kappa = row$kappa,
+      xi = mean_xi,  # Use the mean xi for all sites
+      n = 1
+    )
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

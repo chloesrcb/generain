@@ -198,9 +198,10 @@ get_lag_vectors <- function(df_coords, tau_vect, latlon = FALSE) {
 #'
 #' @export
 get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
-                                    t0 = 0, tau_vect = 0:10, latlon = FALSE) {
-  # Conditional point index in df_coords
-  if (typeof(s0) == "list") { # TODO t0 inutile
+                                        t0 = 0, tau_vect = 0:10,
+                                        latlon = FALSE) {
+  # Find index of conditional site
+  if (typeof(s0) == "list") {
     ind_s0 <- which(df_coords$Latitude == s0$Latitude &
                     df_coords$Longitude == s0$Longitude)
   } else {
@@ -211,58 +212,116 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
     stop("The conditional site (s0) is not found in df_coords")
   }
 
-  # Dimensions
   n <- nrow(df_coords)
-  tau_lag <- tau_vect
-  tau_len <- length(tau_lag)
+  tau_len <- length(tau_vect)
 
-  # Index of pairs (s0, si)
-  j_vals <- 1:n
+  # Repeat index values
+  s1 <- rep(ind_s0, times = n * tau_len)
+  s2 <- rep(1:n, each = tau_len)
+  tau <- rep(tau_vect, times = n)
 
-  # Number of pairs
-  num_pairs <- n
-  # Number of spatio-temporal lags
-  num_st_lags <- n * tau_len
+  # Coordinates
+  s1x <- df_coords$Longitude[s1]
+  s1y <- df_coords$Latitude[s1]
+  s2x <- df_coords$Longitude[s2]
+  s2y <- df_coords$Latitude[s2]
 
-  # init dataframe
-  lags <- data.frame(s1 = integer(num_st_lags), s2 = integer(num_st_lags),
-                     s1x = integer(num_st_lags), s1y = integer(num_st_lags),
-                     s2x = integer(num_st_lags), s2y = integer(num_st_lags),
-                     hx = numeric(num_st_lags), hy = numeric(num_st_lags),
-                     tau = integer(num_st_lags), hnorm = numeric(num_st_lags))
-  lags$s1 <- rep(ind_s0, times = num_st_lags)
-  lags$s2 <- rep(j_vals, each = tau_len)
-  lags$tau <- rep(tau_lag, times = num_pairs)
-
-  # Get coordinates
-  lags$s1x <- df_coords$Longitude[lags$s1]
-  lags$s1y <- df_coords$Latitude[lags$s1]
-  lags$s2x <- df_coords$Longitude[lags$s2]
-  lags$s2y <- df_coords$Latitude[lags$s2]
-
-  # s1_coords <- unlist(df_coords[ind_s0, c("Longitude", "Latitude")])
-  # s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
-
-  # Vector coordinates between two sites
-  # Convert to meters using Haversine distance for hx, hy
+  # Compute spatial lags
+  hx <- s2x - s1x
+  hy <- s2y - s1y
   if (latlon) {
-    # Geodesic distance
-    for (i in 1:nrow(lags)) {
-      lags$hnorm <- haversine_distance_with_advection(lags$s1y, lags$s1x,
-                                              lags$s2y, lags$s2x,
-                                              c(0, 0), lags$tau)$distance
-
-    }
+    # For lat/lon: use Haversine distance
+    hnorm <- geosphere::distHaversine(cbind(s1x, s1y), cbind(s2x, s2y))
   } else {
-    # lags$hx <- s2_coords$Longitude - s1_coords[1]
-    # lags$hy <- s2_coords$Latitude - s1_coords[2]
-    lags$hx <- lags$s2x  - lags$s1x
-    lags$hy <- lags$s2y - lags$s1y
-    lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
+    # For Cartesian coordinates: Euclidean distance
+    hnorm <- sqrt(hx^2 + hy^2)
   }
 
-  return(lags)
+  # Build data.table
+  lags_dt <- data.table(
+    s1 = s1, s2 = s2,
+    s1x = s1x, s1y = s1y,
+    s2x = s2x, s2y = s2y,
+    hx = hx, hy = hy,
+    tau = tau,
+    hnorm = hnorm
+  )
+
+  # For lat/lon: optionally replace hnorm with geodesic distances (if needed)
+  # if (latlon) {
+  #   lags_dt[, hnorm := geosphere::distHaversine(cbind(s1x, s1y), cbind(s2x, s2y))]
+  # }
+
+  return(lags_dt)
 }
+
+# get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
+#                                     t0 = 0, tau_vect = 0:10, latlon = FALSE) {
+#   # Conditional point index in df_coords
+#   if (typeof(s0) == "list") { # TODO t0 inutile
+#     ind_s0 <- which(df_coords$Latitude == s0$Latitude &
+#                     df_coords$Longitude == s0$Longitude)
+#   } else {
+#     ind_s0 <- which(df_coords$Latitude == s0[2] & df_coords$Longitude == s0[1])
+#   }
+
+#   if (length(ind_s0) == 0) {
+#     stop("The conditional site (s0) is not found in df_coords")
+#   }
+
+#   # Dimensions
+#   n <- nrow(df_coords)
+#   tau_lag <- tau_vect
+#   tau_len <- length(tau_lag)
+
+#   # Index of pairs (s0, si)
+#   j_vals <- 1:n
+
+#   # Number of pairs
+#   num_pairs <- n
+#   # Number of spatio-temporal lags
+#   num_st_lags <- n * tau_len
+
+#   # init dataframe
+#   lags <- data.frame(s1 = integer(num_st_lags), s2 = integer(num_st_lags),
+#                      s1x = integer(num_st_lags), s1y = integer(num_st_lags),
+#                      s2x = integer(num_st_lags), s2y = integer(num_st_lags),
+#                      hx = numeric(num_st_lags), hy = numeric(num_st_lags),
+#                      tau = integer(num_st_lags), hnorm = numeric(num_st_lags))
+#   lags$s1 <- rep(ind_s0, times = num_st_lags)
+#   lags$s2 <- rep(j_vals, each = tau_len)
+#   lags$tau <- rep(tau_lag, times = num_pairs)
+
+#   # Get coordinates
+#   lags$s1x <- df_coords$Longitude[lags$s1]
+#   lags$s1y <- df_coords$Latitude[lags$s1]
+#   lags$s2x <- df_coords$Longitude[lags$s2]
+#   lags$s2y <- df_coords$Latitude[lags$s2]
+
+#   # s1_coords <- unlist(df_coords[ind_s0, c("Longitude", "Latitude")])
+#   # s2_coords <- df_coords[unique(lags$s2), c("Longitude", "Latitude")]
+
+#   # Vector coordinates between two sites
+#   # Convert to meters using Haversine distance for hx, hy
+#   if (latlon) {
+#     # Geodesic distance
+#     for (i in 1:nrow(lags)) {
+#       lags$hnorm <- haversine_distance_with_advection(lags$s1y, lags$s1x,
+#                                               lags$s2y, lags$s2x,
+#                                               c(0, 0), lags$tau)$distance
+
+#     }
+#   } else {
+#     # lags$hx <- s2_coords$Longitude - s1_coords[1]
+#     # lags$hy <- s2_coords$Latitude - s1_coords[2]
+#     lags$hx <- lags$s2x  - lags$s1x
+#     lags$hy <- lags$s2y - lags$s1y
+#     lags$hnorm <- sqrt(lags$hx^2 + lags$hy^2)
+#   }
+
+#   return(lags)
+# }
+
 
 
 
@@ -441,6 +500,34 @@ haversine_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) 
   distance_km[distance_km < 1e-6] <- 0
 
   return(list(distance = distance_km, theta = theta, theta_meteo = theta_meteo))
+}
+
+
+
+vector_distance_with_advection <- function(lat1, lon1, lat2, lon2, adv, tau) {
+  to_rad <- function(deg) deg * pi / 180
+  R <- 6371000  # rayon Terre en m
+
+  # Advection (en mètres)
+  adv_x <- adv[1] * tau
+  adv_y <- adv[2] * tau
+
+  # Conversion des déplacements en ° pour appliquer à lon2/lat2
+  lat2_adj <- lat2 + (adv_y / 111132.92)  # 1° latitude ≈ 111132.92 m
+  lon2_adj <- lon2 + (adv_x / (111412.84 * cos(to_rad(lat2))))  # corrige selon la latitude
+
+  # Latitude moyenne pour projection locale
+  lat_mean <- to_rad((lat1 + lat2_adj) / 2)
+
+  # Deltas en radians
+  delta_lat <- to_rad(lat2_adj - lat1)
+  delta_lon <- to_rad(lon2_adj - lon1)
+
+  # hy = distance nord-sud, hx = est-ouest, en km
+  hy <- (R * delta_lat) / 1000  # km
+  hx <- (R * delta_lon * cos(lat_mean)) / 1000  # km
+
+  return(list(hx = hx, hy = hy))
 }
 
 

@@ -31,6 +31,19 @@ get_chiq <- function(data, quantile) {
 }
 
 
+get_chi_empirical <- function(data, q) {
+  if (nrow(data) == 0) return(NA)
+
+  nb_joint_excess <- sum(data[,1] > q & data[,2] > q)
+  nb_excess_total <- sum(data[,1] > q)
+
+  if (nb_excess_total == 0) return(NA)
+
+  return(nb_joint_excess / nb_excess_total)
+}
+
+
+
 #' chispatemp_empirical function
 #' 
 #' Calculate the spatio-temporal chi extremogram for a given dataset
@@ -89,6 +102,91 @@ chispatemp_empirical <- function(data_rain, df_lags, quantile) {
 
 
 
+spatial_chi_pair <- function(rain_pair, q, zeros = TRUE) {
+  if (!zeros) {
+    nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
+    rain_pair <- rain_pair[nonzero_idx, , drop = FALSE]
+  }
+  
+  complete_idx <- complete.cases(rain_pair)
+  rain_cp <- rain_pair[complete_idx, , drop = FALSE]
+  
+  if (nrow(rain_cp) == 0) return(NA)
+  
+  # Calculate empirical chi
+  get_chi_empirical(rain_cp, q)
+}
+
+
+compute_all_pairs_chi <- function(data_rain, dist_mat, q = 0.99, zeros = TRUE) {
+  n_sites <- ncol(data_rain)
+  results <- data.frame(s1 = integer(0), s2 = integer(0), distance = numeric(0), chi = numeric(0))
+
+  for (s1 in 1:(n_sites - 1)) {
+    for (s2 in (s1 + 1):n_sites) {
+      dist_val <- dist_mat[s1, s2]
+      rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
+
+      # Filtrage des dates communes
+      valid_idx <- complete.cases(rain_pair)
+      if (!zeros) {
+        valid_idx <- valid_idx & rowSums(rain_pair != 0, na.rm = TRUE) > 0
+      }
+
+      rain_valid <- rain_pair[valid_idx, , drop = FALSE]
+
+      if (nrow(rain_valid) == 0) {
+        chi_val <- NA
+      } else {
+        num_joint_excess <- sum(rain_valid[,1] > q & rain_valid[,2] > q)
+        num_marginal_excess <- sum(rain_valid[,1] > q)
+        chi_val <- if (num_marginal_excess == 0) NA else num_joint_excess / num_marginal_excess
+      }
+
+      results <- rbind(results, data.frame(s1 = s1, s2 = s2, distance = dist_val, chi = chi_val))
+    }
+  }
+
+  return(results)
+}
+
+aggregate_chi_by_distance <- function(chi_table, nb_bins = 10, method = c("fixed", "quantile")) {
+  method <- match.arg(method)
+  
+  dist_vals <- chi_table$distance
+  if (method == "quantile") {
+    breaks <- unique(quantile(dist_vals, probs = seq(0, 1, length.out = nb_bins + 1)))
+  } else {
+    breaks <- seq(min(dist_vals), max(dist_vals), length.out = nb_bins + 1)
+  }
+
+  # Création de la classe pour chaque paire
+  chi_table$bin <- cut(chi_table$distance, breaks = breaks, include.lowest = TRUE, labels = FALSE)
+
+  # Moyenne de chi par bin
+  agg_result <- aggregate(chi ~ bin, data = chi_table, FUN = mean, na.rm = TRUE)
+
+  # Ajouter le centre des classes de distance
+  bin_mids <- (breaks[-1] + breaks[-length(breaks)]) / 2
+  agg_result$distance_mid <- bin_mids[agg_result$bin]
+
+  return(agg_result)
+}
+
+spatial_chi <- function(data_rain, dist_mat, q, zeros = TRUE,
+                        nb_bins = 10, bin_method = "quantile") {
+  bin_method <- match.arg(bin_method)
+
+  chi_by_pair <- compute_all_pairs_chi(data_rain, dist_mat, q = q,
+                                       zeros = zeros)
+
+  agg_chi <- aggregate_chi_by_distance(chi_by_pair, nb_bins = nb_bins, 
+                                        method = bin_method)
+  chispa_df <- data.frame(lagspa = agg_chi$distance_mid,
+                     chi = agg_chi$chi)
+  return(chispa_df)
+}
+
 # TEMPORAL CHI -----------------------------------------------------------------
 
 
@@ -110,57 +208,57 @@ chispatemp_empirical <- function(data_rain, df_lags, quantile) {
 #'
 #' @export
 temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
-  # number of stations
   nsites <- ncol(data_rain)
-  Tmax <- nrow(data_rain)
   tau_vect <- 0:tmax
-  # get maximum number of observations
   chi_s_temp <- matrix(1, nrow = nsites, ncol = length(tau_vect))
-  q <- quantile
   for (s in 1:nsites) {
-    rain_Xs <- drop_na(data_rain[s]) # for one fixed station
+    rain_Xs <- na.omit(data_rain[, s])
+    
     if (!zeros) {
-      Xs <- data.frame("site" = rain_Xs[rain_Xs > 0, ])
+      rain_Xs <- rain_Xs[rain_Xs > 0]
+    } else if (is.list(rain_Xs)) {
+      rain_Xs <- rain_Xs[[1]]
     } else {
-      Xs <- rain_Xs
+      rain_Xs <- as.vector(rain_Xs)
     }
-    # get quantile for each site if matrix
-    if (is.matrix(quantile)) {
-      q <- quantile[s, s]
-    }
-    Xs_unif <- data.frame(rank(Xs) / (nrow(Xs) + 1))
-    mean_excess_Xs <- sum(Xs_unif > q) # mean excess for each site
-    for (t in tau_vect) {
-      rain_nolag <- rain_Xs[1:(Tmax - t), ] # without lag (t_k)
-      rain_lag <- rain_Xs[(1 + t):Tmax, ] # with lag t (t_k + t)
-      data_cp <- cbind(rain_nolag, rain_lag) # get couple
+    
+    if (length(rain_Xs) <= tmax) next  # skip if not enough data
 
-      if (!zeros) {
-        # remove zeros
-        Xs_cp <- data_cp[rowSums(data_cp) > 0, ]
-      } else {
-        Xs_cp <- data_cp
+    # transform to uniform using rank
+    ranks <- rank(rain_Xs) / (length(rain_Xs) + 1)
+    
+    # get quantile (possibly site-specific)
+    q <- if (is.matrix(quantile)) quantile[s, s] else quantile
+    
+    # count denominator (number of exceedances at lag 0)
+    denom <- sum(ranks > q)
+
+    for (tau in tau_vect) {
+      if (tau >= length(ranks)) {
+        chi_s_temp[s, tau + 1] <- NA
+        next
       }
-
-      n <- nrow(Xs_cp)
-      # Transform data into uniform ranks
-      rain_unif <- cbind(rank(Xs_cp[, 1]) / (n + 1), rank(Xs_cp[, 2]) / (n + 1))
-
-      # check excess above threshold q
-      # P(Xs,t > q | Xs,t+tau > q) / P(Xs,t > q)
-      excess_t <- sum(rain_unif[, 1] > q & rain_unif[, 2] > q)
-      chival <- excess_t / mean_excess_Xs
-      chi_s_temp[s, t + 1] <- chival
+      
+      R1 <- ranks[1:(length(ranks) - tau)]
+      R2 <- ranks[(1 + tau):length(ranks)]
+      
+      numerator <- sum(R1 > q & R2 > q)
+      
+      chival <- if (denom > 0) numerator / denom else NA
+      chi_s_temp[s, tau + 1] <- chival
     }
-    # print(paste0(s, "/", nsites)) # print progress
   }
-  if (mean) { # return mean values by lag
+  
+  if (mean) {
     chi_temp <- colMeans(chi_s_temp, na.rm = TRUE)
-  } else { # return all values
+  } else {
     chi_temp <- chi_s_temp
   }
+  
+  # restrict values to [1e-8, 1 - 1e-8]
   chi_temp[chi_temp <= 0] <- 1e-8
   chi_temp[chi_temp >= 1] <- 1 - 1e-8
+  
   return(chi_temp)
 }
 
@@ -232,7 +330,6 @@ get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
   if (0 %in% df_chi$lag) {
     # remove line with 0 lag
     df_chi <- df_chi[df_chi$lag != 0, ]
-      # df_chi$lag <- df_chi$lag + 0.0001
   }
 
   chitemp <- df_chi$chi
@@ -253,8 +350,53 @@ get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
   if (summary) {
     print(sum_wls_temp)
   }
-  return(c(c_temp, beta_temp, alpha_temp))
+
+  # get significance of parameters
+  p_values <- df_wls_temp$`Pr...t..`
+  # get significance symbols for parameters
+  significance <- ifelse(p_values < 0.001, "***",
+                         ifelse(p_values < 0.01, "**",
+                                ifelse(p_values < 0.05, "*", "")))
+  return(c(c_temp, beta_temp, alpha_temp, significance))
 }
+
+get_estimate_variotemp <- function(df_chi, weights, summary = FALSE, lag_unit = 1) {
+  # regression on temporal chi without 0 lag
+  if (0 %in% df_chi$lag) {
+    # remove line with 0 lag
+    df_chi <- df_chi[df_chi$lag != 0, ]
+  }
+
+  chitemp <- df_chi$chi
+  lagtemp <- df_chi$lag
+
+  # regression with log lag
+  dftemp <- data.frame(tchi = eta(chitemp), lagtemp = log(lagtemp))
+
+  sum_wls_temp <- temporal_chi_WLSE(dftemp, weights)
+  df_wls_temp <- data.frame(sum_wls_temp$coefficients)
+
+  alpha_temp <- df_wls_temp$Estimate[2]
+  c_temp <- df_wls_temp$Estimate[1]
+
+  # Correction de l'intercept pour que beta soit à la minute
+  c_temp_minute <- c_temp + alpha_temp * log(lag_unit)
+  beta_temp_minute <- exp(c_temp_minute)
+
+  if (summary) {
+    print(sum_wls_temp)
+  }
+
+  # significance
+  p_values <- df_wls_temp$`Pr...t..`
+  significance <- ifelse(p_values < 0.001, "***",
+                         ifelse(p_values < 0.01, "**",
+                                ifelse(p_values < 0.05, "*", "")))
+
+  # retourne le c non corrigé (pour info), beta corrigé, alpha, et significativité
+  return(c(c_temp, beta_temp_minute, alpha_temp, significance))
+}
+
 
 
 # SPATIAL CHI ------------------------------------------------------------------
@@ -315,11 +457,11 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
   lags <- get_h_vect(rad_mat, NA, intervals = TRUE)
   # get mid values for each intervals for the plot
   if (mid) {
-    h_vect <- spatial_mean_lags(lags) # get mean values for the plot
+    h_vect <- spatial_mean_lags(lags, mid = mid) # get mean values for the plot
   } else {
     h_vect <- lags
   }
-  lags_sup <- lags[-1] # we don't need the 0, only superior born
+  lags_sup <- lags # we don't need the 0, only superior born
   for (h in h_vect){
     # station number inside h lag
     ind_h <- which(h_vect == h)
@@ -355,7 +497,55 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
 }
 
 
-#' Calculate spatial chi-squared distances
+spatial_chi <- function(rad_mat, data_rain, breaks, quantile, zeros = TRUE, mid = TRUE) {
+  chi_slag <- numeric(0)
+  q <- quantile
+  
+  lags_inf <- breaks[-length(breaks)]
+  lags_sup <- breaks[-1]
+  h_vect <- if (mid) (lags_inf + lags_sup) / 2 else lags_sup
+
+  for (i in seq_along(h_vect)) {
+    cat(sprintf("h = %.2f\n", h_vect[i]))
+    h_sup <- lags_sup[i]
+    indices <- which(rad_mat == h_sup, arr.ind = TRUE)
+
+    nb_pairs <- nrow(indices)
+    cat(sprintf("nb pairs: %d\n", nb_pairs))
+
+    if (nb_pairs == 0) {
+      chi_slag <- c(chi_slag, NA)
+    } else {
+      chi_vals <- numeric(nb_pairs)
+
+      for (j in seq_len(nb_pairs)) {
+        s1 <- indices[j, 1]
+        s2 <- indices[j, 2]
+        rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
+        complete_idx <- complete.cases(rain_pair)
+
+        if (!zeros) {
+          nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
+          complete_idx <- complete_idx & nonzero_idx
+        }
+
+        rain_cp <- rain_pair[complete_idx, , drop = FALSE]
+
+        q_val <- if (length(q) > 1) q[s1, s2] else q
+        chi_vals[j] <- get_chiq(rain_cp, q_val)
+      }
+
+      chi_mean <- mean(chi_vals, na.rm = TRUE)
+      cat(sprintf("chi = %.4f\n", chi_mean))
+      chi_slag <- c(chi_slag, chi_mean)
+    }
+  }
+
+  data.frame(chi = chi_slag, lagspa = h_vect)
+}
+
+
+#' Calculate spatial chi for all lags
 #'
 #' This function calculates the spatial extremogram for a given
 #' distance matrix and rainfall data.
@@ -446,6 +636,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 
   for (h in h_vect) {
     chi_val <- c()
+    print(h)
     # get index pairs
     df_dist_h <- df_dist[df_dist$value == h, ]
     ind_s2 <- as.numeric(as.character(df_dist_h$X)) # get index of s2
@@ -492,6 +683,13 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #'
 #' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
+  # remove 0 lag
+  if (0 %in% chispa$lag) {
+    # remove line with 0 lag
+    chispa <- chispa[chispa$lag != 0, ]
+      # df_chi$lag <- df_chi$lag + 0.0001
+  }
+
   # eta transformation
   etachispa_df <- data.frame(chi = eta(chispa$chi),
                            lagspa = log(chispa$lagspa))
@@ -521,7 +719,80 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   if (summary) {
     print(sum_wls_lag)
   }
-  return(c(c_spa, beta_spa, alpha_spa))
+
+  # get significance of parameters
+  p_values <- wls_coef$`Pr...t..`
+  # get significance symbols for parameters
+  significance <- ifelse(p_values < 0.001, "***",
+                         ifelse(p_values < 0.01, "**",
+                                ifelse(p_values < 0.05, "*", "")))
+  return(c(c_spa, beta_spa, alpha_spa, significance))
+}
+
+
+
+#' Estimate spatial variogram parameters using WLSE
+#'
+#' @param chispa Data frame with columns: lagspa (in meters), chi
+#' @param weights Type of weighting: "residuals", "exp", or "none"
+#' @param summary Logical, print model summary or not
+#' @param lag_unit Unit conversion factor for lags (e.g. 1000 for km, 1 for m)
+#'
+#' @return A data.frame with columns: beta, alpha, signif_beta, signif_alpha
+#' @export
+get_estimate_variospa <- function(chispa, weights = "exp", summary = FALSE, lag_unit = 1) {
+  # Remove lag 0 if present
+  if (0 %in% chispa$lagspa) {
+    chispa <- chispa[chispa$lagspa != 0, ]
+  }
+
+  # Convert lag to desired unit
+  chispa$lagspa <- chispa$lagspa / lag_unit
+
+  # Eta transformation and log-lag
+  df_eta <- data.frame(
+    chi = eta(chispa$chi),
+    lagspa = log(chispa$lagspa)
+  )
+
+  # Define weights
+  ws <- switch(weights,
+               "residuals" = {
+                 model <- lm(chi ~ lagspa, data = df_eta)
+                 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+               },
+               "exp" = exp(-df_eta$lagspa^2),
+               "none" = rep(1, nrow(df_eta)),
+               stop("Unknown weight type")
+  )
+
+  # Fit WLSE
+  model <- lm(chi ~ lagspa, data = df_eta, weights = ws)
+  model_sum <- summary(model)
+
+  # Extract coefficients
+  coefs <- data.frame(model_sum$coefficients)
+  c_m <- coefs$Estimate[1]
+  alpha <- coefs$Estimate[2]
+  beta <- exp(c_m)
+  c_km <- c_m - alpha * log(lag_unit)  # Adjust c for km unit
+  beta_km <- exp(c_km)
+
+  # Significance stars
+  p_values <- coefs$`Pr...t..`
+  signif <- ifelse(p_values < 0.001, "***",
+                   ifelse(p_values < 0.01, "**",
+                          ifelse(p_values < 0.05, "*", "")))
+
+  if (summary) print(model_sum)
+
+  return(data.frame(
+    c = c_km,
+    beta = beta_km,
+    alpha = alpha,
+    signif_beta = signif[1],
+    signif_alpha = signif[2]
+  ))
 }
 
 
@@ -545,6 +816,14 @@ eta <- function(chi) {
   chi <- 2 * log(stdnorm)
   return(chi)
 }
+
+eta <- function(chi) {
+  chi <- pmin(pmax(chi, 1e-6), 1 - 1e-6)  # clamp chi into (0,1)
+  stdnorm <- qnorm(1 - 0.5 * chi)
+  transformed <- 2 * log(stdnorm)
+  return(transformed)
+}
+
 
 #' Calculate the theorical spatio-temporal variogram
 #'
@@ -760,3 +1039,104 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 
   return(df_result)
 }
+
+
+
+#' Estimate spatial variogram parameters using WLSE
+#'
+#' This function estimates the spatial variogram parameters using a transformed
+#' spatial extremogram and weighted least squares estimation (WLSE).
+#'
+#' @param chispa A data frame with columns:
+#'        - `chi`: empirical extremogram values
+#'        - `lagspa`: spatial lags (in km, m, etc.)
+#' @param weights Type of weights to use: "residuals", "exp", or "none"
+#' @param summary Logical, whether to print regression summary
+#'
+#' @return A numeric vector: c(intercept, beta, alpha)
+#'         - intercept: log(beta)
+#'         - beta: scale parameter
+#'         - alpha: rate of spatial decay (in original lag units)
+#'
+#' @export
+get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
+  # eta transformation
+  # etachispa_df <- data.frame(chi = eta(chispa$chi),
+  #                          lagspa = log(chispa$lagspa))
+
+  if (weights == "residuals") {
+    # LS reg (clasical model)
+    model <- lm(chi ~ lagspa, data = etachispa_df)
+    # define weights to use
+    ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+  } else if (weights == "exp") {
+    ws <- exp(-(etachispa_df$lagspa)^2)
+  } else if (weights == "none") {
+    ws <- rep(1, length(etachispa_df$lagspa))
+  }
+
+  # perform weighted least squares regression
+  wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
+
+  # view summary of model
+  sum_wls_lag <- summary(wls_model_spa)
+
+  wls_coef <- data.frame(sum_wls_lag$coefficients)
+
+  alpha_spa <- wls_coef$Estimate[2]
+  c_spa <- wls_coef$Estimate[1]
+  beta_spa <- exp(c_spa)
+  if (summary) {
+    print(sum_wls_lag)
+  }
+  return(c(c_spa, beta_spa, alpha_spa))
+}
+
+
+
+# get_estimate_variospa <- function(chispa, weights = "none", summary = FALSE) {
+#   # Remove lag = 0 if present (undefined or unstable)
+#   chispa <- chispa[chispa$lagspa != 0, ]
+
+#   # Normalize lags (to avoid instability with meters vs km)
+#   max_lag <- max(chispa$lagspa)
+#   chispa$lag_scaled <- chispa$lagspa / max_lag
+
+#   # Apply eta transformation to chi values
+#   etachispa_df <- data.frame(
+#     chi_eta = eta(chispa$chi),
+#     lag_scaled = chispa$lag_scaled
+#   )
+
+#   # Define weights
+#   if (weights == "residuals") {
+#     # Initial OLS to estimate variance of residuals
+#     ols_model <- lm(chi_eta ~ lag_scaled, data = etachispa_df)
+#     resid_model <- lm(abs(ols_model$residuals) ~ ols_model$fitted.values)
+#     ws <- 1 / (fitted(resid_model)^2)
+#   } else if (weights == "exp") {
+#     # Exponential decay on normalized lag
+#     ws <- exp(-(etachispa_df$lag_scaled)^2)
+#   } else if (weights == "none") {
+#     ws <- rep(1, nrow(etachispa_df))
+#   } else {
+#     stop("Invalid 'weights' value. Choose 'residuals', 'exp', or 'none'.")
+#   }
+
+#   # Weighted least squares regression
+#   wls_model <- lm(chi_eta ~ lag_scaled, data = etachispa_df, weights = ws)
+
+#   if (summary) {
+#     print(summary(wls_model))
+#   }
+
+#   # Extract and rescale parameters
+#   intercept <- coef(wls_model)[1]
+#   slope <- coef(wls_model)[2]
+
+#   beta <- exp(intercept)
+#   alpha <- slope / max_lag  # Rescale to original lag units
+
+#   return(c(intercept = intercept, beta = beta, alpha = alpha))
+# }
+

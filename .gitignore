@@ -7,6 +7,7 @@
 *.RData
 .RDataTmp
 data
+images
 .csv
 
 # Imags files
