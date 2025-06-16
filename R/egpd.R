@@ -230,7 +230,7 @@ compute_rmse <- function(y, left_censore) {
 
 
 
-process_site <- function(y, site_name, save_path) {
+process_site <- function(y, site_name, save_path, R = 1000) {
   y <- y[y > 0]
   if (length(y) < 20) return(NULL)  # trop peu de données
 
@@ -243,7 +243,7 @@ process_site <- function(y, site_name, save_path) {
   fit <- fit.extgp(y, model = 1, method = "mle",
                    init = c(1, inits[1], inits[2]),
                    censoring = c(best_cens, Inf),
-                   plots = FALSE, confint = FALSE, ncpus = 7, R = 1000)
+                   plots = FALSE, confint = FALSE, ncpus = 7, R = R)
 
   param_mle <- fit$fit$mle
   probs <- ppoints(length(y))

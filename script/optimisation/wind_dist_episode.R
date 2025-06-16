@@ -375,3 +375,64 @@ ggplot(df_long, aes(x = datetime, y = value, color = variable)) +
 filename <- paste(im_folder, "wind/episode/", 
                   "wind_episode_", ep_id, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+
+
+
+
+compute_wind_episode_vector_mean <- function(episode, wind_df) {
+  # Récupérer les timestamps de l'épisode
+  timestamps <- as.POSIXct(rownames(episode), tz = "UTC")
+  episode$timestamp <- timestamps
+  
+  # Extraire les données de vent correspondant aux timestamps
+  wind_subset <- wind_df %>% filter(datetime %in% episode$timestamp)
+  
+  if (nrow(wind_subset) == 0) {
+    return(data.frame(
+      n_obs = 0,
+      FF_vector_mean = NA,
+      DD_vector_mean = NA,
+      FXY_max = NA,
+      DXY_max = NA,
+      cardDir_max_gust = NA
+    ))
+  }
+
+  # Convertir direction en radians
+  theta_rad <- wind_subset$DD * pi / 180
+  
+  # Calcul des composantes u (Est) et v (Nord)
+  u <- wind_subset$FF * cos(theta_rad)
+  v <- wind_subset$FF * sin(theta_rad)
+  
+  # Moyenne des composantes
+  u_mean <- mean(u, na.rm = TRUE)
+  v_mean <- mean(v, na.rm = TRUE)
+  
+  # Force et direction du vent moyen résultant
+  FF_vector_mean <- sqrt(u_mean^2 + v_mean^2)
+  DD_vector_mean <- (atan2(v_mean, u_mean) * 180 / pi) %% 360
+
+  # Rafale maximale
+  max_idx <- which.max(wind_subset$FXY)
+  
+  return(data.frame(
+    n_obs = nrow(wind_subset),
+    FF_vector_mean = FF_vector_mean,
+    DD_vector_mean = DD_vector_mean,
+    FXY_max = max(wind_subset$FXY, na.rm = TRUE),
+    DXY_max = wind_subset$DXY[max_idx],
+    cardDir_max_gust = wind_subset$cardDir[max_idx]
+  ))
+}
+
+wind_per_episode <- Map(compute_wind_episode_vector_mean, list_episodes,
+                        MoreArgs = list(wind_df = wind_mtp))
+
+wind_ep_df <- do.call(rbind, wind_per_episode)
+head(wind_ep_df)
+
+wind_ep_df[wind_ep_df$n_exces > 1,]
+

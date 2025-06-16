@@ -289,9 +289,10 @@ kable(df_result, format = "latex") %>%
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-q <- 0.995 # quantile
+q <- 0.998 # quantile
 # get central site from sites_coords
-comephore_subset <- comephore[rownames(comephore) >= "2020-01-01", ]
+# comephore_subset <- comephore[rownames(comephore) >= "2020-01-01", ]
+comephore_subset <- comephore
 set_st_excess <- get_spatiotemp_excess(comephore_subset, q)
 
 list_s <- set_st_excess$list_s
@@ -456,179 +457,23 @@ ggsave(filename = paste0(im_folder, "optim/comephore/sum_excesses_histogram_q_",
                          "km_tmax_", tmax, "h_delta_", delta, ".png"),
        width = 20, height = 15, units = "cm")
 
-# does it follow a BINOMIAL distribution?
-# library(MASS)
-
 
 # ADD WIND DATA ################################################################
 
-# list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-#                                 episode_size = episode_size, unif = FALSE)
-
-# list_episodes <- list_episodes_points$episodes
-wind_per_episode <- Map(compute_wind_episode, list_episodes, s0_list, u_list,
-               MoreArgs = list(wind_df = wind_mtp, speed_time = 0, nb_cardinal = 8))
+wind_per_episode <- Map(compute_wind_episode_vector_mean, list_episodes,
+               MoreArgs = list(wind_df = wind_mtp))
 
 wind_ep_df <- do.call(rbind, wind_per_episode)
 head(wind_ep_df)
 tail(wind_ep_df)
-# # plot FF and FF_mean_excess
-# p <- ggplot(wind_ep_df, aes(x = FF, y = FF_mean_excess)) +
-#   geom_point(color = btfgreen) +
-#   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-#   btf_theme +
-#   xlab("Wind speed (FF)") +
-#   ylab("Mean excess wind speed (FF_mean_excess)") +
-#   ggtitle("Wind speed vs Mean excess wind speed")
-# p
 
-# # plot FF hist and FF_mean_excess hist
-# p1 <- ggplot(wind_ep_df, aes(x = FF)) +
-#   geom_histogram(bins = 30, fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-#   btf_theme +
-#   xlab("Wind speed (FF)") +
-#   ylab("Count") +
-#   ggtitle("Histogram of wind speed (FF)")
-# p2 <- ggplot(wind_ep_df, aes(x = FF_mean_excess)) +
-#   geom_histogram(bins = 30, fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-#   btf_theme +
-#   xlab("Mean excess wind speed (FF_mean_excess)") +
-#   ylab("Count") +
-#   ggtitle("Histogram of mean excess wind speed (FF_mean_excess)")
-# grid.arrange(p1, p2, ncol = 2)
-
-# # plot comparison of FF and FF_mean_excess
-# p <- ggplot(wind_ep_df, aes(x = FF, y = FF_mean_excess)) +
-#   geom_point(color = btfgreen) +
-#   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-#   btf_theme +
-#   xlab("Wind speed (FF)") +
-#   ylab("Mean excess wind speed (FF_mean_excess)") +
-#   ggtitle("Wind speed vs Mean excess wind speed")
-# p
-
-# cardinal_8_labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-
-# wind_ep_df <- wind_ep_df %>%
-#   mutate(
-#     DD_mean_bin = cut(DD_mean,
-#                       breaks = seq(0, 360, by = 45),
-#                       include.lowest = TRUE,
-#                       right = FALSE,
-#                       labels = cardinal_8_labels),
-    
-#     DD_excess_bin = cut(DD_excess,
-#                         breaks = seq(0, 360, by = 45),
-#                         include.lowest = TRUE,
-#                         right = FALSE,
-#                         labels = cardinal_8_labels),
-    
-#     DD_t0_bin = cut(DD_t0,
-#                     breaks = seq(0, 360, by = 45),
-#                     include.lowest = TRUE,
-#                     right = FALSE,
-#                     labels = cardinal_8_labels)
-#   )
-
-# wind_plot_df <- wind_ep_df %>% filter(!is.na(DD_mean_bin),
-#                                       !is.na(DD_excess_bin),
-#                                       !is.na(DD_t0_bin))
-
-# p_rose_excess <- ggplot(wind_plot_df, aes(x = DD_excess_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/8) +
-#   btf_theme +
-#   xlab("Direction for exceedances") +
-#   ylab("Count")
-
-# p_rose_t0 <- ggplot(wind_plot_df, aes(x = DD_t0_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/8) +
-#   btf_theme +
-#   xlab("Direction in t0") +
-#   ylab("Count")
-
-# p_rose_mean <- ggplot(wind_plot_df, aes(x = DD_mean_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/8) +
-#   btf_theme +
-#   xlab("Mean direction") +
-#   ylab("Count")
-
-# grid.arrange(p_rose_excess, p_rose_t0, p_rose_mean, ncol = 3)
-
-# # save the plot
-# wind_filename <- paste0(im_folder, "optim/comephore/wind_per_episode",
-#                         "_q_", q * 1000, "_min_spatial_dist_",
-#                         min_spatial_dist, "km_tmax_", tmax,
-#                         "h_delta_", delta, "_8cards.png")
-# ggsave(plot = grid.arrange(p_rose_excess, p_rose_t0, p_rose_mean, ncol = 3),
-#        filename = wind_filename, width = 20, height = 15, units = "cm")
-
-
-# cardinal_4_labels <- c("N", "E", "S", "W")
-
-# wind_ep_df <- wind_ep_df %>%
-#   mutate(
-#     DD_mean_bin = cut(DD_mean,
-#                       breaks = seq(0, 360, by = 90),
-#                       include.lowest = TRUE,
-#                       right = FALSE,
-#                       labels = cardinal_4_labels),
-    
-#     DD_excess_bin = cut(DD_excess,
-#                         breaks = seq(0, 360, by = 90),
-#                         include.lowest = TRUE,
-#                         right = FALSE,
-#                         labels = cardinal_4_labels),
-    
-#     DD_t0_bin = cut(DD_t0,
-#                     breaks = seq(0, 360, by = 90),
-#                     include.lowest = TRUE,
-#                     right = FALSE,
-#                     labels = cardinal_4_labels)
-#   )
-
-# wind_plot_df <- wind_ep_df %>%
-#   filter(!is.na(DD_mean_bin), !is.na(DD_excess_bin), !is.na(DD_t0_bin))
-
-# p_rose_excess <- ggplot(wind_plot_df, aes(x = DD_excess_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/4) +
-#   btf_theme +
-#   xlab("Direction for exceedances") +
-#   ylab("Count")
-
-# p_rose_t0 <- ggplot(wind_plot_df, aes(x = DD_t0_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/4) +
-#   btf_theme +
-#   xlab("Direction in t0") +
-#   ylab("Count")
-
-# p_rose_mean <- ggplot(wind_plot_df, aes(x = DD_mean_bin)) +
-#   geom_bar(fill = btfgreen, alpha = 0.5) +
-#   coord_polar(start = -pi/4) +
-#   btf_theme +
-#   xlab("Mean direction") +
-#   ylab("Count")
-
-# rose_plot <- grid.arrange(p_rose_excess, p_rose_t0, p_rose_mean, ncol = 3)
-
-# wind_filename <- paste0(im_folder, "optim/comephore/wind_per_episode",
-#                         "_q_", q * 1000, "_min_spatial_dist_",
-#                         min_spatial_dist, "km_tmax_", tmax,
-#                         "h_delta_", delta, "_4cards.png")
-# ggsave(plot = rose_plot,
-#        filename = wind_filename,
-#        width = 20, height = 15, units = "cm")
 
 # OPTIMIZATION #################################################################
 
 # Compute the wind vector for each episode (-FF because it's the wind direction)
 # sin and cos are shifted because 0 degree means North
-wind_ep_df$vx <- -wind_ep_df$FF_mean_excess * sin(wind_ep_df$DD_excess * pi / 180)
-wind_ep_df$vy <- -wind_ep_df$FF_mean_excess * cos(wind_ep_df$DD_excess * pi / 180)
+wind_ep_df$vx <- -wind_ep_df$FF_vector_mean * sin(wind_ep_df$DD_vector_mean * pi / 180)
+wind_ep_df$vy <- -wind_ep_df$FF_vector_mean * cos(wind_ep_df$DD_vector_mean * pi / 180)
 
 # if values of vx or vy are really close to 0, set them to 0
 wind_ep_df$vx[abs(wind_ep_df$vx) < 1e-08] <- 0
@@ -660,7 +505,7 @@ result <- optim(par = init_param, fn = neg_ll_composite,
         wind_df = wind_opt,
         latlon = FALSE,
         directional = TRUE,
-        fixed_eta1 = TRUE,
+        fixed_eta1 = FALSE,
         fixed_eta2 = TRUE,
         convert_in_hours = TRUE,
         convert_in_km = TRUE,
@@ -674,145 +519,7 @@ result <- optim(par = init_param, fn = neg_ll_composite,
 
 result
 
-# [1] 0.25091925 1.09286093 0.01410377 0.71778141 0.66585920 0.99900000 avec init 1, 1
-
-# [1] 0.2505004 1.0932247 0.0160466 0.7181440 0.3378168 1.0000000  121433.4 avec init 0.5, 1
-
-
-
-nll_list <- c()
-beta1_list <- seq(0.001, 0.05, length.out = 30)
-for (beta in beta1_list) {
-  params <- c(beta, beta2, alpha1, alpha2, 0.2, 1)
-  nll <- neg_ll_composite(params, list_lags = lags_opt,
-                          list_episodes = episodes_opt,
-                          list_excesses = excesses_opt,
-                          hmax = 7000,
-                          wind_df = wind_opt,
-                          latlon = FALSE,
-                          directional = TRUE,
-                          convert_in_hours = T,
-                          convert_in_km = T)
-  nll_list <- c(nll_list, nll)
-}
-
-
-min_beta1 <- beta1_list[which.min(nll_list)]
-min_nll <- min(nll_list)
-
-df_plot <- data.frame(beta1 = beta1_list, nll = nll_list)
-# Plot
-p <- ggplot(df_plot, aes(x = beta1, y = nll)) +
-  geom_line(color = "#4b4b8a", linewidth = 1.2) +
-  # geom_point(aes(x = min_beta1, y = min_nll), color = "red", size = 3) +
-  # geom_vline(xintercept = min_beta1, linetype = "dashed", color = "red") +
-  # geom_label(aes(x = min_beta1, y = min_nll, 
-  #                label = sprintf("minimum in %.4f", min_beta1)),
-  #            vjust = -1.2, hjust = 0, size = 4, fill = "white", color = "red") +
-  labs(x = expression(beta[1]), y = "- Log-likelihood") +
-  theme_minimal()
-
-p
-
-# Save the plot
-end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
-                      "h_delta_", delta, ".pdf", sep = "")
-filename <- paste0(im_folder, "optim/comephore/neg_ll_beta1_", end_filename, sep = "")
-ggsave(plot= p, filename = filename, width = 20, height = 15, units = "cm")
-
-
-
-nll_list <- c()
-eta1_list <- seq(0.1, 0.5, length.out = 50)
-for (eta in eta1_list) {
-  params <- c(beta1, beta2, alpha1, alpha2, eta, 1)
-  nll <- neg_ll_composite(params, list_lags = lags_opt,
-                          list_episodes = episodes_opt,
-                          list_excesses = excesses_opt,
-                          hmax = 5000,
-                          wind_df = wind_opt,
-                          latlon = F,
-                          directional = T,
-                          convert_in_hours = T,
-                          convert_in_km = T)
-  nll_list <- c(nll_list, nll)
-}
-
-min_eta1 <- eta1_list[which.min(nll_list)]
-min_nll <- min(nll_list)
-
-df_plot <- data.frame(eta = eta1_list, nll = nll_list)
-# Plot
-p <- ggplot(df_plot, aes(x = eta, y = nll)) +
-  geom_line(color = "#4b4b8a", linewidth = 1.2) +
-  geom_point(aes(x = min_eta1, y = min_nll), color = "red", size = 3) +
-  geom_vline(xintercept = min_eta1, linetype = "dashed", color = "red") +
-  geom_label(aes(x = min_eta1, y = min_nll, 
-                 label = sprintf("minimum in %.4f", min_eta1)),
-             vjust = -1.2, hjust = 0, size = 4, fill = "white", color = "red") +
-  labs(x = expression(eta[1]), y = "- Log-likelihood") +
-  theme_minimal()
-p
-
-# Save the plot
-end_filename <- paste(q * 1000, "q_", min_spatial_dist, "km_", tmax,
-                      "h_delta_", delta, ".pdf", sep = "")
-filename <- paste0(im_folder, "optim/comephore/neg_ll_eta1_", end_filename, sep = "")
-ggsave(plot= p, filename = filename, width = 20, height = 15, units = "cm")
-
-
-
-# varying eta1 and eta2
-# nll_list <- c()
-# eta1_list <- seq(0.1, 3, length.out = 30)
-# eta2_list <- seq(0.1, 3, length.out = 30)
-
-# for (eta1 in eta1_list) {
-#   for (eta2 in eta2_list) {
-#     params <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
-#     nll <- neg_ll_composite(params, list_lags = lags_opt,
-#                             list_episodes = episodes_opt,
-#                             list_excesses = excesses_opt,
-#                             hmax = 5,
-#                             wind_df = wind_df,
-#                             latlon = F,
-#                             directional = T,
-#                             convert_in_hours = T)
-#     nll_list <- c(nll_list, nll)
-#   }
-# }
-
-
-# # Convert the list to a matrix for reshaping
-# nll_matrix <- matrix(nll_list, nrow = length(eta1_list), byrow = TRUE)
-# # Create a data frame for ggplot
-# df_plot <- expand.grid(eta1 = eta1_list, eta2 = eta2_list)
-# df_plot$nll <- as.vector(nll_matrix)
-# # Plot the heatmap
-# p <- ggplot(df_plot, aes(x = eta1, y = eta2, fill = nll)) +
-#   geom_tile() +
-#   scale_fill_gradient(low = "blue", high = "red") +
-#   labs(x = expression(eta[1]), y = expression(eta[2]), fill = "- Log-likelihood") +
-#   theme_minimal()
-# p
-
-# # 3D plot
-# library(plotly)
-
-# p_3d <- plot_ly(df_plot, x = ~eta1, y = ~eta2, z = ~nll, type = "surface") %>%
-#   layout(scene = list(xaxis = list(title = "eta1"),
-#                       yaxis = list(title = "eta2"),
-#                       zaxis = list(title = "- Log-likelihood")))
-# # Save the 3D plot
-# filename <- paste0(im_folder, "optim/comephore/neg_ll_eta1_eta2_",
-#                   end_filename, sep = "")
-# htmlwidgets::saveWidget(as_widget(p_3d), filename, selfcontained = TRUE)
-# # Save the 2D heatmap
-# filename <- paste0(im_folder, "optim/comephore/neg_ll_eta
-# 1_eta2_heatmap_",
-#                   end_filename, sep = "")
-# ggsave(plot = p, filename = filename, width = 20, height = 15, units = "cm")
-
+# [1] 0.1919899 1.2861977 0.2326258 0.6075999 0.6722028 0.9990000
 
 
 # EMPIRICAL VARIOGRAM ##########################################################
@@ -840,3 +547,57 @@ vg_emp <- variogram(rain ~ 1, data = rain_df)
 plot(vg_emp, main = paste("Variogramme spatial à", t0))
 
 
+# VARIOGRAM PLOTS ##############################################################
+
+# compute variogram with parameters
+df_result <- data.frame(beta1 = result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        eta1 = result$par[5],
+                        eta2 = result$par[6])
+
+beta1 <- df_result$beta1
+beta2 <- df_result$beta2
+alpha1 <- df_result$alpha1
+alpha2 <- df_result$alpha2
+eta1 <- df_result$eta1
+eta2 <- df_result$eta2
+
+
+# Compute advection for each row
+adv_df_ep <- wind_df %>%
+  mutate(
+    adv_x = (abs(vx)^eta1) * sign(vx) * eta2,
+    adv_y = (abs(vy)^eta1) * sign(vy) * eta2
+  )
+
+# remove NA values
+adv_df_ep <- adv_df_ep[!is.na(adv_df_ep$adv_x), ]
+head(adv_df_ep)
+
+episode <- list_episodes[[1]]
+
+lags <- list_lags[[1]]
+
+wind_ep_1 <- wind_df[1, ]
+
+adv_ep_1 <- adv_df_ep[1, ]
+
+
+
+# Vecteur d'advection pour l'épisode 1
+vx <- wind_ep_1$vx
+vy <- wind_ep_1$vy
+
+adv_x <- (abs(vx)^eta1) * sign(vx) * eta2
+adv_y <- (abs(vy)^eta1) * sign(vy) * eta2
+
+# Recalage des lags
+lags_recal <- lags %>%
+  mutate(
+    hx_recal = s1x - s2x + adv_x * tau,
+    hy_recal = s1y - s2y + adv_y * tau,
+    hnorm_recal = sqrt(hx_recal^2 + hy_recal^2),
+    gamma_model = beta1 * (hnorm_recal^alpha1) + beta2 * (abs(tau)^alpha2)
+  )
