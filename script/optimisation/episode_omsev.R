@@ -152,7 +152,7 @@ rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
 # subrain <- rain[rain_clean$dates >= "2019-09-05" & rain_clean$dates <= "2019-10-01", ]
 # plot(subrain$mse)
 
-q <- 0.95 # quantile
+q <- 0.97 # quantile
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
 # verify that the excess is above the threshold
@@ -181,7 +181,7 @@ all(excess_check)  # Should be TRUE if all exceedances are valid
 
 # Spatio-temporal neighborhood parameters
 min_spatial_dist <- 500 # m
-delta <- 24 # in * 5 min
+delta <- 10 # in * 5 min
 episode_size <- delta # size of the episode
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 tail(rain)
@@ -253,11 +253,6 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 
 n_episodes <- length(selected_points$s0)
 print(n_episodes)
-length(unique(selected_points$s0)) # can be same s0
-length(unique(selected_points$t0)) # never same t0?
-print(min(selected_points$u_s0)) # min threshold
-t0_list <- selected_points$t0
-s0_list <- selected_points$s0
 
 list_episodes_points <- get_extreme_episodes(selected_points, rain,
                                      episode_size = episode_size, unif = FALSE,
@@ -277,25 +272,6 @@ for (ep in 1:length(list_episodes)) {
     stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
   }
 }
-
-
-index <- 10
-sort(t0_list)
-which(t0_list == t0_list[index])
-episode_test <- list_episodes[[index]]
-df_episode <- as.data.frame(episode_test)
-df_episode$Time <- 0:(nrow(df_episode)-1)  # Add a time column
-s0_list[index]
-u_episode <- selected_points$u_s0[index]
-# t0_episode <- t0_list[index]
-# Convert from wide to long format
-df_long <- melt(df_episode, id.vars = "Time")
-head(df_long)
-colnames(df_long) <- c("Time", "Pixel", "Value")
-ggplot(df_long, aes(x = Time, y = Value, group = Pixel)) +
-  geom_line(color = btfgreen) +
-  geom_hline(yintercept = u_episode, color = "red", linetype = "dashed") +
-  theme_minimal()
 
 
 library(ggplot2)
@@ -380,6 +356,86 @@ for (s0 in names(plots_list)) {
          width = 8, height = 4)
 }
 
+
+time_lookup <- tibble(
+  t0 = unlist(list_t),
+  t0_date = parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC"),
+  day = day(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
+  month = month(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
+  year = year(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
+  hour = hour(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
+  minute = minute(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
+  second = second(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC"))
+)
+
+unique(time_lookup$t0_date) # check unique t0 values
+sort(unique(time_lookup$month))
+
+
+# distribution of months
+month_counts <- table(time_lookup$month)
+month_df <- as.data.frame(month_counts) 
+colnames(month_df) <- c("Month", "Count")
+month_df$Month <- factor(month_df$Month, levels = 1:12,
+                         labels = c("Jan", "Feb", "Mar", "Apr", "May",
+                                    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+ggplot(month_df, aes(x = Month, y = Count)) +
+  geom_bar(stat = "identity", fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+  btf_theme +
+  xlab("Month") +
+  ylab("Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# save histo 
+filename <- paste(im_folder, "optim/omsev/months_histogram_q",
+                  q * 100,
+                  ".png", sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+head(time_lookup)
+# selected_points$t0_date <- time_lookup$t0_date[match(selected_points$t0, time_lookup$t0)]
+selected_points$t0_date <- as.POSIXct(selected_points$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# get month of t0_date inside selected_points
+selected_points$month <- month(selected_points$t0_date)
+
+# plot selected points t0 dates
+ggplot(selected_points, aes(x = t0_date)) +
+  geom_histogram(bins = 50, fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+  btf_theme +
+  xlab("t0 Date") +
+  ylab("Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# plot months of t0 dates
+ggplot(selected_points, aes(x = factor(month))) +
+  geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+  btf_theme +
+  xlab("Month") +
+  ylab("Count") +
+  scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May",
+                               "Jun", "Jul", "Aug", "Sep", "Oct",
+                               "Nov", "Dec")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# save plot
+filename <- paste(im_folder, "optim/omsev/selected_episodes_months_histogram_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+# if there is "Y-M-D" change to "Y-M-D 00:00:00"
+selected_points$t0_date <- ifelse(
+  nchar(format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")) == 10,
+  paste0(format(selected_points$t0_date, "%Y-%m-%d"), " 00:00:00"),
+  format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")
+)
+
+datetimes <- selected_points$t0_date
+
+
+
+########
 # Check comephore values
 filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_5km.csv")
 # filename_com <- paste0(data_folder, "comephore/zoom_5km.csv")
