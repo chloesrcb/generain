@@ -98,3 +98,14 @@ CXXFLAGS=-O2 -Wall -Wno-error=format-security
 #### 3. Retry Installation
 
 Go back into R and rerun the installation (Step 1).
+
+
+# MUSE Installation
+
+```
+ Rscript -e "remotes::install_github('chloesrcb/generain', force=TRUE)"
+```
+
+```
+ Rscript -e 'install.packages("reticulate", repos="https://cloud.r-project.org")'
+```

@@ -20,7 +20,7 @@ ngrid <- 7
 spa <- 1:ngrid
 temp <- 0:30
 m <- 500 # number of episodes
-M <- 2 # number of simulations
+M <- 10 # number of simulations
 n.res <- m * M
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram
 beta1 <- param[1]
@@ -81,6 +81,7 @@ clusterExport(cl, varlist = c(
   "spa", "temp", "adv", "t0", "m", "random_s0", "s0",
   "compute_gamma_point", "compute_W_s_t", "sim_rpareto_dir",
   "foldername", "generate_grid_coords", "save_simulations",
+  "compute_st_variogram", "compute_st_gaussian_process",
   "ngrid"
 ))
 
@@ -165,7 +166,6 @@ for (i in 1:M) {
   }
 }
 
-# dependece buhl
 simu_df <- list_rpar[[1]] # first simulation
 s0_used <- s0_list[[1]]
 nsites <- ncol(simu_df) # number of sites
@@ -223,10 +223,17 @@ result_list <- mclapply(1:M, process_simulation, m = m,
 
 # Combine results int a data frame
 df_result_all <- do.call(rbind, result_list)
-colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
-                             "alpha2", "adv1", "adv2")
 
-df_bplot <- as.data.frame(df_result_all)
+colnames(df_result_all) <- c("beta1", "beta1_lower", "beta1_upper",
+                             "beta2", "beta2_lower", "beta2_upper",
+                             "alpha1", "alpha1_lower", "alpha1_upper",
+                             "alpha2", "alpha2_lower", "alpha2_upper",
+                             "adv1", "adv1_lower", "adv1_upper",
+                             "adv2", "adv2_lower", "adv2_upper")
+
+# get only the estimated parameters
+df_bplot <- df_result_all[, c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")]
+df_bplot <- as.data.frame(df_bplot)
 
 # save data in csv
 foldername <- "./data/optim/rpar/"
@@ -248,8 +255,8 @@ labels_latex <- c(
   beta2 = TeX("$\\beta_2$"),
   alpha1 = TeX("$\\alpha_1$"),
   alpha2 = TeX("$\\alpha_2$"),
-  vx = TeX("$v_x$"),
-  vy = TeX("$v_y$")
+  adv1 = TeX("$v_x$"),
+  adv2 = TeX("$v_y$")
 )
 
 ggplot(df_bplot, aes(x = ind, y = values)) +
@@ -258,7 +265,7 @@ ggplot(df_bplot, aes(x = ind, y = values)) +
     x = "Parameters", y = "Estimated values") +
   theme_minimal() +
   geom_point(aes(y = true_param[as.numeric(ind)]), color = "red", pch=4) +
-  scale_x_discrete(labels = labels_latex) 
+  scale_x_discrete(labels = labels_latex)
 
 
 # save plot
@@ -275,7 +282,79 @@ name_file <- paste0("bp_optim_", M, "simu_", m, "rep_", ngrid^2,
 
 ggsave(paste0(foldername, name_file), width = 5, height = 5)
 
+library(ggplot2)
+library(tidyr)
+library(dplyr)
 
+# Exemple pour beta1 — transformer les données pour ggplot
+df_beta1 <- df_result_all %>%
+  select(beta1, beta1_lower, beta1_upper) %>%
+  mutate(sim = 1:n())  # numéro de simulation
+
+ggplot(df_beta1, aes(x = factor(sim), y = beta1)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = beta1_lower, ymax = beta1_upper), width = 0.2) +
+  labs(title = "Estimates et IC 95% de beta1 pour chaque simulation",
+       x = "Simulation",
+       y = "Estimate beta1") +
+  theme(axis.text.x = element_blank())  # masque les labels x si trop nombreux
+
+
+# for all parameters
+params_names <- c("beta1", "beta2", "alpha1", "alpha2", "adv1", "adv2")
+
+library(tidyr)
+library(dplyr)
+library(dplyr)
+
+df_result_all2 <- df_result_all %>%
+  rename_with(~paste0(., "_est"), matches("^(beta1|beta2|alpha1|alpha2|adv1|adv2)$"))
+
+df_long_correct <- df_result_all2 %>%
+  mutate(sim = row_number()) %>%
+  pivot_longer(
+    cols = -sim,
+    names_to = c("param", "stat"),
+    names_sep = "_",
+    values_drop_na = TRUE
+  ) %>%
+  pivot_wider(names_from = stat, values_from = value)
+
+
+param_labels <- c(
+  beta1 = TeX("$\\beta_1$"),
+  beta2 = TeX("$\\beta_2$"),
+  alpha1 = TeX("$\\alpha_1$"),
+  alpha2 = TeX("$\\alpha_2$"),
+  adv1 = TeX("$v_x$"),
+  adv2 = TeX("$v_y$")
+)
+
+df_sample <- df_long_correct %>%
+  filter(sim <= 10) %>%
+  mutate(param = factor(param, levels = names(param_labels)))
+
+df_sample$param <- factor(df_sample$param, levels = names(param_labels))
+
+levels(df_sample$param) <- param_labels[levels(df_sample$param)]
+
+library(latex2exp)
+
+ggplot(df_sample, aes(x = factor(sim), y = est)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(~ param) +
+  xlab("Simulation") +
+  ylab("Estimated value") +
+  theme_minimal()
+
+# save the plot
+filename <- paste0(foldername, "estimates_rpar_CIs_", M, "simu_", m, "rep_",
+                          ngrid^2, "s_", length(temp), "t_", param_str, "_",
+                          adv_str, ".png")
+
+
+################################################################################
 
 # With wind == adv
 wind_df <- data.frame(vx = adv[1], vy = adv[2])

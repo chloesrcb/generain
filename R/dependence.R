@@ -497,52 +497,52 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
 }
 
 
-spatial_chi <- function(rad_mat, data_rain, breaks, quantile, zeros = TRUE, mid = TRUE) {
-  chi_slag <- numeric(0)
-  q <- quantile
+# spatial_chi <- function(rad_mat, data_rain, breaks, quantile, zeros = TRUE, mid = TRUE) {
+#   chi_slag <- numeric(0)
+#   q <- quantile
   
-  lags_inf <- breaks[-length(breaks)]
-  lags_sup <- breaks[-1]
-  h_vect <- if (mid) (lags_inf + lags_sup) / 2 else lags_sup
+#   lags_inf <- breaks[-length(breaks)]
+#   lags_sup <- breaks[-1]
+#   h_vect <- if (mid) (lags_inf + lags_sup) / 2 else lags_sup
 
-  for (i in seq_along(h_vect)) {
-    cat(sprintf("h = %.2f\n", h_vect[i]))
-    h_sup <- lags_sup[i]
-    indices <- which(rad_mat == h_sup, arr.ind = TRUE)
+#   for (i in seq_along(h_vect)) {
+#     cat(sprintf("h = %.2f\n", h_vect[i]))
+#     h_sup <- lags_sup[i]
+#     indices <- which(rad_mat == h_sup, arr.ind = TRUE)
 
-    nb_pairs <- nrow(indices)
-    cat(sprintf("nb pairs: %d\n", nb_pairs))
+#     nb_pairs <- nrow(indices)
+#     cat(sprintf("nb pairs: %d\n", nb_pairs))
 
-    if (nb_pairs == 0) {
-      chi_slag <- c(chi_slag, NA)
-    } else {
-      chi_vals <- numeric(nb_pairs)
+#     if (nb_pairs == 0) {
+#       chi_slag <- c(chi_slag, NA)
+#     } else {
+#       chi_vals <- numeric(nb_pairs)
 
-      for (j in seq_len(nb_pairs)) {
-        s1 <- indices[j, 1]
-        s2 <- indices[j, 2]
-        rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
-        complete_idx <- complete.cases(rain_pair)
+#       for (j in seq_len(nb_pairs)) {
+#         s1 <- indices[j, 1]
+#         s2 <- indices[j, 2]
+#         rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
+#         complete_idx <- complete.cases(rain_pair)
 
-        if (!zeros) {
-          nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
-          complete_idx <- complete_idx & nonzero_idx
-        }
+#         if (!zeros) {
+#           nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
+#           complete_idx <- complete_idx & nonzero_idx
+#         }
 
-        rain_cp <- rain_pair[complete_idx, , drop = FALSE]
+#         rain_cp <- rain_pair[complete_idx, , drop = FALSE]
 
-        q_val <- if (length(q) > 1) q[s1, s2] else q
-        chi_vals[j] <- get_chiq(rain_cp, q_val)
-      }
+#         q_val <- if (length(q) > 1) q[s1, s2] else q
+#         chi_vals[j] <- get_chiq(rain_cp, q_val)
+#       }
 
-      chi_mean <- mean(chi_vals, na.rm = TRUE)
-      cat(sprintf("chi = %.4f\n", chi_mean))
-      chi_slag <- c(chi_slag, chi_mean)
-    }
-  }
+#       chi_mean <- mean(chi_vals, na.rm = TRUE)
+#       cat(sprintf("chi = %.4f\n", chi_mean))
+#       chi_slag <- c(chi_slag, chi_mean)
+#     }
+#   }
 
-  data.frame(chi = chi_slag, lagspa = h_vect)
-}
+#   data.frame(chi = chi_slag, lagspa = h_vect)
+# }
 
 
 #' Calculate spatial chi for all lags
@@ -1059,7 +1059,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 #'         - alpha: rate of spatial decay (in original lag units)
 #'
 #' @export
-get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
+get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   # eta transformation
   # etachispa_df <- data.frame(chi = eta(chispa$chi),
   #                          lagspa = log(chispa$lagspa))
@@ -1070,7 +1070,14 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
     # define weights to use
     ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
   } else if (weights == "exp") {
+    ws <- exp(-(etachispa_df$lagspa))
+  } else if (weights == "exp2") {
     ws <- exp(-(etachispa_df$lagspa)^2)
+  } else if (weights == "expbw") {
+    if (is.null(bw)) {
+      stop("Please provide a bandwidth for 'expbw' weights.")
+    }
+    ws <- exp(-(etachispa_df$lagspa / bw)^2)
   } else if (weights == "none") {
     ws <- rep(1, length(etachispa_df$lagspa))
   }

@@ -14,7 +14,7 @@
 #' 
 #' @export 
 get_spatiotemp_excess <- function(data, quantile = NULL,
-                                  threshold = NULL) {
+                                  threshold = NULL, remove_zeros = FALSE) {
   data <- as.matrix(data)
   site_names <- colnames(data)
 
@@ -22,7 +22,19 @@ get_spatiotemp_excess <- function(data, quantile = NULL,
   if (is.null(quantile) && is.null(threshold)) stop("Specify 'quantile' or 'threshold'.")
 
   if (!is.null(quantile)) {
-    thresholds_by_site <- apply(data, 2, function(col) quantile(col, probs = quantile, na.rm = TRUE))
+
+    if (remove_zeros) {
+        thresholds_by_site <- apply(data, 2, function(col) {
+        col <- col[!is.na(col) & col > 0]  # Retire NA et les 0
+        if (length(col) < 50) {
+          return(NA)  # Trop peu de données non-nulles pour estimer un seuil fiable
+        }
+        quantile(col, probs = q, na.rm = TRUE)
+      }) 
+    }
+    else {
+      thresholds_by_site <- apply(data, 2, function(col) quantile(col, probs = quantile, na.rm = TRUE))
+    }
   } else {
     if (length(threshold) == 1) {
       thresholds_by_site <- rep(threshold, ncol(data))
@@ -95,13 +107,15 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   colnames(dist_matrix) <- site_names
 
   # Initialization
-  selected_points <- data.table(s0 = character(), t0 = integer(), u_s0 = numeric())
+  selected_points <- data.table(s0 = character(), t0 = integer(), 
+                                t0_dates = character(), u_s0 = numeric())
   nb_episode <- 0
 
   # Sort excesses by time for consistent processing
   excess_dt <- data.table(
     s = unlist(list_s),
     t = unlist(list_t),
+    t_dates = names(list_t),
     u = unlist(list_u)
   )
   setorder(excess_dt, t)
@@ -109,6 +123,7 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   for (i in seq_len(nrow(excess_dt))) {
     s0 <- excess_dt$s[i]
     t0 <- excess_dt$t[i]
+    t0_date <- excess_dt$t_dates[i]
     u0 <- excess_dt$u[i]
 
     # Check if new point is valid in space-time relative to all previously selected points
@@ -127,7 +142,8 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
     }
 
     if (is_valid) {
-      selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, u_s0 = u0))
+      selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, 
+                                                t0_dates = t0_date, u_s0 = u0))
       nb_episode <- nb_episode + 1
       if (nb_episode >= n_max_episodes) break
     }
@@ -548,7 +564,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   excesses[, Tobs := 0L]
   excesses$Tobs <- 1
   excesses[, kij := 0L]
-  excesses$kij <- NA
+  # excesses$kij <- NA
   unique_tau <- unique(df_lags$tau) # unique temporal lags
   ind_s1 <- df_lags$s1[1] # s0
 
@@ -558,7 +574,6 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
     for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
       # get the indices of the sites
       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-
       # get the data for the second site
       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
       if(all(is.na(X_s2))) {
@@ -576,7 +591,6 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
         X_s_t <- X_s_t[[1]] # extract the value if it's a list
       }
       nmargin <- sum(X_s_t > quantile) # 0 or 1
-
       excesses$kij[excesses$s1 == ind_s1
                     & excesses$s2 == ind_s2
                     & excesses$tau == tau] <- nmargin
@@ -584,6 +598,44 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   }
   return(excesses)
 }
+
+empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
+  excesses[, Tobs := 1L]
+  excesses[, kij := 0L]
+  unique_tau <- unique(df_lags$tau)
+  ind_s1 <- df_lags$s1[1]
+
+  for (tau in unique_tau) {
+    df_h_t <- df_lags[df_lags$tau == tau, ]
+
+    for (i in seq_len(nrow(df_h_t))) {
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
+      if (all(is.na(X_s2))) next
+
+      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+      if ((t0 + 1 + tau) > length(X_s2)) next
+      X_s_t <- X_s2[t0 + 1 + tau]
+      if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
+
+      if (!is.null(thresholds)) {
+        q_s2 <- thresholds[ind_s2]
+        if (is.na(q_s2)) next
+        nmargin <- as.integer(X_s_t > q_s2)
+      } else {
+        # fallback: uniformization or binary indicator
+        nmargin <- as.integer(X_s_t > 0)  # ou autre logique si tu veux
+      }
+
+      excesses$kij[excesses$s1 == ind_s1 &
+                   excesses$s2 == ind_s2 &
+                   excesses$tau == tau] <- nmargin
+    }
+  }
+  return(excesses)
+}
+
 
 
 #' empirical_excesses function
@@ -1231,32 +1283,6 @@ compute_wind_episode <- function(episode, s0, u, wind_df, speed_time) {
 
 
 
-compute_wind_episode_h <- function(episode, wind_df) {
-  # Get timestamps from the episode
-  timestamps <- as.POSIXct(rownames(episode),
-                            format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-  datetime_t0 <- timestamps[1] # first timestamp of the episode
-  hour_t0 <- lubridate::floor_date(datetime_t0, unit = "hour") # round to the hour
-
-  # Get the wind data for the hour t0
-  wind_row <- wind_df[wind_df$datetime == hour_t0, ]
-
-  if (nrow(wind_row) > 0) {
-    FF <- wind_row$FF
-    DD_t0 <- wind_row$DD
-    cardDir_t0 <- wind_row$cardDir
-  } else {
-    FF <- NA
-    DD_t0 <- NA
-    cardDir_t0 <- NA
-  }
-
-  return(data.frame(FF = FF,
-                    DD_t0 = DD_t0, cardDir_t0 = cardDir_t0))
-}
-
-
-
 # Fonction pour mode robuste
 get_mode_or_t0 <- function(x, fallback) {
   x <- na.omit(x)
@@ -1612,13 +1638,85 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
     method = "L-BFGS-B",
     lower = lower_bounds,
     upper = upper_bounds,
-    control = list(maxit = 10000)
+    control = list(maxit = 10000),
+    hessian = TRUE
   )
 
   estimates <- result$par
-  if (result$convergence != 0) {
+  conv <- (result$convergence == 0)
+  if (!conv) {
     estimates <- rep(NA, length(init_params))
+    ci_lower <- ci_upper <- rep(NA, length(init_params))
+    results_df <- data.frame(
+      beta1 = estimates[1],
+      beta2 = estimates[2],
+      alpha1 = estimates[3],
+      alpha2 = estimates[4],
+      adv1 = estimates[5],
+      adv2 = estimates[6],
+      beta1_lower = NA,
+      beta1_upper = NA,
+      beta2_lower = NA,
+      beta2_upper = NA,
+      alpha1_lower = NA,
+      alpha1_upper = NA,
+      alpha2_lower = NA,
+      alpha2_upper = NA,
+      adv1_lower = NA,
+      adv1_upper = NA,
+      adv2_lower = NA,
+      adv2_upper = NA
+    )
+  } else {
+    # If convergence, extract the Hessian matrix and compute CIs
+    hessian <- result$hessian
+    # Check if hessian is valid
+    if (is.null(hessian) || any(!is.finite(hessian)) || inherits(try(solve(hessian), silent = TRUE), "try-error")) {
+      estimates <- rep(NA, length(init_params))
+      ci_lower <- ci_upper <- rep(NA, length(init_params))
+    } else {
+      # Compute standard errors from inverse Hessian
+      cov_matrix <- solve(hessian)
+      se <- sqrt(diag(cov_matrix))
+      
+      # 95% confidence intervals
+      z_val <- qnorm(0.975)  # ≈1.96
+      ci_lower <- estimates - z_val * se
+      ci_upper <- estimates + z_val * se
+      
+      # Optionally, combine into a data frame
+      results_df <- data.frame(
+        beta1 = estimates[1],
+        beta1_lower = ci_lower[1],
+        beta1_upper = ci_upper[1],
+        beta2 = estimates[2],
+        beta2_lower = ci_lower[2],
+        beta2_upper = ci_upper[2],
+        alpha1 = estimates[3],
+        alpha1_lower = ci_lower[3],
+        alpha1_upper = ci_upper[3],
+        alpha2 = estimates[4],
+        alpha2_lower = ci_lower[4],
+        alpha2_upper = ci_upper[4],
+        adv1 = estimates[5],
+        adv1_lower = ci_lower[5],
+        adv1_upper = ci_upper[5],
+        adv2 = estimates[6],
+        adv2_lower = ci_lower[6],
+        adv2_upper = ci_upper[6]
+      )
+    }
   }
-
-  return(estimates)
+  if (!is.na(wind_df)) {
+    # change adv1, adv2 and their CIs to eta1, eta2 and their CIs
+    results_df$eta1 <- results_df$adv1
+    results_df$eta2 <- results_df$adv2
+    results_df$eta1_lower <- results_df$adv1_lower
+    results_df$eta1_upper <- results_df$adv1_upper
+    results_df$eta2_lower <- results_df$adv2_lower
+    results_df$eta2_upper <- results_df$adv2_upper
+    results_df <- results_df[, -c("adv1", "adv2", "adv1_lower", "adv1_upper",
+                                  "adv2_lower", "adv2_upper")]
+  }
+  return(results_df)
 }

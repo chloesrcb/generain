@@ -45,27 +45,31 @@ max(df_dist$value)
 
 library(ggplot2)
 
-site1 <- "cnrs"
-site2 <- "poly"
-filename <- paste0(im_folder, "chiplot/omsev/quantile_omsev_", site1, "_", site2, ".png")
-png(filename, width = 10, height = 5, units = "in", res = 300)
+sites_names <- colnames(rain)
+site_combinations <- combn(sites_names, 2, simplify = FALSE)
 
-par(mfrow = c(1, 2))
-rain_pair <- rain[, c(site1, site2)]
-# remove na
-rain_pair <- rain_pair[complete.cases(rain_pair), ]
-colnames(rain_pair)
-rain_pair_no0 <- rain_pair[rowSums(rain_pair) > 0, ]
-chiplot(rain_pair_no0, xlim = c(0.9, 1), ylim1 = c(-0.1, 1), which = 1,
-        qlim = c(0.8, 0.997), main1 = "Without zeros")
-# abline(v = 0.93, col = "red", lty = 2)
+for (pair in site_combinations) {
+  site1 <- pair[1]
+  site2 <- pair[2]
+  filename <- paste0(im_folder, "mrlplot/omsev/", site1, "_", site2, ".png")
+  png(filename, width = 10, height = 5, units = "in", res = 300)
 
-# Same with all zeros
-chiplot(rain_pair, xlim = c(0.9995, 1), ylim1 = c(0, 1), which = 1,
-        qlim = c(0.9995, 0.99995), main1 = "With zeros")
-# abline(v = 0.999875, col = "red", lty = 2)
+  par(mfrow = c(1, 1))
+  rain_pair <- rain[, c(site1, site2)]
+  # remove na
+  rain_pair <- rain_pair[complete.cases(rain_pair), ]
+  rain_pair_no0 <- rain_pair[rowSums(rain_pair) > 0, ]
+  mrlplot(rain_pair_no0)
 
-dev.off()
+  # get corresponding quantile for threshold u
+
+  dev.off()
+}
+
+u <- 6
+abline(v = u, col = "red", lty = 2)
+quantile_value <- ecdf(rain_pair_no0[[site1]])(u)
+quantile_value <- mean(rain_pair_no0[[site1]] <= u)
 nrow(rain_pair_no0)
 # count conjoint excesses
 q <- 0.98
