@@ -33,19 +33,101 @@ location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
 # rain.all5 is the data frame name for 5 min data
 # get only stations records and dates
 rain <- as.data.frame(rain.all5[, c(1, 6:(ncol(rain.all5) - 1))])
-lubridate::tz(index(rain$dates))       # ou omsev$date si c’est une colonne
-lubridate::tz(index(comephore))   # ou comephore$date
 
 # remove rain before september 2019 and after january 2024
 rain$dates <- as.POSIXct(rain.all5$dates, tz = "UTC")
-first_date <- as.POSIXct("2019-10-01", tz = "UTC")
-last_date <- as.POSIXct("2024-01-31", tz = "UTC")
-rain <- rain[rain$dates >= first_date & rain$dates <= last_date, ]
+# first_date <- as.POSIXct("2019-10-01", tz = "UTC")
+# last_date <- as.POSIXct("2024-01-31", tz = "UTC")
+# rain <- rain[rain$dates >= first_date & rain$dates <= last_date, ]
 rownames(rain) <- rain$dates
 head(rain)
 tail(rain)
 
-# plot(rain$dates, rain$mse)
+# Filter dates and remove NA rows from all columns
+first_date <- as.POSIXct("2022-09-06 23:00:00", tz = "UTC")
+last_date <- as.POSIXct("2022-09-07 05:00:00", tz = "UTC")
+subrain <- rain %>%
+  filter(dates >= first_date & dates <= last_date)
+
+# remove brives, cines, hydro
+subrain <- subrain[, !(colnames(subrain) %in% c("brives", "cines", "hydro"))]
+
+# Get all rain gauge columns (exclude 'dates')
+rain_gauges <- setdiff(names(subrain), "dates")
+foldername <- paste0(im_folder, "rain/OMSEV/episodes_6_8_sept_2022/")
+
+# put every rain gauge time series on the same plot
+# melt the data frame to long format
+library(reshape2)
+rain_long <- melt(subrain, id.vars = "dates", variable.name = "Station",
+                  value.name = "Rain")
+colnames(rain_long) <- c("dates", "Station", "Rain")
+# remove na
+rain_long <- rain_long %>%
+  filter(!is.na(Rain))
+# Create the plot
+p <- ggplot(rain_long, aes(x = dates, y = Rain, color = Station)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Date",
+    y = "Rain (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right") 
+p
+# Save the plot
+ggsave(
+  filename = paste0(foldername, "all_gauges_5min_6_7_sept_2022_from1hto4h.png"),
+  plot = p,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+# remove na in subrain
+subrain <- na.omit(subrain)
+# Aggregate the data to 1h intervals (5 min to 1h)
+rain_1h <- subrain %>%
+  group_by(dates = ceiling_date(dates, "hour")) %>%
+  summarise(across(everything(), ~ sum(.x, na.rm = TRUE))) %>%
+  ungroup()
+
+plot(subrain$dates, subrain$mse, type = "l", col = btfgreen,
+     xlab = "Date", ylab = "Rain (mm)", main = "Rainfall at MSE station (5 min aggregation)")
+     
+plot(rain_1h$dates, rain_1h$mse, type = "l", col = btfgreen,
+     xlab = "Date", ylab = "Rain (mm)", main = "Rainfall at MSE station (1h aggregation)")
+
+
+library(reshape2)
+rain_long <- melt(as.data.frame(rain_1h), id.vars = "dates",
+                    variable.name = "Station", value.name = "Rain")
+colnames(rain_long) <- c("dates", "Station", "Rain")
+# remove na
+rain_long <- rain_long %>%
+  filter(!is.na(Rain))
+# Create the plot
+p <- ggplot(rain_long, aes(x = dates, y = Rain, color = Station)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Date",
+    y = "Rain (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right") 
+p
+# Save the plot
+ggsave(
+  filename = paste0(foldername, "all_gauges_1h_6_7_sept_2022_from1hto4h.png"),
+  plot = p,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+
 
 # Remove non real zeros
 filename_omsev1min <- paste0(data_folder,
@@ -81,6 +163,8 @@ for (col in colnames(rain1min)[colnames(rain1min) != "dates"]) {
     ))
   }
 }
+
+
 
 results
 library(dplyr)
@@ -437,18 +521,100 @@ datetimes <- selected_points$t0_date
 
 ########
 # Check comephore values
-filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_5km.csv")
+filename_com <- paste0(data_folder, "comephore/comephore_2008_2024.csv")
 # filename_com <- paste0(data_folder, "comephore/zoom_5km.csv")
 comephore_raw <- read.csv(filename_com, sep = ",")
-filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_5km.csv")
+filename_loc <- paste0(data_folder, "comephore/loc_px.csv")
 loc_px <- read.csv(filename_loc, sep = ",")
 
 
 # get comephore values for the selected episodes datetime
 df_comephore <- as.data.frame(comephore_raw)
+colnames(df_comephore)[1] <- "date"
+# if there is a "Y-M-D" change to "Y-M-D 00:00:00"
+df_comephore$date <- ifelse(nchar(df_comephore$date) == 10,
+                            paste0(df_comephore$date, " 00:00:00"),
+                            df_comephore$date)  
+
 df_comephore$date <- as.POSIXct(df_comephore$date,
                                 format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 head(df_comephore)
+
+# Take only data from 6 to 7 September 2022
+start_date <- as.POSIXct("2022-09-06 00:00:00", tz = "UTC")
+end_date <- as.POSIXct("2022-09-08 04:00:00", tz = "UTC")
+df_comephore <- df_comephore[df_comephore$date >= start_date & 
+                              df_comephore$date <= end_date, ]
+
+library(reshape2)
+rain_long <- melt(as.data.frame(df_comephore), id.vars = "date",
+                  variable.name = "Pixel", value.name = "Rain")
+
+colnames(rain_long) <- c("dates", "Pixel", "Rain")
+# remove na
+rain_long <- rain_long %>%
+  filter(!is.na(Rain))
+# Create the plot
+p <- ggplot(rain_long, aes(x = dates, y = Rain, color = Pixel)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Date",
+    y = "Rain (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+p
+
+foldername <- paste0(im_folder, "rain/comephore/episodes_6_8_sept_2022/")
+# Save the plot
+ggsave(
+  filename = paste0(foldername, "all_pixels_6_8_sept_2022.png"),
+  plot = p,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+# zoom comephore values from 6 September 2022 18:00 to 7 September 2022 1:00
+start_time <- as.POSIXct("2022-09-06 18:00:00", tz = "UTC")
+end_time <- as.POSIXct("2022-09-07 01:00:00", tz = "UTC")
+df_comephore <- df_comephore[df_comephore$date >= start_time & 
+                              df_comephore$date <= end_time, ]
+
+library(reshape2)
+rain_long <- melt(as.data.frame(df_comephore), id.vars = "date", 
+                  variable.name = "Pixel", value.name = "Rain")
+
+colnames(rain_long) <- c("dates", "Pixel", "Rain")
+# remove na
+rain_long <- rain_long %>%
+  filter(!is.na(Rain))
+# Create the plot
+p <- ggplot(rain_long, aes(x = dates, y = Rain, color = Pixel)) +
+  geom_line() +
+  labs(
+    title = "",
+    x = "Date",
+    y = "Rain (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+p
+
+foldername <- paste0(im_folder, "rain/comephore/episodes_6_8_sept_2022/")
+# Save the plot
+ggsave(
+  filename = paste0(foldername, "all_pixels_6_7_sept_2022_timezoom.png"),
+  plot = p,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+
+
+
 
 # Take only data after 2019 october 1st
 df_comephore <- df_comephore[df_comephore$date >= "2019-10-01" & 
@@ -482,3 +648,5 @@ for (episode_id in seq_along(list_episodes)) {
 
 
 episode <- list_episodes[[216]]
+
+

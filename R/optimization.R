@@ -995,10 +995,10 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     if (fixed_eta2) {
       eta2 <- 1
     }
-    # adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
-    # adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
-    adv_x <- eta1 * wind_df$vx*(abs(wind_df$vx)^(eta2 - 1))
-    adv_y <- eta1 *  wind_df$vy*(abs(wind_df$vy)^(eta2 - 1))
+    adv_x <- (abs(wind_df$vx)^eta2) * sign(wind_df$vx) * eta1
+    adv_y <- (abs(wind_df$vy)^eta2) * sign(wind_df$vy) * eta1
+    # adv_x <- eta1 * wind_df$vx*(abs(wind_df$vx)^(eta2 - 1))
+    # adv_y <- eta1 *  wind_df$vy*(abs(wind_df$vy)^(eta2 - 1))
     adv_df <- cbind(adv_x, adv_y)
     if (length(adv_df) == 2) {
       adv <- as.vector(adv_df)

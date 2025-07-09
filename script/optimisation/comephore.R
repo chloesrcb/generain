@@ -28,17 +28,34 @@ filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_5km.csv")
 comephore_raw <- read.csv(filename_com, sep = ",")
 filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_5km.csv")
 loc_px <- read.csv(filename_loc, sep = ",")
+colnames(comephore_raw)
 
+# remove pixel in loc_px that are not in comephore_raw
+loc_px <- loc_px[loc_px$pixel_name %in% colnames(comephore_raw)[-1], ]
+nrow(loc_px) # number of pixels
+# reindex
+rownames(loc_px) <- NULL
 # length(colnames(comephore_raw)) - 1
 # length(loc_px$pixel_name)
 
 df_comephore <- as.data.frame(comephore_raw)
+
+# when date is just a date, put 00:00:00 as time
+if (nchar(df_comephore$date[1]) == 10) {
+  df_comephore$date <- paste(df_comephore$date, "00:00:00")
+}
+
 df_comephore$date <- as.POSIXct(df_comephore$date,
                                 format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 head(df_comephore)
 
+length(unique(df_comephore$date))
+# Voir les duplicatas
+duplicated_dates <- df_comephore[duplicated(df_comephore$date), ]
+head(duplicated_dates)
+
 # Take only data after 2007
-colnames(df_comephore)[1] <- "date"
+# colnames(df_comephore)[1] <- "date"
 df_comephore <- df_comephore[df_comephore$date >= "2008-01-01", ]
 tail(df_comephore)
 # put date in index
@@ -69,7 +86,7 @@ wind_mtp$cardDir <- as.character(wind_mtp$cardDir)  # Ensure it's character
 wind_mtp$cardDir[is.na(wind_mtp$DD)] <- NA
 # Check if NA values are properly handled
 summary(wind_mtp)
-plot(wind_mtp$FF)
+# plot(wind_mtp$FF)
 # 1 nd = 0,514 m/s
 head(wind_mtp$cardDir)
 
@@ -81,8 +98,8 @@ head(wind_mtp$cardDir)
 # wind_mtp$FF <- wind_mtp$FF 
 wind_mtp$FF_kmh <- wind_mtp$FF * 3.6  # convert to km/h
 
-plot(wind_mtp$FF_kmh, type = "l", col = "blue",
-     main = "Wind speed in km/h", xlab = "Time", ylab = "Wind speed (km/h)")
+# plot(wind_mtp$FF_kmh, type = "l", col = "blue",
+#      main = "Wind speed in km/h", xlab = "Time", ylab = "Wind speed (km/h)")
 
 # DISTANCE AND COORDS ##########################################################
 
@@ -124,15 +141,17 @@ p2 <- ggplot(grid_coords_km, aes(x = x_km, y = y_km)) +
   geom_text(aes(label = rownames(grid_coords_km)), size = 1.5, hjust = -0.2) +
   coord_fixed() +
   theme_minimal() +
+  xlab("x in km") +
+  ylab("y in km") +
   ggtitle("Transformed coordinates in km")
 
 p_coords <- grid.arrange(p1, p2, ncol = 2)
 
 # save plot
-# filename <- paste(im_folder, "optim/comephore/coords_transformation.png",
-#                   sep = "")
-# ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
-#        units = "cm")
+filename <- paste(im_folder, "optim/comephore/coords_transformation.png",
+                  sep = "")
+ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
+       units = "cm")
 
 # get distance matrix
 grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
@@ -155,7 +174,7 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q_no0_spa <- 0.99
+q_no0_spa <- 0.97
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                             quantile = q_no0_spa, hmax = hmax, zeros = FALSE)
 
@@ -269,7 +288,7 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 chitemp_eta_estim
 
 # save plot
-filename <- paste(im_folder, "WLSE/comephore/full_temporal_chi_eta_estim_",
+filename <- paste(im_folder, "WLSE/comephore/full_temporal_chi_eta_estim_exp_",
                 q_no0_temp, ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -288,12 +307,13 @@ kable(df_result, format = "latex") %>%
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-q <- 0.998 # quantile
+q <- 0.97 # quantile
 
 # get central site from sites_coords
 # comephore_subset <- comephore[rownames(comephore) >= "2020-01-01", ]
 comephore_subset <- comephore
-set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q)
+set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q,
+                                      remove_zeros = TRUE)
 
 
 
@@ -361,19 +381,34 @@ datetimes <- selected_points$t0_date
 
 
 
-# save datetimes of episode in a csv file
-# datetimes_df <- data.frame( datetime = selected_points$t0_date,
-#                             day = selected_points$day,
-#                             month = selected_points$month,
-#                             year = selected_points$year,
-#                             hour = selected_points$hour,
-#                             minute = selected_points$minute,
-#                             second = selected_points$second)
+# plot histogram of t0 months in string character format in english
+library(ggplot2)
+library(lubridate)
+library(dplyr)
 
-datetimes_df <- data.frame( datetime = selected_points$t0_date)
+datetimes <- as.POSIXct(datetimes, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# Extract months from datetimes
+df_months <- data.frame(month = month(datetimes, label = TRUE, locale = "en_US.UTF-8"))
+# in english
+df_months$month <- factor(df_months$month, levels = month.abb)
+ggplot(df_months, aes(x = month)) +
+  geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+  btf_theme +
+  xlab("Month") +
+  ylab("Count") 
+
+# save plot
+filename <- paste(im_folder, "optim/comephore/episodes/t0_months_histogram_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+datetimes <- unique(datetimes)
+datetimes_df <- data.frame( datetime = datetimes)
 
 filename <- paste0(data_folder, "comephore/t0_episodes",
-           "_q", q * 1000, "_delta", delta,
+           "_q", q * 100, "_delta", delta,
            "_dmin", min_spatial_dist, ".csv")
 
 write.csv(datetimes_df, file = filename, row.names = FALSE)
@@ -393,7 +428,7 @@ ggplot(df_threshold, aes(x = u_s0)) +
   xlab(TeX(paste0("Threshold for quantile $q = ", q, "$"))) +
   ylab("Count")
 filename <- paste(im_folder, "optim/comephore/5km_threshold_histogram_q",
-                  q * 1000, "_delta", delta, "_dmin", min_spatial_dist,
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -420,7 +455,7 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
  
 # Convert matrix to data frame
-index <- 10
+index <- 1
 sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
@@ -438,10 +473,10 @@ ggplot(df_long, aes(x = Time, y = Value, group = Pixel)) +
   geom_hline(yintercept = u_episode, color = "red", linetype = "dashed") +
   theme_minimal()
 
-# filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
-#                   "km_max", tmax, "h_delta_", delta, ".png", sep = "")
-# # filename <- "test.png"
-# ggsave(filename, width = 20, height = 15, units = "cm")
+filename <- paste(im_folder, "optim/comephore/extreme_episode", index, "_min", min_spatial_dist,
+                  "km_q", q*100, "_delta_", delta, ".png", sep = "")
+# filename <- "test.png"
+ggsave(filename, width = 20, height = 15, units = "cm")
 
 
 list_episodes_unif_points <- get_extreme_episodes(selected_points, comephore_subset,
@@ -457,7 +492,7 @@ library(parallel)
 
 tau_vect <- 0:10
 tmax <- max(tau_vect)
-df_coords <- as.data.frame(grid_coords_m)
+df_coords <- as.data.frame(grid_coords_km)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -470,7 +505,10 @@ list_results <- mclapply(1:length(s0_list), function(i) {
                                 tau_vect, latlon = FALSE)
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
   excesses <- empirical_excesses_rpar(episode, 1, lags, t0 = ind_t0_ep)
-  lags$tau <- lags$tau * 3600 # convert tau from hours to seconds
+  lags$tau <- lags$tau # convert tau from hours to seconds
+  # lags$hnorm <- lags$hnorm / 1000 # convert to km
+  # lags$hx <- lags$hx / 1000 # convert hx from m to km
+  # lags$hy <- lags$hy / 1000 # convert hy from m
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -508,7 +546,7 @@ ggplot(df_excesses, aes(x = sum_excess)) +
   ggtitle("Distribution of sum of excesses")
 
 ggsave(filename = paste0(im_folder, "optim/comephore/sum_excesses_histogram_q_",
-                         q * 1000, "_min_spatial_dist_", min_spatial_dist,
+                         q * 100, "_min_spatial_dist_", min_spatial_dist,
                          "km_tmax_", tmax, "h_delta_", delta, ".png"),
        width = 20, height = 15, units = "cm")
 
@@ -609,8 +647,14 @@ head(selected_episodes)
 ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
 selected_episodes_nona <- selected_episodes[-ind_NA_adv, ]
 
-wind_df <- selected_episodes_nona[, c("adv_x", "adv_y")]
+wind_df <- selected_episodes[, c("adv_x", "adv_y")]
+colnames(wind_df) <- c("vx", "vy")
 length(wind_df$vx) # should be the same as number of episodes
+# wind_df$vx <- - wind_df$vx  # invert x component
+# wind_df$vy <- - wind_df$vy  # invert y component
+# convert m/s to km/h
+wind_df$vx <- wind_df$vx * 3.6  # convert to km/h
+wind_df$vy <- wind_df$vy * 3.6  # convert to km/h
 # OPTIMIZATION #################################################################
 
 # Compute the wind vector for each episode (-FF because it's the wind direction)
@@ -623,7 +667,6 @@ length(wind_df$vx) # should be the same as number of episodes
 # wind_ep_df$vy[abs(wind_ep_df$vy) < 1e-08] <- 0
 
 # wind_df <- wind_ep_df[, c("vx", "vy")]
-colnames(wind_df) <- c("vx", "vy")
 # which episode has NA wind values
 ind_NA <- which(is.na(wind_df$vx))
 ind_NA <- ind_NA_adv
@@ -641,31 +684,163 @@ if (any(ind_NA > 0)) {
   excesses_opt <- list_excesses
 }
 
+
+eta1 <- 1.5
+eta2 <- 1
+i <- 1
+excesses <- list_excesses[[i]]
+lags <- list_lags[[i]]
+head(lags)
+# Choisir advection (varie selon wind_df)
+if (!all(is.na(wind_df))) {
+  adv <- as.numeric(wind_df[i, ])
+  # if adv_x or adv_y are really close
+} else {
+  adv <- c(0, 0)
+}
+
+adv_x <- adv[1]  # vx
+adv_y <- adv[2]  # vy
+params_adv <- c(beta1, beta2, alpha1, alpha2, adv_x, adv_y)  # add adv to params
+adv <- params_adv[5:6]  # adv_x, adv_y
+# Obtenir la table chi complète
+chi_df <- theoretical_chi(params = params_adv, df_lags = lags,
+                          latlon = FALSE, directional = TRUE,
+                          convert_in_hours = F, convert_in_km = F)
+hnorm <- chi_df$hnorm
+hnormV <- chi_df$hnormV
+summary(hnorm - hnormV)
+library(ggplot2)
+
+# 1. Vecteurs de déplacement (hx, hy)
+ggplot(chi_df, aes(x = hx, y = hy)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Vecteurs de déplacement hx/hy",
+       x = "hx (km)", y = "hy (km)") +
+  theme_minimal()
+
+# 2. Variogramme (vario) vs distance and for different time lags as factor
+ggplot(chi_df, aes(x = hnormV, y = vario, color = factor(tau))) +
+  geom_point(alpha = 0.6) +
+  labs(title = "",
+       x = "Distance (km)", y = "Variogramme",
+       color = "Time Lag (tau)") +
+  theme_minimal()
+
+# 3. Chi vs distance
+ggplot(chi_df, aes(x = hnormV, y = chi, color = factor(tau))) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Chi vs Distance", x = "Distance (km)", y = "Chi") +
+  theme_minimal()
+
+# 4. Chi vs vario (fonction de transformation)
+ggplot(chi_df, aes(x = vario, y = chi)) +
+  geom_point(color = "purple") +
+  labs(title = "Chi vs Variogramme", x = "Variogramme", y = "Chi") +
+  theme_minimal()
+
+print(adv) # Advection utilisée pour cet épisode
+summary(chi_df$hx)
+summary(chi_df$hy)
+summary(chi_df$chi)
+summary(chi_df$vario)
+
+ggplot(chi_df, aes(x = s1x, y = s1y)) +
+  geom_segment(aes(xend = s2x, yend = s2y), arrow = arrow(length = unit(0.1, "cm")), alpha = 0.3) +
+  labs(title = "Displacement between points",
+       x = "s1x (km)", y = "s1y (km)") +
+  coord_fixed()
+
+for (i in c(1, 210)) {
+  adv <- as.numeric(wind_df[i, ])
+  adv_x <- adv[1]  # vx
+  adv_y <- adv[2]  # vy
+  params_adv <- params_adv <- c(beta1, beta2, alpha1, alpha2, adv_x, adv_y)
+  chi_df <- theoretical_chi(params_adv, list_lags[[i]],
+                            latlon = FALSE, directional = TRUE,
+                            convert_in_hours = FALSE, convert_in_km = FALSE)
+  
+  chi_df$episode <- i
+  if (i == 1) {
+    chi_all <- chi_df
+  } else {
+    chi_all <- rbind(chi_all, chi_df)
+  }
+}
+
+ggplot(chi_all, aes(x = hnormV, y = chi, color = factor(episode))) +
+  geom_point(alpha=0.5) +
+  labs(title = "Comparaison de Chi entre épisodes", x = "Distance (km)", y = "Chi", color = "Épisode") +
+  theme_minimal()
+
+
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 nrow(wind_opt)
+adv_df <- data.frame(vx = 0, vy = 0)
 length(episodes_opt) # should be the same
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = lags_opt, list_episodes = episodes_opt,
-        list_excesses = excesses_opt, hmax = 7000,
+        list_excesses = excesses_opt, hmax = 5,
         wind_df = wind_opt,
         latlon = FALSE,
         directional = TRUE,
         fixed_eta1 = FALSE,
-        fixed_eta2 = TRUE,
-        convert_in_hours = TRUE,
-        convert_in_km = TRUE,
+        fixed_eta2 = FALSE,
+        convert_in_hours = FALSE,
+        convert_in_km = FALSE,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(10, 10, 1.999, 1.999, 10, 10),
         control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = F)
+                      trace = 1),
+        hessian = T)
 
 result
+test_init <-  result$par
 
-# [1] 0.08076635 0.79050560 0.82388296 0.63683042 7.47589903 0.99900000
+# From results get CI 
+# Compute the standard errors from the Hessian
+hessian <- result$hessian
+if (is.null(hessian)) {
+  stop("Hessian is NULL, cannot compute standard errors.")
+} 
+# Supposons que tu connais les indices des paramètres fixés
+# fixed_indices <- c(6)
 
+# # Tu gardes les lignes/colonnes des paramètres variables
+# var_indices <- setdiff(seq_len(nrow(hessian)), fixed_indices)
+
+# # Sous-matrice hessienne restreinte aux paramètres libres
+# hessian <- hessian[var_indices, var_indices]
+
+# Calcul des erreurs standard uniquement pour les paramètres libres
+
+inv_hessian <- solve(hessian)
+
+diag_var <- diag(inv_hessian)
+diag_var[diag_var <= 0] <- 0
+
+# Calcul des erreurs standard pour les paramètres libres
+se <- sqrt(diag_var)
+
+# Create a data frame with the results
+df_results <- data.frame(
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2", "vx", "vy"),
+  Estimate = result$par,
+  StdError = se,
+  LowerCI = result$par - 1.96 * se,
+  UpperCI = result$par + 1.96 * se
+)
+
+# do a latex table with kable and 
+
+
+# > result
+# $par
+# [1] 0.1129827 1.0965668 1.0217060 0.6181883 1.0000000 1.0000000
+
+# $value
+# [1] 106061.9
 
 
 # EMPIRICAL VARIOGRAM ##########################################################
@@ -732,7 +907,7 @@ alpha2 <- df_result$alpha2
 eta1 <- df_result$eta1
 eta2 <- df_result$eta2
 
-
+library(dplyr)
 # Compute advection for each row
 adv_df_ep <- wind_df %>%
   mutate(
@@ -777,18 +952,18 @@ lags_recal <- lags %>%
   )
 
 
-ggplot(lags_recal %>% filter(tau == 3600), aes(x = hx_recal, y = hy_recal, fill = gamma_model)) +
+ggplot(lags_recal %>% filter(tau == 10), aes(x = hx_recal, y = hy_recal, fill = gamma_model)) +
   geom_tile() +
   coord_equal() +
-  labs(title = "Carte du variogramme directionnel à tau = 0", x = "hx", y = "hy")
+  labs(title = "Directional variogram for tau = 0", x = "hx", y = "hy")
 
 
 
 set.seed(42)  # Pour reproductibilité
 
 # Tirer 10 épisodes aléatoires
-episode_ids <- sample(seq_along(list_lags), 10)
-tau_value <- 3600
+episode_ids <- c(1, sample(seq_along(list_lags), 10))
+tau_value <- 0
 lags_recal_all <- purrr::map_dfr(episode_ids, function(i) {
   # Données de l'épisode i
   lags <- list_lags[[i]]
@@ -813,173 +988,119 @@ lags_recal_all <- purrr::map_dfr(episode_ids, function(i) {
     geom_tile() +
     coord_equal() +
       labs(
-    title = paste("Episode", i, "at", tau_value / 3600, "hour(s)"),
+    title = paste("Episode", i, "at", tau_value, "hour(s)"),
     x = expression(h[x] - tau * V),
     y = expression(h[y] - tau * V),
     fill = expression(gamma(h, tau))
   ) +
   scale_fill_viridis_c()
-  print(p)
 
   #save plot
-  filename <- paste(im_folder, "optim/comephore/vario_estim/variogram_ep_", i, "_tau", tau_value, ".png", sep = "")
+  foldername <- paste0(im_folder, "optim/comephore/vario_estim/q_", q * 100, 
+    "_mindist_", min_spatial_dist, "km_delta_", delta, "h/")
+  filename <- paste(foldername, "variogram_ep_", i, "_tau", tau_value, ".png", sep = "")
   ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
   return(lags_recal)
 })
 
+################################################################################
 
+library(tidyverse)
+library(viridis)
 
+episode_id <- 348
+tau_values <- 0:5
+pixel_size_km <- 1  # Taille du pixel = 1 km
 
+lags <- list_lags[[episode_id]]
+wind <- wind_df[episode_id, ]
 
-# Étape 1 — Sélectionner 10 épisodes
-set.seed(42)
-episode_ids <- sample(seq_along(list_lags), 10)
-# episode_ids <- c(1, 2, 3)
-tau_value <- 1 * 3600
+adv_x <- (abs(wind$vx)^eta1) * sign(wind$vx) * eta2
+adv_y <- (abs(wind$vy)^eta1) * sign(wind$vy) * eta2
 
-# Étape 2 — Pré-calcul gamma_model pour trouver les bornes min/max
-gamma_range <- purrr::map_dfr(episode_ids, function(i) {
-  lags <- list_lags[[i]]
-  wind <- wind_df[i, ]
-  
-  adv_x <- (abs(wind$vx)^eta1) * sign(wind$vx) * eta2
-  adv_y <- (abs(wind$vy)^eta1) * sign(wind$vy) * eta2
-  
+# Calcul hx/hy recalés pour tous les tau
+lags_all <- map_dfr(tau_values, function(tau) {
   lags %>%
     mutate(
-      hx_recal = s1x - s2x + adv_x * tau_value,
-      hy_recal = s1y - s2y + adv_y * tau_value,
-      gamma_model = beta1 * (abs(hx_recal)^alpha1) +
-                    beta1 * (abs(hy_recal)^alpha1) +
-                    beta2 * (abs(tau_value)^alpha2)
-    ) %>%
-    filter(tau == tau_value) %>%
-    select(gamma_model)
-})
-
-# Calcul min/max
-gamma_min <- min(gamma_range$gamma_model, na.rm = TRUE)
-gamma_max <- max(gamma_range$gamma_model, na.rm = TRUE)
-
-# Étape 3 — Générer les figures avec échelle fixe
-lags_recal_all <- purrr::map_dfr(episode_ids, function(i) {
-  lags <- list_lags[[i]]
-  wind <- wind_df[i, ]
-
-  adv_x <- (abs(wind$vx)^eta1) * sign(wind$vx) * eta2
-  adv_y <- (abs(wind$vy)^eta1) * sign(wind$vy) * eta2
-
-  lags_recal <- lags %>%
-    mutate(
+      tau = tau,
       hx_recal = s1x - s2x + adv_x * tau,
       hy_recal = s1y - s2y + adv_y * tau,
       gamma_model = beta1 * (abs(hx_recal)^alpha1) +
                     beta1 * (abs(hy_recal)^alpha1) +
-                    beta2 * (abs(tau)^alpha2),
-      episode_id = paste0("E", i)
+                    beta2 * (abs(tau)^alpha2)
     )
+})
 
-  # Plot avec échelle fixe
-  p <- ggplot(lags_recal %>% filter(tau == tau_value),
-              aes(x = hx_recal, y = hy_recal, fill = gamma_model)) +
-    geom_tile() +
+# Bornes globales
+hx_min <- floor(min(lags_all$hx_recal))
+hx_max <- ceiling(max(lags_all$hx_recal))
+hy_min <- floor(min(lags_all$hy_recal))
+hy_max <- ceiling(max(lags_all$hy_recal))
+
+# Nombre pixels (arrondi au supérieur)
+epsilon <- 10  # petit dépassement pour inclure la borne max
+
+n_pixels_x <- ceiling((hx_max - hx_min) / pixel_size_km)
+n_pixels_y <- ceiling((hy_max - hy_min) / pixel_size_km)
+
+hx_bins <- seq(hx_min, hx_min + n_pixels_x * pixel_size_km + epsilon, by = pixel_size_km)
+hy_bins <- seq(hy_min, hy_min + n_pixels_y * pixel_size_km + epsilon, by = pixel_size_km)
+
+
+lags_all_binned <- lags_all %>%
+  mutate(
+    hx_bin = cut(hx_recal, breaks = hx_bins, include.lowest = TRUE, labels = FALSE),
+    hy_bin = cut(hy_recal, breaks = hy_bins, include.lowest = TRUE, labels = FALSE)
+  ) %>%
+  filter(!is.na(hx_bin) & !is.na(hy_bin)) %>%
+  mutate(
+    hx_center = hx_bins[hx_bin] + pixel_size_km / 2,
+    hy_center = hy_bins[hy_bin] + pixel_size_km / 2
+  )
+
+# Grille complète pour chaque tau
+full_grid <- expand.grid(
+  hx_center = hx_bins[-length(hx_bins)] + pixel_size_km / 2,
+  hy_center = hy_bins[-length(hy_bins)] + pixel_size_km / 2,
+  tau = tau_values
+)
+
+# Moyenne gamma par pixel et tau
+lags_mean <- lags_all_binned %>%
+  group_by(tau, hx_center, hy_center) %>%
+  summarise(gamma_mean = mean(gamma_model, na.rm = TRUE), .groups = "drop")
+
+lags_mean_complete <- full_grid %>%
+  left_join(lags_mean, by = c("tau", "hx_center", "hy_center"))
+
+# Palette commune
+gamma_min <- quantile(lags_mean_complete$gamma_mean, 0.01, na.rm = TRUE)
+gamma_max <- quantile(lags_mean_complete$gamma_mean, 0.99, na.rm = TRUE)
+
+plots <- map(tau_values, function(tau_val) {
+  ggplot(lags_mean_complete %>% filter(tau == tau_val),
+         aes(x = hx_center, y = hy_center, fill = gamma_mean)) +
+    geom_raster() +
     coord_equal() +
+    scale_fill_viridis_c(limits = c(gamma_min, gamma_max), oob = scales::squish, na.value = "transparent") +
     labs(
-      title = paste("Episode", i, "at", tau_value / 3600, "hour(s)"),
+      title = paste("Épisode", episode_id, "- τ =", tau_val),
       x = expression(h[x] - tau * V),
       y = expression(h[y] - tau * V),
       fill = expression(gamma(h, tau))
     ) +
-    scale_fill_viridis_c(limits = c(gamma_min, gamma_max))  # ← échelle fixe ici
-
-  print(p)
-  filename <- paste0(im_folder, 
-    "optim/comephore/vario_estim/q_", q * 1000, "_mindist_",
-                      min_spatial_dist, "km_delta_", delta, "h/",
-    "variogram_ep_", i, "_tau_", tau_value / 3600, "h.pdf")
-  ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
-
-  return(lags_recal)
+    theme_minimal()
 })
 
+# Sauvegarde des plots
+foldername <- paste0(im_folder, "optim/comephore/vario_estim/q_", q * 100, 
+                     "_mindist_", min_spatial_dist, "km_delta_", delta, "h/")
+dir.create(foldername, recursive = TRUE, showWarnings = FALSE)
 
-# Paramètres
-set.seed(42)
-episode_ids <- c(1, 2, sample(seq_along(list_lags), 10))
-tau_values <- c(0, 3600, 7200, 10800)  # en secondes
-
-# Dossier de sortie
-out_dir <- paste0(im_folder, "optim/comephore/vario_estim/q_", q * 1000, 
-                  "_mindist_", min_spatial_dist, "km_delta_", delta, "h/")
-
-# Boucle sur tau_values
-lags_recal_all <- purrr::map_dfr(tau_values, function(tau_value) {
-
-  # Étape 1 : Estimer min/max de gamma_model pour ce tau
-  gamma_range <- purrr::map_dfr(episode_ids, function(i) {
-    lags <- list_lags[[i]]
-    wind <- wind_df[i, ]
-    
-    adv_x <- (abs(wind$vx)^eta1) * sign(wind$vx) * eta2
-    adv_y <- (abs(wind$vy)^eta1) * sign(wind$vy) * eta2
-    
-    lags %>%
-      mutate(
-        hx_recal = s1x - s2x + adv_x * tau_value,
-        hy_recal = s1y - s2y + adv_y * tau_value,
-        gamma_model = beta1 * (abs(hx_recal)^alpha1) +
-                      beta1 * (abs(hy_recal)^alpha1) +
-                      beta2 * (abs(tau_value)^alpha2)
-      ) %>%
-      filter(tau == tau_value) %>%
-      select(gamma_model)
-  })
-
-  gamma_min <- min(gamma_range$gamma_model, na.rm = TRUE)
-  gamma_max <- max(gamma_range$gamma_model, na.rm = TRUE)
-
-  # Étape 2 : Boucle sur les épisodes pour ce tau
-  purrr::map_dfr(episode_ids, function(i) {
-    lags <- list_lags[[i]]
-    wind <- wind_df[i, ]
-    
-    adv_x <- (abs(wind$vx)^eta1) * sign(wind$vx) * eta2
-    adv_y <- (abs(wind$vy)^eta1) * sign(wind$vy) * eta2
-    
-    lags_recal <- lags %>%
-      mutate(
-        hx_recal = s1x - s2x + adv_x * tau,
-        hy_recal = s1y - s2y + adv_y * tau,
-        gamma_model = beta1 * (abs(hx_recal)^alpha1) +
-                      beta1 * (abs(hy_recal)^alpha1) +
-                      beta2 * (abs(tau)^alpha2),
-        episode_id = paste0("E", i),
-        tau_label = paste0("τ = ", tau_value / 3600, "h")
-      )
-
-    # Plot pour un (tau, épisode)
-    p <- ggplot(lags_recal %>% filter(tau == tau_value),
-                aes(x = hx_recal, y = hy_recal, fill = gamma_model)) +
-      geom_tile() +
-      coord_equal() +
-      labs(
-        title = paste("Episode", i, " - ", tau_value / 3600, "h"),
-        x = expression(h[x] - tau * V),
-        y = expression(h[y] - tau * V),
-        fill = expression(gamma(h, tau))
-      ) +
-      scale_fill_viridis_c(limits = c(gamma_min, gamma_max)) +
-      theme_minimal()
-
-    print(p)
-
-    filename <- paste0(out_dir, "variogram_ep_", i, "_tau_", tau_value / 3600, "h.pdf")
-    ggsave(filename, plot = p, width = 20, height = 15, units = "cm")
-
-    return(lags_recal)
-  })
-
-})  # Fin map_dfr sur tau_values
+for (i in seq_along(plots)) {
+  filename <- paste0(foldername, "variogram_ep_", episode_id, "_tau_", tau_values[i], ".png")
+  ggsave(filename, plot = plots[[i]], width = 20, height = 15, units = "cm")
+}
 
 
 
@@ -1014,27 +1135,14 @@ ggplot(adv_df_ep, aes(x = 0, y = 0)) +
      x = expression(v[x]~"(m/s)"),
     y = expression(v[y]~"(m/s)")
   ) +
+  ylim(c(-500, 500)) +
+  xlim(c(-500, 1500)) +
   theme_minimal()
 
 # save plot
 filename <- paste(im_folder, "optim/comephore/advection_vector_field.pdf", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
-
-# plot on vector field
-library(ggplot2)
-library(ggforce)  # pour geom_segment2
-library(gridExtra)  # pour grid.arrange
-library(grid)  # pour ggsave
-library(ggplot2)
-
-ggplot(adv_df_ep, aes(x = adv_x, y = adv_y)) +
-  geom_segment(aes(xend = adv_x + 0.1 * adv_x, yend = adv_y + 0.1 * adv_y),
-               arrow = arrow(length = unit(0.2, "cm")), color = btfgreen) +
-  coord_fixed() +
-  labs(title = "Advection vector field",
-       x = "Adv_x (m/s)", y = "Adv_y (m/s)") +
-  theme_minimal()
 
 
 library(dplyr)
@@ -1043,24 +1151,97 @@ adv_df_ep <- wind_df %>%
   mutate(
     adv_x = (abs(vx)^eta1) * sign(vx) * eta2,
     adv_y = (abs(vy)^eta1) * sign(vy) * eta2,
-    speed = sqrt(adv_x^2 + adv_y^2),
+    speed = sqrt(adv_x^2 + adv_y^2) / 3.6,  # convert km/h to m/s
     direction = (atan2(adv_y, adv_x) * 180 / pi) %% 360  # direction en degrés
   )
 
 
-adv_df_ep <- adv_df_ep %>%
-  mutate(
-    dir_bin = cut(direction, breaks = seq(0, 360, by = 30), include.lowest = TRUE)
-  )
+custom_breaks <- c(0, 0.5, 1, 2, 4, 6, 8, 10, Inf)  # vitesse in m/s
+custom_labels <- c(
+  ">0-0.5 m/s",
+  "0.5-1 m/s",
+  "1-2 m/s",
+  "2-4 m/s",
+  "4-6 m/s",
+  "6-8 m/s",
+  "8-10 m/s",
+  ">10 m/s"
+)
 
 adv_df_ep <- adv_df_ep %>%
   mutate(
-    speed_bin = cut(speed, breaks = c(0, 2, 4, 6, 8, Inf), right = FALSE)
+    speed_bin = cut(speed,
+                    breaks = custom_breaks,
+                    labels = custom_labels,
+                    include.lowest = TRUE,
+                    right = FALSE)
   )
 
+
+# get cardinals
+adv_df_ep <- adv_df_ep %>%
+  mutate(
+    dir_bin = cut(direction,
+                  breaks = seq(0, 360, by = 45),  # 8 bins for 360°
+                  labels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"),
+                  include.lowest = TRUE)
+  )
+
+
+# where are na
+na_indices <- which(is.na(adv_df_ep$dir_bin) | is.na(adv_df_ep$speed_bin))
+
+# remove na
+adv_df_ep <- adv_df_ep %>%
+  filter(!is.na(dir_bin) & !is.na(speed_bin))
+
+# remove 0 advection values
+adv_df_ep <- adv_df_ep %>%
+  filter(!(adv_x == 0 & adv_y == 0))
+# number of zero advection values
+n_zero_adv <- nrow(wind_df) - nrow(adv_df_ep)
+
+custom_palette <- c(
+  "#dceef8",  # très clair bleu
+  "#b3cde3",  # bleu pastel
+  "#89abc7",  # bleu moyen
+  "#5e8db1",  # bleu soutenu
+  "#4f74b1",  # bleu foncé
+  "#8856a7",  # violet clair
+  "#6a3d9a",  # violet soutenu
+  "#4d004b"   # violet très foncé
+)
+
+
+# Plot wind rose with speed bins
 ggplot(adv_df_ep, aes(x = dir_bin, fill = speed_bin)) +
-  geom_bar(position = "stack", width = 1, color = "white") +
-  coord_polar(start = -pi/12) +
-  labs(title = "Wind rose (by speed bin)",
-       x = "Direction", y = "Count", fill = "Speed bin") +
-  theme_minimal()
+  geom_bar(width = 0.7) +
+  scale_fill_manual(
+    values = custom_palette,
+    name = "Speed (m/s)"
+  ) +
+  coord_polar(start = -pi/8) +
+  labs(title = "",
+       x = "Direction",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    legend.key.height = unit(0.6, "cm"),
+    legend.key.width = unit(0.4, "cm")
+  )
+
+# save plot
+filename <- paste(im_folder, "optim/comephore/adv_estimates/wind_rose_speed_per_direction.pdf", sep = "")
+ggsave(filename, width = 20, height = 15, units = "cm")
+
+
+colnames(selected_episodes) <- c("s0", "t0", "u_s0", "t0_date", "adv_x_ms", "adv_y_ms")
+# add adv estimates in selected_episodes
+selected_episodes$adv_hat_x_ms <- adv_df_ep$adv_x
+selected_episodes$adv_hat_y_ms <- adv_df_ep$adv_y
+
+foldername <- paste0(data_folder, "comephore/optim_adv/")
+dir.create(foldername, recursive = TRUE, showWarnings = FALSE)
+wind_df_filename <- paste(data_folder, "/comephore/optim_adv/adv_df.csv", sep = "")
+write.csv(selected_episodes, wind_df_filename, row.names = FALSE)

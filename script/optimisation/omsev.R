@@ -36,9 +36,9 @@ location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
 rain <- as.data.frame(rain.all5[, c(1, 6:(ncol(rain.all5) - 1))])
 
 # remove rain before september 2019 and after january 2024
-rain$dates <- as.POSIXct(rain.all5$dates, tz = "Europe/Paris")
-rain <- rain[rain$dates >= "2019-09-06" & rain$dates <= "2024-01-31", ]
+# rain$dates <- as.POSIXct(rain.all5$dates, tz = "Europe/Paris")
 rain$dates <- with_tz(rain$dates, tzone = "UTC")
+rain <- rain[rain$dates >= "2019-09-06" & rain$dates <= "2024-02-01", ]
 rownames(rain) <- rain$dates
 head(rain)
 tail(rain)
@@ -109,11 +109,11 @@ rain <- as.data.frame(rain_clean)
 # put dates as rownames
 rownames(rain) <- rain$dates
 rain <- rain[-1] # remove dates column
-rain$mse
+# rain$mse
 # Get distances matrix
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
-x11()
+# x11()
 plot(df_dist$value)
 max(df_dist$value)
 
@@ -305,7 +305,7 @@ sites_names <- colnames(rain)
 # rain <- rain[, -c(18, 19, 20)] # remove cines, hydro, brives
 tmax <- 10
 nsites <- ncol(rain) # number of sites
-q_temp <- 0.93 # quantile for temporal chi
+q_temp <- 0.9 # quantile for temporal chi
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
 start_time <- Sys.time()
@@ -380,11 +380,6 @@ chitemp_eta_estim
 # save plot
 filename <- paste(im_folder, "WLSE/omsev/temporal/full_temporal_chi_eta_estim_residuals_", q_temp,
                  ".pdf", sep = "")
-
-chitemp_eta_estim + theme(
-  axis.title = element_text(size = 10),
-  axis.text = element_text(size = 8)
-)
 
 ggsave(filename, width = 20, height = 15, units = "cm", dpi = 600, device = "pdf")
 
@@ -555,7 +550,7 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 ################################################################################
 
 # estimates
-param_omsev <- c(beta1, beta2, alpha1, alpha2)
+param_omsev <- c(beta1, beta2, alpha1, alpha2) # m / 5 min
 
 # in rain remove when all data are NA<
 rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
@@ -646,6 +641,7 @@ for (i in 1:length(selected_points$s0)) {
 
 # Threshold histogram
 df_threshold <- data.frame(u_s0 = selected_points$u_s0)
+unique(df_threshold$u_s0)
 breaks <- seq(floor(min(df_threshold$u_s0)), ceiling(max(df_threshold$u_s0)), by = 0.1)
 
 ggplot(df_threshold, aes(x = u_s0)) +
@@ -654,7 +650,7 @@ ggplot(df_threshold, aes(x = u_s0)) +
   xlab(TeX(paste0("Threshold for quantile $q = ", q, "$"))) +
   ylab("Count")
 filename <- paste(im_folder, "optim/omsev/300m_threshold_histogram_q",
-                  q * 1000, "_delta", delta, "_dmin", min_spatial_dist,
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -690,7 +686,6 @@ time_lookup <- tibble(
 
 unique(time_lookup$t0_date) # check unique t0 values
 sort(unique(time_lookup$month))
-
 
 # distribution of months
 month_counts <- table(time_lookup$month)
@@ -754,10 +749,6 @@ selected_points$t0_date <- ifelse(
 datetimes <- selected_points$t0_date
 
 
-date <- datetimes[1]
-rain_date <- rain[date, ]
-
-
 library(lubridate)
 
 # Convert to POSIXct if needed
@@ -769,28 +760,72 @@ selected_points$t0_date_rounded <- round_date(selected_points$t0_date, unit = "h
 datetimes <- unique(selected_points$t0_date_rounded)
 
 
-# save datetimes of episode in a csv file
-# datetimes_df <- data.frame( datetime = selected_points$t0_date,
-#                             day = selected_points$day,
-#                             month = selected_points$month,
-#                             year = selected_points$year,
-#                             hour = selected_points$hour,
-#                             minute = selected_points$minute,
-#                             second = selected_points$second)
+# get comephore advection episodes
+adv_filename <- paste(data_folder, "/comephore/optim_adv/adv_df.csv", sep = "")
+adv_com_df <- read.csv(adv_filename, sep = ",")
+head(adv_com_df)
 
-datetimes_df <- data.frame( datetime =datetimes)
-datetimes_df$datetime <- format(datetimes_df$datetime, "%Y-%m-%d %H:%M:%S")
+# keep only the t0_date adv_hat_x_ms adv_hat_y_ms
+adv_com_df <- adv_com_df[, c("t0_date", "adv_hat_x_ms", "adv_hat_y_ms")]
+# convert t0_date to POSIXct
+adv_com_df$t0_date <- as.POSIXct(adv_com_df$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# keep only t0_date after 2019-01-01
+adv_com_df <- adv_com_df[adv_com_df$t0_date >= as.POSIXct("2019-01-01", tz = "UTC"), ]
+selected_points$t0_date_rounded <- as.POSIXct(selected_points$t0_date_rounded, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
-filename <- paste0(data_folder, "omsev/t0_episodes",
-           "_q", q * 100, "_delta", delta,
-           "_dmin", min_spatial_dist, ".csv")
+# plot the t0_date_rounded of selected_points and t0_date of adv_com_df
+ggplot() +
+  geom_point(aes(x = selected_points$t0_date_rounded, y = rep(1, length(selected_points$t0_date_rounded))),
+             color = btfgreen, alpha = 0.5) +
+  geom_point(aes(x = adv_com_df$t0_date, y = rep(2, length(adv_com_df$t0_date))),
+             color = "red", alpha = 0.5) +
+  btf_theme +
+  xlab("t0 Date (rounded)") +
+  ylab("Source") +
+  scale_y_continuous(breaks = c(1, 2), labels = c("Selected Points", "Advection Data")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-write.csv(datetimes_df, file = filename, row.names = FALSE)
 
-datetimes_df <- read_csv(filename, col_types = cols(
-  datetime = col_datetime(format = "")
-))
 
+# Threshold in seconds (e.g., 1 hour)
+threshold <- 3600
+
+# Find close pairs using a loop or vectorized approach (more efficient using data.table or fuzzyjoin for large data)
+library(dplyr)
+
+# Create cross join and filter by time difference
+proximity_df <- merge(selected_points, adv_com_df, by = NULL) %>%
+  filter(abs(as.numeric(difftime(t0_date_rounded, t0_date, units = "hours"))))
+
+head(selected_points)
+head(adv_com_df)
+head(outer(selected_points$t0_date_rounded, adv_com_df$t0_date, FUN = function(x, y) abs(as.numeric(difftime(x, y, units = "hours")))))
+
+# Plot with connecting lines
+ggplot() +
+  geom_point(aes(x = selected_points$t0_date_rounded, y = rep(1, nrow(selected_points))),
+             color = btfgreen, alpha = 0.5) +
+  geom_point(aes(x = adv_com_df$t0_date, y = rep(2, nrow(adv_com_df))),
+             color = "red", alpha = 0.5) +
+  geom_segment(data = proximity_df,
+               aes(x = t0_date_rounded, xend = t0_date, y = 1, yend = 2),
+               color = "blue", alpha = 0.3) +
+  btf_theme +
+  xlab("t0 Date (rounded)") +
+  ylab("Source") +
+  scale_y_continuous(breaks = c(1, 2), labels = c("Selected Points", "Advection Data")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+# corresponding t0_date in adv_com_df and t0_date_rounded in selected_points
+selected_points$adv_x <- adv_com_df$adv_hat_x_ms[match(selected_points$t0_date_rounded, adv_com_df$t0_date)]
+selected_points$adv_y <- adv_com_df$adv_hat_y_ms[match(selected_points$t0_date_rounded, adv_com_df$t0_date)]
 
 # check the episode
 head(episode)
