@@ -265,7 +265,7 @@ all(excess_check)  # Should be TRUE if all exceedances are valid
 
 # Spatio-temporal neighborhood parameters
 min_spatial_dist <- 500 # m
-delta <- 10 # in * 5 min
+delta <- 12 # in * 5 min
 episode_size <- delta # size of the episode
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 tail(rain)
@@ -542,7 +542,7 @@ head(df_comephore)
 
 # Take only data from 6 to 7 September 2022
 start_date <- as.POSIXct("2022-09-06 00:00:00", tz = "UTC")
-end_date <- as.POSIXct("2022-09-08 04:00:00", tz = "UTC")
+end_date <- as.POSIXct("2022-09-10 20:00:00", tz = "UTC")
 df_comephore <- df_comephore[df_comephore$date >= start_date & 
                               df_comephore$date <= end_date, ]
 
@@ -569,7 +569,7 @@ p
 foldername <- paste0(im_folder, "rain/comephore/episodes_6_8_sept_2022/")
 # Save the plot
 ggsave(
-  filename = paste0(foldername, "all_pixels_6_8_sept_2022.png"),
+  filename = paste0(foldername, "all_pixels_6_9_sept_2022_from0to20h.png"),
   plot = p,
   width = 10,
   height = 6,

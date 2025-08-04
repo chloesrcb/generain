@@ -360,44 +360,6 @@ get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
   return(c(c_temp, beta_temp, alpha_temp, significance))
 }
 
-get_estimate_variotemp <- function(df_chi, weights, summary = FALSE, lag_unit = 1) {
-  # regression on temporal chi without 0 lag
-  if (0 %in% df_chi$lag) {
-    # remove line with 0 lag
-    df_chi <- df_chi[df_chi$lag != 0, ]
-  }
-
-  chitemp <- df_chi$chi
-  lagtemp <- df_chi$lag
-
-  # regression with log lag
-  dftemp <- data.frame(tchi = eta(chitemp), lagtemp = log(lagtemp))
-
-  sum_wls_temp <- temporal_chi_WLSE(dftemp, weights)
-  df_wls_temp <- data.frame(sum_wls_temp$coefficients)
-
-  alpha_temp <- df_wls_temp$Estimate[2]
-  c_temp <- df_wls_temp$Estimate[1]
-
-  # Correction de l'intercept pour que beta soit à la minute
-  c_temp_minute <- c_temp + alpha_temp * log(lag_unit)
-  beta_temp_minute <- exp(c_temp_minute)
-
-  if (summary) {
-    print(sum_wls_temp)
-  }
-
-  # significance
-  p_values <- df_wls_temp$`Pr...t..`
-  significance <- ifelse(p_values < 0.001, "***",
-                         ifelse(p_values < 0.01, "**",
-                                ifelse(p_values < 0.05, "*", "")))
-
-  # retourne le c non corrigé (pour info), beta corrigé, alpha, et significativité
-  return(c(c_temp, beta_temp_minute, alpha_temp, significance))
-}
-
-
 
 # SPATIAL CHI ------------------------------------------------------------------
 
@@ -684,11 +646,11 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   # remove 0 lag
-  if (0 %in% chispa$lag) {
-    # remove line with 0 lag
-    chispa <- chispa[chispa$lag != 0, ]
-      # df_chi$lag <- df_chi$lag + 0.0001
-  }
+  # if (0 %in% chispa$lag) {
+  #   # remove line with 0 lag
+  #   chispa <- chispa[chispa$lag != 0, ]
+  #     # df_chi$lag <- df_chi$lag + 0.0001
+  # }
 
   # eta transformation
   etachispa_df <- data.frame(chi = eta(chispa$chi),
@@ -700,7 +662,14 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
     # define weights to use
     ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
   } else if (weights == "exp") {
+    ws <- exp(-(etachispa_df$lagspa))
+  } else if (weights == "exp2") {
     ws <- exp(-(etachispa_df$lagspa)^2)
+  } else if (weights == "expbw") {
+    if (is.null(bw)) {
+      stop("Please provide a bandwidth for 'expbw' weights.")
+    }
+    ws <- exp(-(etachispa_df$lagspa / bw)^2)
   } else if (weights == "none") {
     ws <- rep(1, length(etachispa_df$lagspa))
   }
@@ -727,72 +696,6 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
                          ifelse(p_values < 0.01, "**",
                                 ifelse(p_values < 0.05, "*", "")))
   return(c(c_spa, beta_spa, alpha_spa, significance))
-}
-
-
-
-#' Estimate spatial variogram parameters using WLSE
-#'
-#' @param chispa Data frame with columns: lagspa (in meters), chi
-#' @param weights Type of weighting: "residuals", "exp", or "none"
-#' @param summary Logical, print model summary or not
-#' @param lag_unit Unit conversion factor for lags (e.g. 1000 for km, 1 for m)
-#'
-#' @return A data.frame with columns: beta, alpha, signif_beta, signif_alpha
-#' @export
-get_estimate_variospa <- function(chispa, weights = "exp", summary = FALSE, lag_unit = 1) {
-  # Remove lag 0 if present
-  if (0 %in% chispa$lagspa) {
-    chispa <- chispa[chispa$lagspa != 0, ]
-  }
-
-  # Convert lag to desired unit
-  chispa$lagspa <- chispa$lagspa / lag_unit
-
-  # Eta transformation and log-lag
-  df_eta <- data.frame(
-    chi = eta(chispa$chi),
-    lagspa = log(chispa$lagspa)
-  )
-
-  # Define weights
-  ws <- switch(weights,
-               "residuals" = {
-                 model <- lm(chi ~ lagspa, data = df_eta)
-                 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
-               },
-               "exp" = exp(-df_eta$lagspa^2),
-               "none" = rep(1, nrow(df_eta)),
-               stop("Unknown weight type")
-  )
-
-  # Fit WLSE
-  model <- lm(chi ~ lagspa, data = df_eta, weights = ws)
-  model_sum <- summary(model)
-
-  # Extract coefficients
-  coefs <- data.frame(model_sum$coefficients)
-  c_m <- coefs$Estimate[1]
-  alpha <- coefs$Estimate[2]
-  beta <- exp(c_m)
-  c_km <- c_m - alpha * log(lag_unit)  # Adjust c for km unit
-  beta_km <- exp(c_km)
-
-  # Significance stars
-  p_values <- coefs$`Pr...t..`
-  signif <- ifelse(p_values < 0.001, "***",
-                   ifelse(p_values < 0.01, "**",
-                          ifelse(p_values < 0.05, "*", "")))
-
-  if (summary) print(model_sum)
-
-  return(data.frame(
-    c = c_km,
-    beta = beta_km,
-    alpha = alpha,
-    signif_beta = signif[1],
-    signif_alpha = signif[2]
-  ))
 }
 
 
@@ -1042,27 +945,27 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 
 
 
-#' Estimate spatial variogram parameters using WLSE
-#'
-#' This function estimates the spatial variogram parameters using a transformed
-#' spatial extremogram and weighted least squares estimation (WLSE).
-#'
-#' @param chispa A data frame with columns:
-#'        - `chi`: empirical extremogram values
-#'        - `lagspa`: spatial lags (in km, m, etc.)
-#' @param weights Type of weights to use: "residuals", "exp", or "none"
-#' @param summary Logical, whether to print regression summary
-#'
-#' @return A numeric vector: c(intercept, beta, alpha)
-#'         - intercept: log(beta)
-#'         - beta: scale parameter
-#'         - alpha: rate of spatial decay (in original lag units)
-#'
-#' @export
+# #' Estimate spatial variogram parameters using WLSE
+# #'
+# #' This function estimates the spatial variogram parameters using a transformed
+# #' spatial extremogram and weighted least squares estimation (WLSE).
+# #'
+# #' @param chispa A data frame with columns:
+# #'        - `chi`: empirical extremogram values
+# #'        - `lagspa`: spatial lags (in km, m, etc.)
+# #' @param weights Type of weights to use: "residuals", "exp", or "none"
+# #' @param summary Logical, whether to print regression summary
+# #'
+# #' @return A numeric vector: c(intercept, beta, alpha)
+# #'         - intercept: log(beta)
+# #'         - beta: scale parameter
+# #'         - alpha: rate of spatial decay (in original lag units)
+# #'
+# #' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   # eta transformation
-  # etachispa_df <- data.frame(chi = eta(chispa$chi),
-  #                          lagspa = log(chispa$lagspa))
+  etachispa_df <- data.frame(chi = eta(chispa$chi),
+                           lagspa = log(chispa$lagspa))
 
   if (weights == "residuals") {
     # LS reg (clasical model)
@@ -1098,52 +1001,3 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   }
   return(c(c_spa, beta_spa, alpha_spa))
 }
-
-
-
-# get_estimate_variospa <- function(chispa, weights = "none", summary = FALSE) {
-#   # Remove lag = 0 if present (undefined or unstable)
-#   chispa <- chispa[chispa$lagspa != 0, ]
-
-#   # Normalize lags (to avoid instability with meters vs km)
-#   max_lag <- max(chispa$lagspa)
-#   chispa$lag_scaled <- chispa$lagspa / max_lag
-
-#   # Apply eta transformation to chi values
-#   etachispa_df <- data.frame(
-#     chi_eta = eta(chispa$chi),
-#     lag_scaled = chispa$lag_scaled
-#   )
-
-#   # Define weights
-#   if (weights == "residuals") {
-#     # Initial OLS to estimate variance of residuals
-#     ols_model <- lm(chi_eta ~ lag_scaled, data = etachispa_df)
-#     resid_model <- lm(abs(ols_model$residuals) ~ ols_model$fitted.values)
-#     ws <- 1 / (fitted(resid_model)^2)
-#   } else if (weights == "exp") {
-#     # Exponential decay on normalized lag
-#     ws <- exp(-(etachispa_df$lag_scaled)^2)
-#   } else if (weights == "none") {
-#     ws <- rep(1, nrow(etachispa_df))
-#   } else {
-#     stop("Invalid 'weights' value. Choose 'residuals', 'exp', or 'none'.")
-#   }
-
-#   # Weighted least squares regression
-#   wls_model <- lm(chi_eta ~ lag_scaled, data = etachispa_df, weights = ws)
-
-#   if (summary) {
-#     print(summary(wls_model))
-#   }
-
-#   # Extract and rescale parameters
-#   intercept <- coef(wls_model)[1]
-#   slope <- coef(wls_model)[2]
-
-#   beta <- exp(intercept)
-#   alpha <- slope / max_lag  # Rescale to original lag units
-
-#   return(c(intercept = intercept, beta = beta, alpha = alpha))
-# }
-

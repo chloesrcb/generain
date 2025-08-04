@@ -101,14 +101,14 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
     dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
   } else {
     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
-    dist_matrix <- ceiling(round(dist_matrix, 1) * 1000 ) / 1000
+    dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
   }
   rownames(dist_matrix) <- site_names
   colnames(dist_matrix) <- site_names
 
   # Initialization
   selected_points <- data.table(s0 = character(), t0 = integer(), 
-                                t0_dates = character(), u_s0 = numeric())
+                                t0_date = character(), u_s0 = numeric())
   nb_episode <- 0
 
   # Sort excesses by time for consistent processing
@@ -143,7 +143,7 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 
     if (is_valid) {
       selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, 
-                                                t0_dates = t0_date, u_s0 = u0))
+                                                t0_date = t0_date, u_s0 = u0))
       nb_episode <- nb_episode + 1
       if (nb_episode >= n_max_episodes) break
     }
@@ -542,62 +542,123 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
   return(marginal_excesses)
 }
 
-#' empirical_excesses_rpar function
+
+#' empirical_excesses_rpar function (clean version)
 #'
-#' This function calculates the empirical excesses based on indicators above a
-#' quantile threshold for the r-Pareto process.
+#' Computes empirical excesses for r-Pareto process based on thresholds or quantiles.
 #'
-#' @param data_rain The rainfall data.
-#' @param quantile The quantile value.
-#' @param df_lags The dataframe with spatial and temporal lag values.
-#' @param threshold A boolean value to indicate if the quantile variable is a
-#'                threshold value and not a uniform quantile. Default is FALSE.
-#' @param t0 The starting time. Default is 1.
+#' @param data_rain Matrix or data.frame of rainfall data (rows: time, columns: sites).
+#' @param df_lags Dataframe with columns: s1, s2 (site indices), tau (temporal lags).
+#' @param thresholds NULL (uniform quantile, default), or a single threshold (numeric), or a numeric vector of thresholds per site.
+#' @param quantile Quantile level to use if thresholds is NULL. Default = 0.9.
+#' @param t0 Starting time index (integer). Default = 0.
 #'
-#' @return The empirical excesses dataframe with the number of excesses kij and
-#' the number of possible excesses Tobs, with the lag values.
-#'
+#' @return A data.table with lag values, number of excesses (kij), and number of observed times (Tobs).
 #' @export
-empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
-                                    threshold = FALSE, t0 = 0) {
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
-  excesses[, Tobs := 0L]
-  excesses$Tobs <- 1
-  excesses[, kij := 0L]
-  # excesses$kij <- NA
-  unique_tau <- unique(df_lags$tau) # unique temporal lags
-  ind_s1 <- df_lags$s1[1] # s0
+empirical_excesses_rpar <- function(data_rain, df_lags,
+                                    thresholds = NULL, quantile = 0.9,
+                                    t0 = 0) {
+  # Init output
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
+  excesses[, `:=`(Tobs = 1L, kij = 0L)]
 
-  for (tau in unique_tau) { # loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
+  unique_tau <- unique(df_lags$tau)
+  ind_s1 <- df_lags$s1[1]  # site of interest
 
-    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-      # get the indices of the sites
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      # get the data for the second site
-      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      if(all(is.na(X_s2))) {
-        next # skip if all values are NA
-      }
+  for (tau in unique_tau) {
+    df_tau <- df_lags[df_lags$tau == tau, ]
 
+    for (i in seq_len(nrow(df_tau))) {
+      ind_s2 <- as.numeric(df_tau$s2[i])
+      X_s2 <- data_rain[, ind_s2, drop = FALSE]
+
+      if (all(is.na(X_s2))) next
       X_s2 <- as.vector(na.omit(X_s2[, 1]))
 
-      # if (!threshold) {
-      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
-      # }
-      # shifted data
-      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
-      if (is.list(X_s_t)) {
-        X_s_t <- X_s_t[[1]] # extract the value if it's a list
+      t_index <- t0 + 1 + tau
+      if (t_index > length(X_s2)) next
+
+      X_s_t <- X_s2[t_index]
+      if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
+
+      # Determine the threshold to use
+      if (!is.null(thresholds)) {
+        if (length(thresholds) == 1) {
+          threshold_val <- thresholds
+        } else {
+          threshold_val <- thresholds[ind_s2]
+          if (is.na(threshold_val)) next
+        }
+        exceed <- X_s_t > threshold_val
+      } else {
+        # Use uniform quantile
+        rank_val <- rank(X_s2) / (length(X_s2) + 1)
+        exceed <- rank_val[t_index] > quantile
       }
-      nmargin <- sum(X_s_t > quantile) # 0 or 1
-      excesses$kij[excesses$s1 == ind_s1
-                    & excesses$s2 == ind_s2
-                    & excesses$tau == tau] <- nmargin
+      excesses[s1 == ind_s1 & s2 == ind_s2 & tau == tau,
+              kij := as.integer(exceed)]
     }
   }
+
   return(excesses)
 }
+
+# #' empirical_excesses_rpar function
+# #'
+# #' This function calculates the empirical excesses based on indicators above a
+# #' quantile threshold for the r-Pareto process.
+# #'
+# #' @param data_rain The rainfall data.
+# #' @param quantile The quantile value.
+# #' @param df_lags The dataframe with spatial and temporal lag values.
+# #' @param threshold A boolean value to indicate if the quantile variable is a
+# #'                threshold value and not a uniform quantile. Default is FALSE.
+# #' @param t0 The starting time. Default is 1.
+# #'
+# #' @return The empirical excesses dataframe with the number of excesses kij and
+# #' the number of possible excesses Tobs, with the lag values.
+# #'
+# #' @export
+# empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
+#                                     threshold = FALSE, t0 = 0) {
+#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
+#   excesses[, Tobs := 0L]
+#   excesses$Tobs <- 1
+#   excesses[, kij := 0L]
+#   # excesses$kij <- NA
+#   unique_tau <- unique(df_lags$tau) # unique temporal lags
+#   ind_s1 <- df_lags$s1[1] # s0
+
+#   for (tau in unique_tau) { # loop over temporal lags
+#     df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
+
+#     for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+#       # get the indices of the sites
+#       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+#       # get the data for the second site
+#       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
+#       if (all(is.na(X_s2))) {
+#         next # skip if all values are NA
+#       }
+
+#       X_s2 <- as.vector(na.omit(X_s2[, 1]))
+
+#       # if (!threshold) {
+#       #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
+#       # }
+#       # shifted data
+#       X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
+#       if (is.list(X_s_t)) {
+#         X_s_t <- X_s_t[[1]] # extract the value if it's a list
+#       }
+#       nmargin <- sum(X_s_t > quantile) # 0 or 1
+#       excesses$kij[excesses$s1 == ind_s1
+#                     & excesses$s2 == ind_s2
+#                     & excesses$tau == tau] <- nmargin
+#     }
+#   }
+#   return(excesses)
+# }
 
 empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
@@ -736,8 +797,7 @@ empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
 #'
 #' @export
 theoretical_chi <- function(params, df_lags, latlon = FALSE,
-                            directional = FALSE, convert_in_hours = TRUE,
-                            convert_in_km = TRUE) {
+                            directional = FALSE) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
@@ -764,7 +824,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
    # Cartesian coordinates case
    chi_df$s1xv <- chi_df$s1x
    chi_df$s1yv <- chi_df$s1y
-   # - adv because tau = t - t0 (in simulation) and 
+   # - adv because tau = t - t0 and 
    # s_shifted = s - adv * t, s0_shifted = s0 - adv * t0, h = s - s0
    chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau # m/s * s = m
    chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
@@ -782,29 +842,29 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
 
   }
 
-  if (convert_in_hours && any(chi_df$tau > 3600)) {
-    # Convert tau to hours
-    chi_df$tau <- chi_df$tau / 3600 # convert to hours
-  }
+  # if (convert_in_hours && any(chi_df$tau > 3600)) {
+  #   # Convert tau to hours
+  #   chi_df$tau <- chi_df$tau / 3600 # convert to hours
+  # }
 
-  if (convert_in_km && any(chi_df$hnorm > 1000)) {
-    # Convert hnormV to km
-    chi_df$hnormV <- chi_df$hnormV / 1000 # convert to km
-    chi_df$hx <- chi_df$hx / 1000 # km
-    chi_df$hy <- chi_df$hy / 1000 # km
-  }
+  # if (convert_in_km && any(chi_df$hnorm > 1000)) {
+  #   # Convert hnormV to km
+  #   chi_df$hnormV <- chi_df$hnormV / 1000 # convert to km
+  #   chi_df$hx <- chi_df$hx / 1000 # km
+  #   chi_df$hy <- chi_df$hy / 1000 # km
+  # }
 
 
   if (directional) {
     # Apply directional distance adjustment
     chi_df$vario <- (2 * beta1) * abs(chi_df$hx)^alpha1 +
                     (2 * beta1) * abs(chi_df$hy)^alpha1 +
-                    (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
+                    (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
   } else {
     # Only distance lag
     chi_df$hlag <-  chi_df$hnormV
     chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
-                    (2 * beta2) * abs(chi_df$tau)^alpha2 # km and hours
+                    (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
   }
 
   # Compute chi from variogram
@@ -884,8 +944,7 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 neg_ll <- function(params, df_lags, excesses,
                       hmax = NA,  rpar = TRUE, threshold = FALSE,
                       latlon = FALSE, quantile = NA, data = NA,
-                      directional = TRUE, convert_in_hours = TRUE,
-                      convert_in_km = TRUE) {
+                      directional = TRUE) {
   if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
@@ -907,8 +966,7 @@ neg_ll <- function(params, df_lags, excesses,
     excesses <- excesses[df_lags$hnorm <= hmax, ]
     df_lags <- df_lags[df_lags$hnorm <= hmax, ]
   }
-  chi <- theoretical_chi(params, df_lags, latlon, directional, convert_in_hours,
-                          convert_in_km)
+  chi <- theoretical_chi(params, df_lags, latlon, directional)
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
@@ -970,9 +1028,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                              hmax = NA, latlon = TRUE,
                              directional = TRUE, threshold = FALSE,
                              rpar = TRUE, fixed_eta1 = FALSE,
-                             fixed_eta2 = FALSE,
-                             convert_in_hours = FALSE,
-                             convert_in_km = FALSE) {
+                             fixed_eta2 = FALSE) {
   # Add default values for advection parameters
   print(params)
   if (length(params) == 4) {
@@ -1028,9 +1084,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                      hmax = hmax, excesses = excesses,
                      latlon = latlon, directional = directional,
                      threshold = threshold, rpar = rpar,
-                     data = data, quantile = quantile,
-                     convert_in_hours = convert_in_hours,
-                     convert_in_km = convert_in_km)
+                     data = data, quantile = quantile)
 
     nll_composite <- nll_composite + nll_i
   }

@@ -38,7 +38,7 @@ rain <- as.data.frame(rain.all5[, c(1, 6:(ncol(rain.all5) - 1))])
 # remove rain before september 2019 and after january 2024
 # rain$dates <- as.POSIXct(rain.all5$dates, tz = "Europe/Paris")
 rain$dates <- with_tz(rain$dates, tzone = "UTC")
-rain <- rain[rain$dates >= "2019-09-06" & rain$dates <= "2024-02-01", ]
+rain <- rain[rain$dates >= "2019-01-01" & rain$dates <= "2024-02-01", ]
 rownames(rain) <- rain$dates
 head(rain)
 tail(rain)
@@ -123,7 +123,7 @@ library(dplyr)
 rain <- rain %>%
   filter(!if_all(everything(), is.na))
 
-# in rain remove when all data are NA<
+# in rain remove when all data are NA
 rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
 
 # remove cines, hydro, brives
@@ -288,273 +288,33 @@ sites_names <- colnames(rain)
 #     color = "Site"
 #   )
 
-
-# # save plot
-# filename <- paste(im_folder, "WLSE/omsev/temporal/excess_counts_temporal_",
-#                     q, ".png", sep = "")
-# ggsave(filename, width = 20, height = 15, units = "cm")
-
 ################################################################################
-# EXTREMOGRAM ------------------------------------------------------------------
+# WLSE results -----------------------------------------------------------------
 ################################################################################
-# Spatial and temporal CHIPLOT and CHI value for all pairs
+foldername <- paste0(data_folder, "omsev/WLSE/")
+df_spa_result <- read.csv(paste0(foldername, "wlse_spa_summary.csv"))
+df_temp_result <- read.csv(paste0(foldername, "wlse_temp_summary.csv"))
+df_result_all <- merge(df_spa_result, df_temp_result, by = NULL)
 
-# TEMPORAL CHI -----------------------------------------------------------------
+# select one row
+df_result <- df_result_all[df_result_all$q_spa == 0.95 &
+                             df_result_all$q_temp == 0.9, ]
 
-# remove stations  cines, hydro, brives
-# rain <- rain[, -c(18, 19, 20)] # remove cines, hydro, brives
-tmax <- 10
-nsites <- ncol(rain) # number of sites
-q_temp <- 0.9 # quantile for temporal chi
-# Temporal chi with spatial lag fixed at 0
-# compute chiplot of every site with itself but lagged in time
-start_time <- Sys.time()
-chimat_dtlag <- temporal_chi(rain, tmax, quantile = q_temp, mean = FALSE, zeros = FALSE)
-end_time <- Sys.time()
-elapsed_time <- end_time - start_time
-print(elapsed_time)
-
-
-chi_df_dt <- data.frame(chimat_dtlag)
-colnames(chi_df_dt) <- c(0:tmax) * 5 # temporal lags from 1 to tmax
-rownames(chi_df_dt) <- c(1:nsites) # stations
-# remove lag 0
-chi_df_dt <- chi_df_dt[, -1] # remove lag 0
-
-# boxplot all pixels values for chi temp
-# Reshape data using gather function
-df_gathered <- chi_df_dt %>% gather(key = "variable", value = "value")
-df_gathered$group <- factor(as.integer(df_gathered$variable),
-                            levels = seq(0, tmax) * 5)
-
-# Plot boxplots
-chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
-  geom_boxplot(fill = btfgreen, alpha = 0.4, outlier.color = btfgreen) +
-  btf_boxplot_theme +
-  xlab(TeX(r"($\tau$ (minutes))")) +
-  ylab(TeX(r"($\widehat{\chi}(0,\tau)$)"))
-
-chitemp
-
-filename <- paste(im_folder, "WLSE/omsev/temporal/full_temporal_chi_boxplot_", q_temp,
-                 ".pdf", sep = "")
-
-# save plot
-ggsave(filename, plot = chitemp, width = 20, height = 15, units = "cm",
-       dpi = 600, device = "pdf")
-
-
-chimat_dt_mean <- temporal_chi(rain, tmax, quantile = q_temp, mean = TRUE,
-                               zeros = FALSE)
-# get h axis in minutes ie x5 minutes
-df <- data.frame(lag = c(0:tmax) * 5, chi = chimat_dt_mean)
-
-# remove lag 0
-df <- df[-1, ] # remove lag 0
-ggplot(df, aes(x = lag, y = chi)) +
-  geom_point(color = btfgreen) +
-  btf_theme +
-  xlab(TeX(r"($\tau$ (minutes))")) +
-  ylab(TeX(r"($\hat{\chi}$)"))
-
-
-dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
-
-wlse_temp <- get_estimate_variotemp(df,
-                                    weights = "residuals", summary = TRUE)
-c2 <- as.numeric(wlse_temp[[1]])
-beta2 <- as.numeric(wlse_temp[[2]])
-alpha2 <- as.numeric(wlse_temp[[3]])
-y <- alpha2 * df$lag + c2  #idem
-
-chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
-  geom_point(color = btfgreen, size = 4) +
-  btf_theme +
-  xlab(TeX(r"($\log(\tau)$)")) +
-  ylab(TeX(r"($\zeta(\widehat{\chi}(0,\tau))$)")) +
-  geom_line(aes(x = lag, y = alpha2 * lag + c2),
-            alpha = 0.6, color = "darkred", linewidth = 1.5)
-
-chitemp_eta_estim
-
-# save plot
-filename <- paste(im_folder, "WLSE/omsev/temporal/full_temporal_chi_eta_estim_residuals_", q_temp,
-                 ".pdf", sep = "")
-
-ggsave(filename, width = 20, height = 15, units = "cm", dpi = 600, device = "pdf")
-
-
-# SPATIAL CHI ------------------------------------------------------------------
-
-library(classInt)
-
-make_distance_classes <- function(distances,
-                                  method = "quantile",
-                                  n = 10,
-                                  pairs_per_class = NULL) {
-  distances <- sort(distances)
-  if (method == "quantile") {
-    breaks <- quantile(distances, probs = seq(0, 1, length.out = n + 1))
-  } else if (method == "equal") {
-    breaks <- seq(min(distances), max(distances), length.out = n + 1)
-  } else if (method == "jenks") {
-    breaks <- classIntervals(distances, n = n, style = "jenks")$brks
-  } else if (method == "fixed_pairs") {
-    if (is.null(pairs_per_class)) stop("Need pairs_per_class")
-    n_classes <- floor(length(distances) / pairs_per_class)
-    indices <- seq(1, length(distances), by = pairs_per_class)
-    breaks <- distances[indices]
-    breaks <- c(breaks, max(distances) + 10)
-  } else if (method == "log") {
-    breaks <- exp(seq(log(min(distances)), log(max(distances)),
-                                                          length.out = n + 1))
-  } else {
-    stop("Unknown method")
-  }
-  return(unique(breaks))
-}
-
-df_dist_order <- df_dist %>%
-  filter(value > 0) %>%
-  arrange(value)
-# Supposons que df_dist_order a déjà été filtré avec df_dist_order$value > 0
-distances <- df_dist_order$value
-
-# Choisir méthode ici :
-radius <- make_distance_classes(distances,
-                                method = "quantile",
-                                n = 12,
-                                pairs_per_class = 20)
-dist_counts <- table(cut(distances, breaks = radius))
-df_hist <- data.frame(Interval = names(dist_counts), Count = as.vector(dist_counts))
-df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
-df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
-
-histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
-  btf_theme +
-  geom_bar(stat = "identity", fill = btfgreen, alpha = 0.8) +
-  xlab("Spatial lag") +
-  ylab("Pair count") +
-  theme(axis.text.x = element_text(angle = 45)) +
-  scale_x_discrete(labels = df_hist$Breaks)
-
-# save histogram
-filename <- paste(im_folder, "WLSE/omsev/spatial/histogram_spatial_lag_",
-                 length(radius) - 1, ".pdf", sep = "")
-ggsave(filename, plot = histradius, width = 20, height = 15, units = "cm",
-       dpi = 600, device = "pdf")
-
-# Create matrix of radius
-rad_mat <- dist_mat
-
-for (i in 2:length(radius)) {
-  curr_radius <- radius[i]
-  prev_radius <- radius[i - 1]
-  rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
-}
-
-# Assigner NA aux distances non classées (>= dernier rayon)
-rad_mat[dist_mat >= max(radius)] <- NA
-rad_mat[dist_mat == 0] <- NA
-
-# Triangulaire
-rad_mat[lower.tri(rad_mat)] <- NA
-rad_mat_sym <- rad_mat
-rad_mat_sym[lower.tri(rad_mat)] <- t(rad_mat)[lower.tri(rad_mat)]
-hmax <- max(radius) # distance max in absolute value...
-nb_col <- length(unique(radius)) # we exclude 0 ?
-
-q_spa <- 0.95
-# plot chi for each distance
-chispa_df <- spatial_chi(rad_mat, rain,
-                         quantile = q_spa, zeros = FALSE, mid = TRUE)
-
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
-                           lagspa = log(chispa_df$lagspa))
-
-par(mfrow = c(1, 1))
-
-chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
-  btf_theme +
-  geom_point(col = btfgreen, size = 4) +
-  xlab(TeX(paste0("$||", expression(bold("h")), "||$", " (m)"))) +
-  ylab(TeX(paste0("$\\widehat{\\chi}(", expression(bold("h")), ", 0)$"))) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color =  "#5c595943")) +
-  ylim(0, 1) +
-  theme(panel.grid.major = element_line(color = "white"),
-        panel.grid.minor = element_line(color = "white"))
-
-chispa_plot
-
-ymin <- min(etachispa_df$chi)
-
-chispa_eta <- ggplot(etachispa_df, aes(lagspa, chi)) +
-  btf_theme +
-  geom_point(col = "darkred", size = 4) +
-  xlab(TeX(paste0("$ log ||", expression(bold("h")), "||$"))) +
-  ylab(TeX(paste0("$\\widehat{\\chi}(", expression(bold("h")), ", 0)$"))) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color = "#5c595943"))
-
-chispa_eta
-
-
-chispa_df$lagspa <- chispa_df$lagspa # convert to km
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "residuals", summary = TRUE, bw = 1.5)
-c1 <- wlse_spa[[1]]
-beta1 <- wlse_spa[[2]]
-alpha1 <- wlse_spa[[3]]
-y <- alpha1 * etachispa_df$lagspa + c1  #idem
-print(paste("c1:", c1, "beta1:", beta1, "alpha1:", alpha1))
-
-chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
-  btf_theme +
-  geom_point(col = btfgreen, size = 4) +
-  xlab(TeX(r"($\log(h)$)")) +
-  ylab(TeX(r"($\zeta(\widehat{\chi}(h, 0))$)")) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color = "#5c595943")) +
-  geom_line(aes(x = lagspa, y = alpha1 * lagspa + c1), alpha = 0.6,
-            color = "darkred", linewidth = 1.5) +
-        ylim(-2, 0) # set y limits to ymin and max chi
-
-chispa_eta_estim
-
-# save plot
-filename <- paste(im_folder, "WLSE/omsev/spatial/spatial_chi_eta_estim_residuals_",
-                 q_spa, "_radius_", length(radius) - 1, ".pdf", sep = "")
-ggsave(filename, width = 20, height = 15, units = "cm")
-
+beta1 <- df_result$beta1
+beta2 <- df_result$beta2
+alpha1 <- df_result$alpha1
+alpha2 <- df_result$alpha2
 
 ################################################################################
 # VARIOGRAM --------------------------------------------------------------------
 ################################################################################
 
 # estimates
-param_omsev <- c(beta1, beta2, alpha1, alpha2) # m / 5 min
+param_omsev <- c(beta1, beta2, alpha1, alpha2) # m / min
 
 # in rain remove when all data are NA<
 rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
-q <- 0.95 # quantile
+q <- 0.97 # quantile
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
 # verify that the excess is above the threshold
@@ -649,7 +409,7 @@ ggplot(df_threshold, aes(x = u_s0)) +
   btf_theme +
   xlab(TeX(paste0("Threshold for quantile $q = ", q, "$"))) +
   ylab("Count")
-filename <- paste(im_folder, "optim/omsev/300m_threshold_histogram_q",
+filename <- paste(im_folder, "optim/omsev/threshold_histogram_q",
                   q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
@@ -669,204 +429,121 @@ list_episodes_points <- get_extreme_episodes(selected_points, rain,
 list_episodes <- list_episodes_points$episodes
 episode <- list_episodes[[1]]
 
-
-library(dplyr)
-library(lubridate)
-library(readr)
-time_lookup <- tibble(
-  t0 = unlist(list_t),
-  t0_date = parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC"),
-  day = day(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
-  month = month(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
-  year = year(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
-  hour = hour(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
-  minute = minute(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC")),
-  second = second(parse_date_time(names(list_t), orders = c("ymd HMS", "ymd HM", "ymd"), tz = "UTC"))
-)
-
-unique(time_lookup$t0_date) # check unique t0 values
-sort(unique(time_lookup$month))
-
-# distribution of months
-month_counts <- table(time_lookup$month)
-month_df <- as.data.frame(month_counts) 
-colnames(month_df) <- c("Month", "Count")
-month_df$Month <- factor(month_df$Month, levels = 1:12,
-                         labels = c("Jan", "Feb", "Mar", "Apr", "May",
-                                    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
-ggplot(month_df, aes(x = Month, y = Count)) +
-  geom_bar(stat = "identity", fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-  btf_theme +
-  xlab("Month") +
-  ylab("Count") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# save histo 
-filename <- paste(im_folder, "optim/omsev/months_histogram_q",
-                  q * 100,
-                  ".png", sep = "")
-ggsave(filename, width = 20, height = 15, units = "cm")
-
-head(time_lookup)
-# selected_points$t0_date <- time_lookup$t0_date[match(selected_points$t0, time_lookup$t0)]
 selected_points$t0_date <- as.POSIXct(selected_points$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-# get month of t0_date inside selected_points
-selected_points$month <- month(selected_points$t0_date)
 
-# plot selected points t0 dates
-ggplot(selected_points, aes(x = t0_date)) +
-  geom_histogram(bins = 50, fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-  btf_theme +
-  xlab("t0 Date") +
-  ylab("Count") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# plot months of t0 dates
-ggplot(selected_points, aes(x = factor(month))) +
-  geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-  btf_theme +
-  xlab("Month") +
-  ylab("Count") +
-  scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May",
-                               "Jun", "Jul", "Aug", "Sep", "Oct",
-                               "Nov", "Dec")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# save plot
-filename <- paste(im_folder, "optim/omsev/selected_episodes_months_histogram_q",
-                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-                  ".png", sep = "")
-
-ggsave(filename, width = 20, height = 15, units = "cm")
-
-# if there is "Y-M-D" change to "Y-M-D 00:00:00"
-selected_points$t0_date <- ifelse(
-  nchar(format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")) == 10,
-  paste0(format(selected_points$t0_date, "%Y-%m-%d"), " 00:00:00"),
-  format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")
-)
-
-datetimes <- selected_points$t0_date
-
+# selected_points$t0_date <- ifelse(
+#   nchar(format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")) == 10,
+#   paste0(format(selected_points$t0_date, "%Y-%m-%d"), " 00:00:00"),
+#   format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")
+# )
 
 library(lubridate)
 
-# Convert to POSIXct if needed
-selected_points$t0_date <- as.POSIXct(selected_points$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# Round to the next hour
+selected_points$t0_date_rounded <- ceiling_date(selected_points$t0_date, "hour")
 
-# Round to the nearest hour
-selected_points$t0_date_rounded <- round_date(selected_points$t0_date, unit = "hour")
-
-datetimes <- unique(selected_points$t0_date_rounded)
+datetimes <- unique(selected_points$t0_date)
+datetimes_hour <- unique(selected_points$t0_date_rounded)
 
 
-# get comephore advection episodes
-adv_filename <- paste(data_folder, "/comephore/optim_adv/adv_df.csv", sep = "")
-adv_com_df <- read.csv(adv_filename, sep = ",")
-head(adv_com_df)
-
-# keep only the t0_date adv_hat_x_ms adv_hat_y_ms
-adv_com_df <- adv_com_df[, c("t0_date", "adv_hat_x_ms", "adv_hat_y_ms")]
-# convert t0_date to POSIXct
-adv_com_df$t0_date <- as.POSIXct(adv_com_df$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-# keep only t0_date after 2019-01-01
-adv_com_df <- adv_com_df[adv_com_df$t0_date >= as.POSIXct("2019-01-01", tz = "UTC"), ]
-selected_points$t0_date_rounded <- as.POSIXct(selected_points$t0_date_rounded, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-
-# plot the t0_date_rounded of selected_points and t0_date of adv_com_df
-ggplot() +
-  geom_point(aes(x = selected_points$t0_date_rounded, y = rep(1, length(selected_points$t0_date_rounded))),
-             color = btfgreen, alpha = 0.5) +
-  geom_point(aes(x = adv_com_df$t0_date, y = rep(2, length(adv_com_df$t0_date))),
-             color = "red", alpha = 0.5) +
-  btf_theme +
-  xlab("t0 Date (rounded)") +
-  ylab("Source") +
-  scale_y_continuous(breaks = c(1, 2), labels = c("Selected Points", "Advection Data")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# save datetime list to csv
+datetime_filename <- paste(data_folder, "/omsev/t0_episodes_q", q * 100,
+                           "_delta", delta, "_dmin", min_spatial_dist,
+                           ".csv", sep = "")
+write.csv(data.frame(t0_date = datetimes_hour), datetime_filename, row.names = FALSE)
 
 
-
-# Threshold in seconds (e.g., 1 hour)
-threshold <- 3600
-
-# Find close pairs using a loop or vectorized approach (more efficient using data.table or fuzzyjoin for large data)
-library(dplyr)
-
-# Create cross join and filter by time difference
-proximity_df <- merge(selected_points, adv_com_df, by = NULL) %>%
-  filter(abs(as.numeric(difftime(t0_date_rounded, t0_date, units = "hours"))))
-
-head(selected_points)
-head(adv_com_df)
-head(outer(selected_points$t0_date_rounded, adv_com_df$t0_date, FUN = function(x, y) abs(as.numeric(difftime(x, y, units = "hours")))))
-
-# Plot with connecting lines
-ggplot() +
-  geom_point(aes(x = selected_points$t0_date_rounded, y = rep(1, nrow(selected_points))),
-             color = btfgreen, alpha = 0.5) +
-  geom_point(aes(x = adv_com_df$t0_date, y = rep(2, nrow(adv_com_df))),
-             color = "red", alpha = 0.5) +
-  geom_segment(data = proximity_df,
-               aes(x = t0_date_rounded, xend = t0_date, y = 1, yend = 2),
-               color = "blue", alpha = 0.3) +
-  btf_theme +
-  xlab("t0 Date (rounded)") +
-  ylab("Source") +
-  scale_y_continuous(breaks = c(1, 2), labels = c("Selected Points", "Advection Data")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-
-
-
-
-
-
-# corresponding t0_date in adv_com_df and t0_date_rounded in selected_points
-selected_points$adv_x <- adv_com_df$adv_hat_x_ms[match(selected_points$t0_date_rounded, adv_com_df$t0_date)]
-selected_points$adv_y <- adv_com_df$adv_hat_y_ms[match(selected_points$t0_date_rounded, adv_com_df$t0_date)]
-
-# check the episode
-head(episode)
 library(ggplot2)
-library(reshape2)  # for melting wide data to long format
+library(dplyr)
 
-# Convert matrix to data frame
-index <- 105
-sort(t0_list)
-which(t0_list == t0_list[index])
-episode_test <- list_episodes[[index]]
-df_episode <- as.data.frame(episode_test)
-df_episode$Time <- 0:(nrow(df_episode)-1)  # Add a time column
-s0_list[index]
-u_episode <- selected_points$u_s0[index]
-# t0_episode <- t0_list[index]
-# Convert from wide to long format
-df_long <- melt(df_episode, id.vars = "Time")
-head(df_long)
-colnames(df_long) <- c("Time", "Pixel", "Value")
-ggplot(df_long, aes(x = Time, y = Value, group = Pixel)) +
-  geom_line(color = btfgreen) +
-  geom_hline(yintercept = u_episode, color = "red", linetype = "dashed") +
-  theme_minimal()
+# Create output folder if it doesn't exist
+rain_plot_folder <- file.path(im_folder, "optim/omsev/rain_episodes/")
+if (!dir.exists(rain_plot_folder)) dir.create(rain_plot_folder, recursive = TRUE)
 
-filename <- paste(im_folder, "optim/omsev/extreme_episode", index, "_min", min_spatial_dist,
-                  "m_max", tmax, "_5min_delta_", delta, ".png", sep = "")
-# filename <- "test.png"
-ggsave(filename, width = 20, height = 15, units = "cm")
+# Loop over all datetimes and plot
+for (i in seq_along(datetimes)) {
+  # Define window (e.g., -2h to +10h around dt)
+  dt <- as.POSIXct(datetimes[i], tz = "UTC")
+  start_date <- dt - 2 * 3600
+  end_date <- dt + 10 * 3600
+
+  rain_subset <- rain[rownames(rain) >= start_date & rownames(rain) <= end_date, , drop = FALSE]
+  rain_subset$datetime <- as.POSIXct(rownames(rain_subset), tz = "UTC")
+
+  rain_subset_long <- rain_subset %>%
+    pivot_longer(cols = -datetime, names_to = "Station", values_to = "Value") %>%
+    filter(!is.na(Value))
+
+  plot_title <- paste0("Rainfall around ", format(dt, "%Y-%m-%d %H:%M"))
+  
+  rain_plot <- ggplot(rain_subset_long, aes(x = datetime, y = Value, color = Station)) +
+    geom_line(size = 0.5) +
+    geom_vline(xintercept = as.numeric(dt), linetype = "dashed", color = "black") +  # dashed vertical line at dt
+    labs(title = plot_title, x = "Time", y = "Rainfall (mm)") +
+    theme_minimal() +
+    theme(legend.position = "right")
+
+  # Save plot
+  plot_filename <- file.path(rain_plot_folder, paste0("rain_", format(dt, "%Y%m%d_%H%M"), ".png"))
+  ggsave(plot_filename, plot = rain_plot, width = 12, height = 6, units = "in", dpi = 150)
+}
 
 
-list_episodes_unif_points <- get_extreme_episodes(selected_points, rain,
-                                      episode_size = episode_size, unif = TRUE)
+# get comephore advection for each episode
+adv_filename <- paste(data_folder, "/omsev/adv_estim/advection_results_q",
+                      q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                      ".csv", sep = "")
+adv_df <- read.csv(adv_filename, sep = ",")
+head(adv_df)
 
-list_episodes_unif <- list_episodes_unif_points$episodes
+# convert adv in m/s to km/h
+adv_df$mean_dx_kmph <- adv_df$mean_dx_mps * 3.6
+adv_df$mean_dy_kmph <- adv_df$mean_dy_mps * 3.6
+# Transform t0 to POSIXct
+adv_df$t0 <- as.POSIXct(adv_df$t0, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
-s0_list <- selected_points$s0
-t0_list <- selected_points$t0
-u_list <- selected_points$u_s0
+# get only matching episodes from selected_points
+matching_indices <- match(selected_points$t0_date_rounded, adv_df$t0)
+# remove NA indices
+matching_indices <- matching_indices[!is.na(matching_indices)]
+# get only matching rows
+adv_df <- adv_df[matching_indices, ]
+rownames(adv_df) <- NULL  # reset row names
+head(adv_df)
 
-library(parallel)
+nrow(adv_df) # number of episodes with advection estimates
+
+selected_episodes <- selected_points
+selected_episodes$adv_x <- rep(NA, nrow(selected_episodes))
+selected_episodes$adv_y <- rep(NA, nrow(selected_episodes))
+
+# get adv values for each episode according to the t0_date
+for (i in 1:nrow(selected_episodes)) {
+  t0_date <- selected_episodes$t0_date_rounded[i]
+  adv_row <- adv_df[adv_df$t0 == t0_date, ]
+  if (nrow(adv_row) == 0) {
+    print(i)
+    print(paste("No advection data found for t0_date =", t0_date))
+  } else {
+    # if there are multiple rows, take the first one
+    adv_row <- adv_row[1, ]
+    adv_x <- adv_row$mean_dx_mps
+    adv_y <- adv_row$mean_dy_mps
+    selected_episodes$adv_x[i] <- adv_x
+    selected_episodes$adv_y[i] <- adv_y
+  }
+}
+
+head(selected_episodes)
+tail(selected_episodes)
+# Remove episodes with NA advection values
+# ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
+# ind_0_adv <- which(selected_episodes$adv_x == 0 & selected_episodes$adv_y == 0)
+# selected_episodes_nona <- selected_episodes[-ind_0_adv, ]
+selected_episodes_nona <- selected_episodes
+wind_df <- selected_episodes_nona[, c("adv_x", "adv_y")]
+colnames(wind_df) <- c("vx", "vy")
+length(wind_df$vx) # should be the same as number of episodes
 
 tau_vect <- 0:10
 thresholds_by_site <- apply(rain, 2, function(col) {
@@ -875,65 +552,53 @@ thresholds_by_site <- apply(rain, 2, function(col) {
   quantile(col, probs = q)
 })
 
-tmax <- max(tau_vect)
-df_coords <- as.data.frame(sites_coords)
-# Compute the lags and excesses for each conditional point
-list_results <- mclapply(1:length(s0_list), function(i) {
-  s0 <- s0_list[i]
-  col_s0 <- which(colnames(rain) == s0)
-  s0_coords <- df_coords[col_s0, ]
-  # t0 <- t0_list[i]
-  episode <- list_episodes[[i]]
-  ind_t0_ep <- 0 # index of t0 in the episode
-  lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = TRUE)
-  # lags$hnorm <- lags$hnorm / 1000 # convert to km
-  # excesses <- empirical_excesses_rpar(episode, q, lags, t0 = ind_t0_ep)
-  # Seuils calculés sans les zéros
+# plot wind df vectors
+library(ggplot2)
+library(grid)  # pour arrow()
 
-  excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
-                                      lags, t0 = ind_t0_ep)
+wind_df_plot <- ggplot(selected_episodes_nona, aes(x = 0, y = 0)) +
+  geom_segment(aes(xend = adv_x, yend = adv_y), 
+               arrow = arrow(length = unit(0.2, "cm")),
+               color = btfgreen, size = 0.5) +
+  geom_point(aes(x = adv_x, y = adv_y), color = btfgreen, size = 1) +
+  btf_theme +
+  coord_equal() +
+  xlab("Advection in x (km/h)") +
+  ylab("Advection in y (km/h)") +
+  ggtitle("Advection vectors for selected episodes") +
+  theme(plot.title = element_text(hjust = 0.5)) 
 
-  lags$tau <- lags$tau
-  list(lags = lags, excesses = excesses)
-}, mc.cores = detectCores() - 1)
+wind_df_plot
 
-list_lags <- lapply(list_results, `[[`, "lags")
-list_excesses <- lapply(list_results, `[[`, "excesses")
+# save wind df plot
+filename <- paste(im_folder, "optim/omsev/advection_com_emp_plot_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+ggsave(filename, plot = wind_df_plot, width = 20, height = 15, units = "cm",
+       dpi = 600, device = "png")
 
-s0 <- s0_list[1]
-col_s0 <- which(colnames(rain) == s0)
-s0_coords <- df_coords[col_s0, ]
-excesses <- list_excesses[[20]]
-sum(excesses$kij)
-df_lags <- list_lags[[1]]
-tail(df_lags)
+selected_episodes_nona$speed <- sqrt(selected_episodes_nona$adv_x^2 + 
+                                       selected_episodes_nona$adv_y^2)
+
+selected_episodes_nona$angle_deg <- atan2(selected_episodes_nona$adv_x, selected_episodes_nona$adv_y) * 180 / pi
+# Mettre l’angle dans [0, 360[
+selected_episodes_nona$angle_deg <- (selected_episodes_nona$angle_deg + 360) %% 360
 
 
-# ADD ADV DATA ################################################################
+get_cardinal <- function(angle) {
+  directions <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+  idx <- round(angle / 45) %% 8 + 1
+  return(directions[idx])
+}
 
-adv_filename <- paste0(data_folder, "omsev/adv_estim/advection_results.csv")
-adv_df <- read.csv(adv_filename, sep = ",")
-head(adv_df)
-nrow(adv_df) # number of advection estimates
-# convert adv_df$t0 to POSIXct
-adv_df$t0 <- as.POSIXct(adv_df$t0, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-# convert adv_df
-length(adv_df$t0) # should be same as length(t0_list)
-length(selected_points$t0_date) # should be same as length(t0_list)
-selected_points$adv_x <- adv_df$mean_dx_mps[match(selected_points$t0_date_rounded, adv_df$t0)]
-selected_points$adv_y <- adv_df$mean_dy_mps[match(selected_points$t0_date_rounded, adv_df$t0)]
+selected_episodes_nona$direction <- sapply(selected_episodes_nona$angle_deg, get_cardinal)
 
-
-selected_points_nona <- selected_points[!is.na(selected_points$adv_x) & !is.na(selected_points$adv_y), ]
 
 # remove those with 0 advection
 # selected_points_adv <- selected_points_nona[
   # selected_points_nona$adv_x != 0 | selected_points_nona$adv_y != 0, ]
-selected_points_adv <- selected_points_nona
-s0_list <- selected_points_nona$s0
-s0_list <- selected_points_adv$s0
-list_episodes_points <- get_extreme_episodes(selected_points_adv, rain,
+s0_list <- selected_episodes_nona$s0
+list_episodes_points <- get_extreme_episodes(selected_episodes_nona, rain,
                               episode_size = episode_size, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
@@ -950,14 +615,15 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = TRUE)
-  # lags$hnorm <- lags$hnorm / 1000 # convert to km
+  # hnorm is in meters
+  lags$hnorm <- lags$hnorm # convert to km
+
   # excesses <- empirical_excesses_rpar(episode, q, lags, t0 = ind_t0_ep)
-  # Seuils calculés sans les zéros
 
   excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
                                       lags, t0 = ind_t0_ep)
-
-  lags$tau <- lags$tau
+  # tau is in 5 minutes
+  lags$tau <- lags$tau * 5 * 60 # convert to seconds
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -972,84 +638,316 @@ sum(excesses$kij)
 df_lags <- list_lags[[1]]
 tail(df_lags)
 
-
 # wind_df test
 # adv_df <- data.frame(vx = 1, vy = 1)
-adv_df <- selected_points_nona[, c("adv_x", "adv_y")]
-colnames(adv_df) <- c("vx", "vy")
+
+eta1_com <- 4
+eta2_com <- 2
+
+colnames(adv_df)
+init_param <- c(beta1, beta2, alpha1, alpha2, eta1_com, eta2_com)
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+
 # init_param <- c(0.02, 0.5, alpha1, alpha2, 1, 1)
 
+hmax <- max(dist_mat) # convert to km
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = list_lags, list_episodes = list_episodes,
         list_excesses = list_excesses, hmax = hmax,
-        wind_df = adv_df,
+        wind_df = wind_df,
         latlon = TRUE,
         directional = TRUE,
-        fixed_eta1 = FALSE,
+        fixed_eta1 = TRUE,
         fixed_eta2 = TRUE,
-        convert_in_hours = FALSE,
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(10, 10, 1.999, 1.999, 10, 10),
         control = list(maxit = 10000,
                       trace = 1,
                       parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = F)
+        hessian = T)
 
 result
 
-#0.64170004 0.23508995 0.07947333 1.06460933 1.01845062 1.00000000
+beta1_hat <- result$par[1]
+beta2_hat <- result$par[2]
+alpha1_hat <- result$par[3]
+alpha2_hat <- result$par[4]
+eta1_hat <- result$par[5]
+eta2_hat <- result$par[6]
+hessian <- result$hessian
+# remove eta1 and eta2 from the hessian
+hessian_noeta <- hessian[-(5:6), -(5:6)]
+vcov_matrix <- solve(hessian_noeta)
 
 
-init_param <- c(beta1, beta2, alpha1, alpha2)
+library(numDeriv)
 
-result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = list_lags, list_episodes = list_episodes,
-        list_excesses = list_excesses, hmax = sqrt(17),
-        latlon = TRUE,
-        directional = FALSE,
-        convert_in_hours = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(10, 10, 1.999, 1.999),
-        control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1)),
-        hessian = F)
+compute_gamma_ic_grid <- function(h_vals, tau_vals, direction, wind_i,
+                                  theta_hat, vcov_matrix, eta1 = 1, eta2 = 1) {
+  df_out <- data.frame()
+  
+  for (tau in tau_vals) {
+    for (h in h_vals) {
+      hx <- h * direction[1]
+      hy <- h * direction[2]
 
-result
+      gamma_func <- function(theta) {
+        beta1 <- theta[1]; beta2 <- theta[2]
+        alpha1 <- theta[3]; alpha2 <- theta[4]
+        if (length(theta) > 4) {
+          eta1 <- theta[5]; eta2 <- theta[6]
+        } 
+        vx <- eta1 * abs(wind_i$vx)^eta2 * sign(wind_i$vx)
+        vy <- eta1 * abs(wind_i$vy)^eta2 * sign(wind_i$vy)
 
-# [1] 0.01392341 0.79141409 0.47458862 0.59647469
-#  Init WLSE: [1] 0.01392341 0.16940296 0.47458862 0.61530967
+        term1 <- beta1 * abs(hx - vx * tau)^alpha1
+        term2 <- beta2 * abs(hy - vy * tau)^alpha1
+        term3 <- beta2 * tau^alpha2
+        return(term1 + term2 + term3)
+      }
+
+      grad_gamma <- grad(gamma_func, theta_hat)
+      var_gamma <- t(grad_gamma) %*% vcov_matrix %*% grad_gamma
+      se_gamma <- sqrt(var_gamma)
+      gamma_hat <- gamma_func(theta_hat)
+
+      df_out <- rbind(df_out, data.frame(
+        h = h,
+        tau = tau,
+        gamma = gamma_hat,
+        gamma_low = gamma_hat - 1.96 * se_gamma,
+        gamma_high = gamma_hat + 1.96 * se_gamma
+      ))
+    }
+  }
+
+  return(df_out)
+}
+
+# Paramètres estimés
+theta_hat <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
+library(ggplot2)
+library(numDeriv)
+
+# Named standard directions
+directions_named <- list(
+  EW = c(1, 0),
+  NS = c(0, 1),
+  Diagonal = c(1, 1) / sqrt(2)
+)
+
+# Selected episodes
+episode_ids <- c(1, 3, 5, 10, 20, 100)
+
+# Spatial and temporal lags
+dmax <- max(dist_mat) / 1000  # convert m to km
+dmax<- 1
+h_vals <- seq(0, dmax, by = 0.05)
+tau_vals <- c(0, 1, 3, 5, 10) * 5 / 60  # in hours (5-min intervals)
 
 
 
-init_param <- c(beta1, beta2, alpha1, alpha2, 0.1, 0.2)
+str_zero_wind <- ""
+if (!any(wind_df$vx == 0 & wind_df$vy == 0)) {
+  str_zero_wind <- "_no_0adv"
+} 
 
-result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = list_lags, list_episodes = list_episodes,
-        list_excesses = list_excesses, hmax = sqrt(17),
-        latlon = TRUE,
-        directional = FALSE,
-        convert_in_hours = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(10, 10, 1.999, 1.999, 10, 10),
-        control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = F)
+# Output folder
+foldername <- paste0(im_folder, "optim/omsev/variogram/q", q * 100,
+                     "_delta", delta, "_dmin", min_spatial_dist, 
+                     str_zero_wind, "/")
 
-result
+if (!dir.exists(foldername)) dir.create(foldername, recursive = TRUE)
 
-# [1] 0.005393757 0.791221062 0.475214154 0.597500562 0.650280008 0.649669269
-#  Init WLSE: [1] 0.01392341 0.16940296 0.47458862 0.61530967 0 0
+# Main loop
+for (i in episode_ids) {
+  print(i)
+  wind_i <- wind_df[i, ]
+  vx_i <- wind_i$vx
+  vy_i <- wind_i$vy
+  V_vec <- c(vx_i, vy_i)
 
-# [1] 0.6307329 0.7782762 0.4765049 0.5992543 0.1339897 0.2673149
-#  Init WLSE: [1] 0.01392341 0.16940296 0.47458862 0.61530967 0.1 0.2
+  norm_V <- sqrt(sum(V_vec^2))
+  
+  # Skip advection if wind is zero
+  if (norm_V == 0) {
+    # message("Episode ", i, ": zero wind → skipping advection direction.")
+    directions_named_ext <- directions_named
+  } else {
+    direction_adv <- V_vec / norm_V
+    directions_named_ext <- c(directions_named, list(Advection = direction_adv))
+  }
+
+  # Loop over all directions
+  for (dname in names(directions_named_ext)) {
+    direction <- directions_named_ext[[dname]]
+
+    df_gamma <- compute_gamma_ic_grid(h_vals, tau_vals, direction,
+                                      wind_i, theta_hat, vcov_matrix,
+                                      eta1 = eta1_hat, eta2 = eta2_hat)
+    df_gamma$tau_min <- df_gamma$tau * 60  # for plotting in minutes
+
+    subtitle_txt <- paste0("Direction: ", dname,
+                           ", Episode ", i, ", V = (",
+                           round(vx_i * 1000 / 60, 4), ", ",
+                           round(vy_i * 1000 / 60, 4), ") m/s")
+
+    p <- ggplot(df_gamma, aes(x = h, y = gamma, color = factor(tau_min))) +
+      geom_line(size = 1.2) +
+      geom_ribbon(aes(ymin = gamma_low, ymax = gamma_high, fill = factor(tau_min)),
+                  alpha = 0.2, color = NA) +
+      labs(
+        title = "",
+        subtitle = subtitle_txt,
+        x = "Distance (km)",
+        y = expression(gamma(h, tau)),
+        color = expression(tau ~ "(min)"),
+        fill = expression(tau ~ "(min)")
+      ) +
+      theme_minimal()
+
+    filename <- paste0(foldername, "variogram_direction_",
+                       dname, "_episode_", i, ".pdf")
+    ggsave(filename, plot = p, width = 20, height = 15,
+           units = "cm", dpi = 600)
+  }
+}
 
 
 ################################################################################
+
+# Fictive advection vectors for representation
+fictive_adv <- data.frame(
+  adv_x = c(0, 0.01, 0.1, -1, -1, 1, 10, -2, 1),
+  adv_y = c(0, 0.02, 0.5, -5, 5, 1, 11, -1, -1)
+)
+
+# Estimated parameters from optimization
+theta_hat <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
+eta1_hat <- result$par[5]
+eta2_hat <- result$par[6]
+
+# Lag distances (km)
+h_vals <- seq(0, 3, by = 0.05)
+
+# Time lags (converted to hours)
+tau_vals <- c(0, 1, 3, 5, 7, 10) * 5 / 60
+
+# Standard spatial directions (unit vectors)
+directions_named <- list(
+  EW = c(1, 0),
+  NS = c(0, 1),
+  Diagonal = c(1, 1) / sqrt(2)
+)
+
+# Function to compute variogram gamma over grid of h and tau
+# Arguments:
+# - h_vals: spatial distances
+# - tau_vals: temporal lags
+# - direction: spatial direction vector (unit vector)
+# - theta_hat: parameter vector (beta1, beta2, alpha1, alpha2)
+# - eta1, eta2: parameters controlling advection scaling
+# - fictive_v: advection velocity vector
+compute_gamma_grid <- function(h_vals, tau_vals, direction,
+                               theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
+  df_out <- data.frame()
+  
+  # Calculate scaled advection velocity components
+  vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
+  vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
+  
+  for (tau in tau_vals) {
+    for (h in h_vals) {
+      # Compute the spatial lag vector along given direction
+      hx <- h * direction[1]
+      hy <- h * direction[2]
+      
+      # Calculate the corrected spatial lag considering advection
+      # Distance between h vector and advected position tau*V
+      # dist_corr <- sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2)
+
+      vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
+      vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
+
+      # Projection sur la direction
+      h_proj <- hx * direction[1] + hy * direction[2]
+      v_proj <- vx * direction[1] + vy * direction[2]
+
+      dist_corr <- abs(h_proj - v_proj * tau)
+
+      beta1 <- theta_hat[1]
+      beta2 <- theta_hat[2]
+      alpha1 <- theta_hat[3]
+      alpha2 <- theta_hat[4]
+      
+      # Variogram model: sum of spatial and temporal components
+      term1 <- beta1 * dist_corr^alpha1
+      term2 <- beta2 * tau^alpha2
+      
+      gamma_hat <- term1 + term2
+      
+      # Save results with corrected distance and parameters
+      df_out <- rbind(df_out, data.frame(
+        h = h,
+        tau = tau,
+        tau_min = tau * 60,  # for plotting in minutes
+        gamma = gamma_hat,
+        dist_corr = dist_corr
+      ))
+    }
+  }
+  return(df_out)
+}
+
+# Output folder for saving plots (update path as needed)
+foldername <- paste0(im_folder, "optim/omsev/variogram/q", q * 100,
+                     "_delta", delta, "_dmin", min_spatial_dist, "_fictive_adv/")
+if (!dir.exists(foldername)) dir.create(foldername, recursive = TRUE)
+
+# Loop over all fictive advection vectors
+for (i in seq_len(nrow(fictive_adv))) {
+  fictive_v <- c(fictive_adv$adv_x[i], fictive_adv$adv_y[i])
+  
+  # Normalize advection direction vector
+  norm_v <- sqrt(sum(fictive_v^2))
+  if (norm_v > 0) {
+    dir_adv <- fictive_v / norm_v
+  } else {
+    dir_adv <- c(1, 0)  # default if zero vector
+  }
+  
+  # Add the advection direction to standard directions
+  directions_all <- c(directions_named, list(Advection = dir_adv))
+  
+  # Loop over all directions
+  for (dname in names(directions_all)) {
+    direction <- directions_all[[dname]]
+    
+    # Compute gamma grid with corrected distance for each direction and advection vector
+    df_gamma <- compute_gamma_grid(h_vals, tau_vals, direction,
+                                   theta_hat,
+                                   eta1 = eta1_hat, eta2 = eta2_hat,
+                                   fictive_v = fictive_v)
+    
+    # Plot gamma as function of corrected distance (dist_corr)
+    subtitle_txt <- paste0("Advection: V = (",
+                           round(fictive_v[1], 3), ", ", round(fictive_v[2], 3), "), direction: ", dname)
+    
+    p <- ggplot(df_gamma, aes(x = dist_corr, y = gamma, color = factor(tau_min))) +
+      geom_line(size = 1.2) +
+      labs(
+        subtitle = subtitle_txt,
+        x = expression(abs(h - tau * V)),
+        y = expression(gamma(h, tau)),
+        color = expression(tau ~ "(min)")
+      ) +
+      theme_minimal()
+    
+    filename <- paste0(foldername, "variogram_fictive", i, "_dir_", dname, ".pdf")
+    ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
+  }
+}
+
 
 
