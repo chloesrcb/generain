@@ -527,8 +527,8 @@ for (i in 1:nrow(selected_episodes)) {
   } else {
     # if there are multiple rows, take the first one
     adv_row <- adv_row[1, ]
-    adv_x <- adv_row$mean_dx_mps
-    adv_y <- adv_row$mean_dy_mps
+    adv_x <- adv_row$mean_dx_kmph
+    adv_y <- adv_row$mean_dy_kmph
     selected_episodes$adv_x[i] <- adv_x
     selected_episodes$adv_y[i] <- adv_y
   }
@@ -616,14 +616,14 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = TRUE)
   # hnorm is in meters
-  lags$hnorm <- lags$hnorm # convert to km
+  lags$hnorm <- lags$hnorm / 1000 # convert to km
 
   # excesses <- empirical_excesses_rpar(episode, q, lags, t0 = ind_t0_ep)
 
   excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
                                       lags, t0 = ind_t0_ep)
   # tau is in 5 minutes
-  lags$tau <- lags$tau * 5 * 60 # convert to seconds
+  lags$tau <- lags$tau * 5 / 60 # convert to hours
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -644,13 +644,12 @@ tail(df_lags)
 eta1_com <- 4
 eta2_com <- 2
 
-colnames(adv_df)
 init_param <- c(beta1, beta2, alpha1, alpha2, eta1_com, eta2_com)
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
 # init_param <- c(0.02, 0.5, alpha1, alpha2, 1, 1)
 
-hmax <- max(dist_mat) # convert to km
+hmax <- max(dist_mat) / 1000 # convert to km
 result <- optim(par = init_param, fn = neg_ll_composite,
         list_lags = list_lags, list_episodes = list_episodes,
         list_excesses = list_excesses, hmax = hmax,
