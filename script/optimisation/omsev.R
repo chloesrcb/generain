@@ -44,7 +44,7 @@ head(rain)
 tail(rain)
 # Remove non real zeros
 filename_omsev1min <- paste0(data_folder,
-                         "omsev/omsev_1min/rain_mtp_1min_2019_2024.RData")
+                      "omsev/omsev_1min/rain_mtp_1min_2019_2024.RData")
 load(filename_omsev1min)
 rain1min <- Rain.all.treated
 colnames(rain1min) <- c("dates", "archie", "archiw", "cefe", "chu1", "chu2",
@@ -462,7 +462,7 @@ if (!dir.exists(rain_plot_folder)) dir.create(rain_plot_folder, recursive = TRUE
 
 # Loop over all datetimes and plot
 for (i in seq_along(datetimes)) {
-  # Define window (e.g., -2h to +10h around dt)
+  # Define window -2h to +10h around dt
   dt <- as.POSIXct(datetimes[i], tz = "UTC")
   start_date <- dt - 2 * 3600
   end_date <- dt + 10 * 3600
