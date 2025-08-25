@@ -168,7 +168,8 @@ result_list <- parLapply(cl, 1:M, function(i) {
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
-    excesses <- empirical_excesses_rpar(list_rpar[[j]], u, lags,
+    excesses <- empirical_excesses_rpar(list_rpar[[j]], quantile = u,
+                                        df_lags = lags,
                                        t0 = t0, threshold = TRUE)
     list(lags = lags, excesses = excesses)
   })
@@ -193,6 +194,7 @@ list_excesses <- do.call(c, lapply(result_list,
 list_lags <- do.call(c, lapply(result_list, function(res) res$list_lags))
 
 # Do an histogram of the sum of kij for all kij
+par(mfrow = c(1, 1))
 if (!muse) {
   sum_kij <- 0
   for (excesses in list_excesses) {
@@ -220,6 +222,8 @@ if (init_diff) {
   init_type <- ""
 }
 
+M <- 5
+m <- 350
 
 # Optimization
 result_list <- mclapply(1:M, process_simulation, m = m,

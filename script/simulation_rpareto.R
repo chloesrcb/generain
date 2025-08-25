@@ -18,7 +18,7 @@ library(latex2exp)
 # Simulate data using the rpareto model
 ngrid <- 5
 spa <- 1:ngrid
-temp <- 0:30
+temp <- 0:29
 m <- 300 # number of episodes
 M <- 7 # number of simulations
 n.res <- m * M
@@ -212,15 +212,163 @@ excesses <- list_excesses[[6]]
 sum(excesses$kij)
 
 wind_df <- data.frame(vx = adv[1], vy = adv[2])
-result_list <- mclapply(1:M, process_simulation, m = m,
+init_params <- c(params[1:4], 1, 1)
+result_list <- mclapply(1:2, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
-                        init_params = params,
+                        init_params = init_params,
                         hmax = 7, wind_df = wind_df,
                         directional = FALSE,
                         fixed_eta1 = FALSE, fixed_eta2 = FALSE,
                         mc.cores = num_cores)
+
+
+coords <- as.matrix(expand.grid(x = spa, y = spa))
+nloc   <- nrow(coords)
+
+# vecteurs h_ij
+Hvec <- array(NA, dim = c(nloc, nloc, 2))
+for (i in 1:nloc) {
+  for (j in 1:nloc) {
+    Hvec[i,j,] <- coords[j,] - coords[i,]
+  }
+}
+
+Tau <- 0:10
+n_tau <- length(Tau)
+
+d_eff <- array(NA, dim = c(nloc, nloc, n_tau))
+for (k in seq_along(Tau)) {
+  tau <- Tau[k]
+  d_eff[,,k] <- sqrt((Hvec[,,1] - adv[1]*tau)^2 +
+                     (Hvec[,,2] - adv[2]*tau)^2)
+}
+
+gamma_th <- array(NA, dim = dim(d_eff))
+for (k in seq_along(Tau)) {
+  tau <- abs(Tau[k])
+  gamma_th[,,k] <- 2 * (beta1 * (d_eff[,,k]^alpha1) +
+                        beta2 * (tau^alpha2))
+}
+
+compute_gamma_hat <- function(result, Hvec, Tau) {
+  par_hat <- result$par
+  beta1_hat  <- par_hat[1]
+  beta2_hat  <- par_hat[2]
+  alpha1_hat <- par_hat[3]
+  alpha2_hat <- par_hat[4]
+  eta1_hat <- par_hat[5]
+  eta2_hat <- par_hat[6]
+  vx_hat <- (abs(adv[1])^eta2_hat) * sign(adv[1]) * eta1_hat
+  vy_hat <- (abs(adv[2])^eta2_hat) * sign(adv[2]) * eta1_hat
+  adv_hat <- c(vx_hat, vy_hat)
+  
+  nloc <- dim(Hvec)[1]
+  n_tau <- length(Tau)
+  
+  d_eff_hat <- array(NA, dim = c(nloc, nloc, n_tau))
+  for (k in seq_along(Tau)) {
+    tau <- Tau[k]
+    d_eff_hat[,,k] <- sqrt((Hvec[,,1] - adv_hat[1]*tau)^2 +
+                           (Hvec[,,2] - adv_hat[2]*tau)^2)
+  }
+  
+  gamma_hat <- array(NA, dim = dim(d_eff_hat))
+  for (k in seq_along(Tau)) {
+    tau <- abs(Tau[k])
+    gamma_hat[,,k] <- 2 * (beta1_hat * (d_eff_hat[,,k]^alpha1_hat) +
+                           beta2_hat * (tau^alpha2_hat))
+  }
+  return(gamma_hat)
+}
+
+### --- Visualisation : toutes les simus vs vrai ---
+library(dplyr)
+nbins <- 30
+plot_tau <- c(0, 5, 10)   # valeurs de tau à visualiser
+
+par(mfrow=c(1,3), mar=c(4,4,2,1))
+for (tau in plot_tau) {
+  k <- which(Tau == tau)
+  
+  # vrai variogramme
+  dvals_th <- as.vector(d_eff[,,k])
+  gvals_th <- as.vector(gamma_th[,,k])
+  breaks <- seq(0, max(dvals_th), length.out = nbins + 1)
+  mids   <- 0.5*(breaks[-1] + breaks[-length(breaks)])
+  g_mean_th <- tapply(gvals_th, cut(dvals_th, breaks, include.lowest=TRUE), mean, na.rm=TRUE)
+  
+  # tracer la courbe vraie
+  plot(mids, g_mean_th, type="l", col="blue", lwd=2,
+       main=paste("tau =", tau),
+       xlab="Distance h", ylab="Variogram",
+       ylim=c(0, max(g_mean_th, na.rm=TRUE)*1.2))
+  
+  # tracer toutes les courbes estimées (une par simu)
+  for (j in seq_along(result_list)) {
+    gamma_hat <- compute_gamma_hat(result_list[[j]], Hvec, Tau)
+    dvals_hat <- as.vector(d_eff[,,k])  # même dvals si on garde la même grille
+    gvals_hat <- as.vector(gamma_hat[,,k])
+    g_mean_hat <- tapply(gvals_hat, cut(dvals_hat, breaks, include.lowest=TRUE), mean, na.rm=TRUE)
+    lines(mids, g_mean_hat, col=rgb(1,0,0,0.3), lwd=1, lty=2) # rouge transparent
+  }
+  
+  legend("topleft", legend=c("Vrai", "Estimés"),
+         col=c("blue","red"), lwd=c(2,1), lty=c(1,2), bty="n")
+}
+
+
+
+n_bins <- 30
+n_tau <- length(Tau)
+gamma_mc <- array(NA, dim = c(n_bins, n_tau, 100))  # 100 simulations
+
+for (j in 1:100) {
+  gamma_hat <- compute_gamma_hat(result_list[[j]], Hvec, Tau)
+  
+  for (k in 1:n_tau) {
+    dvals_hat <- as.vector(d_eff[,,k])
+    gvals_hat <- as.vector(gamma_hat[,,k])
+    
+    breaks <- seq(0, max(dvals_hat), length.out = n_bins+1)
+    g_mean_hat <- tapply(gvals_hat, cut(dvals_hat, breaks, include.lowest = TRUE), mean, na.rm=TRUE)
+    
+    gamma_mc[,k,j] <- g_mean_hat
+  }
+}
+
+
+gamma_mean <- apply(gamma_mc, c(1,2), mean, na.rm=TRUE)
+gamma_sd   <- apply(gamma_mc, c(1,2), sd, na.rm=TRUE)
+gamma_q05  <- apply(gamma_mc, c(1,2), quantile, probs=0.05, na.rm=TRUE)
+gamma_q95  <- apply(gamma_mc, c(1,2), quantile, probs=0.95, na.rm=TRUE)
+
+
+tau_idx <- 6  # exemple tau = 5
+plot(mids, gamma_mean[,tau_idx], type="l", col="red", lwd=2,
+     ylim=c(min(gamma_q05[,tau_idx]), max(gamma_q95[,tau_idx])),
+     xlab="Distance h", ylab="Variogram",
+     main=paste("Monte Carlo Tau =", Tau[tau_idx]))
+polygon(c(mids, rev(mids)), c(gamma_q05[,tau_idx], rev(gamma_q95[,tau_idx])),
+        col=rgb(1,0,0,0.2), border=NA)
+lines(mids, gamma_th_binned[,tau_idx], col="blue", lwd=2)  # variogramme vrai
+legend("topleft", legend=c("Vrai","Moyenne estimée","Enveloppe 5-95%"),
+       col=c("blue","red","red"), lwd=c(2,2,NA), lty=c(1,1,NA), 
+       fill=c(NA,NA,rgb(1,0,0,0.2)), border=NA, bty="n")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Combine results int a data frame
 df_result_all <- do.call(rbind, result_list)
@@ -361,12 +509,14 @@ filename <- paste0(foldername, "estimates_rpar_CIs_", M, "simu_", m, "rep_",
 wind_df <- data.frame(vx = adv[1], vy = adv[2])
 
 init_param <- c(params[1:4], 1, 1)
-result_list <- mclapply(1:M, process_simulation, M = M, m = m,
+result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
-                        init_params = params,
+                        init_params = init_param,
                         hmax = 7, wind_df = wind_df,
+                        directional = FALSE,
+                        fixed_eta1 = FALSE, fixed_eta2 = FALSE,
                         mc.cores = num_cores)
 result
 
