@@ -1,3 +1,290 @@
+sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
+                                adv = c(0, 0), t0 = 0, nres = 1,
+                                random_s0 = FALSE, s0 = c(1, 1),
+                                s0_radius = Inf,
+                                anisotropic = FALSE) {
+  # Ensure RandomFields works with duplicated coordinates if needed
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE)
+
+  # Dimensions
+  lx <- length(x)
+  ly <- length(y)
+  lt <- length(t)
+  site_names <- paste0("S", seq_len(lx * ly))
+
+  # Define fractional Brownian motion models
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+
+  # Create spatio-temporal grid with advection
+  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = t)
+  grid$shifted_x <- grid$x - grid$t * adv[1]
+  grid$shifted_y <- grid$y - grid$t * adv[2]
+  grid$site <- rep(site_names, times = lt)
+  coords <- grid[, c("shifted_x", "shifted_y")]
+
+  # Remove duplicate coordinates if no advection
+  if (all(adv == 0)) {
+    coords <- coords[!duplicated(coords), ]
+  }
+
+  # If random s0, precompute possible points within radius
+  s0_center <- s0
+  if (random_s0) {
+    grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
+    distances <- sqrt((grid_points$x - s0_center[1])^2 + 
+                      (grid_points$y - s0_center[2])^2)
+    candidate_points <- grid_points[distances <= s0_radius, ]
+    if (nrow(candidate_points) == 0) {
+      stop("No grid points found within specified radius of s0_center.")
+    }
+  }
+
+  s0_list <- list()  # To store all s0 used
+  Z <- array(NA, dim = c(lx, ly, lt, nres))  # 4D output array
+
+  for (i in seq_len(nres)) {
+    # Select s0 (random or fixed)
+    if (random_s0) {
+      selected_index <- sample(nrow(candidate_points), 1)
+      s0 <- as.integer(candidate_points[selected_index, ])
+    }
+    s0 <- data.frame(x = s0[1], y = s0[2])
+    s0_list[[i]] <- s0
+
+    # Identify index in grid for conditioning point at time t0
+    ind_s0_t0 <- which(grid$x == s0$x & grid$y == s0$y & grid$t == t0)
+
+    # Temporal variogram centered at t0
+    gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+
+    if (anisotropic) {
+      # Anisotropic: separate space into x and y directions
+      gamma_space_x <- RandomFields::RFvariogram(modelSpace,
+                                x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
+      gamma_space_y <- RandomFields::RFvariogram(modelSpace,
+                                x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+      # Combine variograms
+      gamma_0 <- compute_st_variogram(
+        grid,
+        gamma_space_x = gamma_space_x,
+        gamma_space_y = gamma_space_y,
+        gamma_temp = gamma_temp,
+        adv = adv
+      )
+
+      # Simulate independent Gaussian fields in each spatial direction
+      W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
+      W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
+      W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+      # Combine spatial and temporal processes
+      W <- compute_st_gaussian_process(
+        grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
+      )
+    } else {
+      # Isotropic case: compute single spatial variogram
+      gamma_space <- RandomFields::RFvariogram(modelSpace,
+                          x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+                          y = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+      gamma_0 <- compute_st_variogram(
+        grid,
+        gamma_space = gamma_space,
+        gamma_temp = gamma_temp,
+        adv = adv
+      )
+
+      # Simulate isotropic spatial Gaussian field
+      W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
+      W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+      # Combine spatial and temporal processes
+      W <- compute_st_gaussian_process(
+        grid, W_s = W_s, W_t = W_t, adv = adv
+      )
+    }
+
+    # Construct Pareto process
+    Y <- exp(W - W[ind_s0_t0] - gamma_0)  # Normalize and shift
+    R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)  # Generate radial component
+    Z[,,, i] <- R * Y  # Final field
+  }
+
+  return(list(Z = Z, s0_used = s0_list))
+}
+
+compute_st_variogram <- function(grid,
+                                 gamma_space = NULL,
+                                 gamma_space_x = NULL,
+                                 gamma_space_y = NULL,
+                                 gamma_temp,
+                                 adv) {
+  lx <- length(unique(grid$x))
+  ly <- length(unique(grid$y))
+  lt <- length(unique(grid$t))
+
+  # Determine isotropic or anisotropic
+  is_anisotropic <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
+  is_isotropic <- !is.null(gamma_space)
+
+  if (!is_isotropic && !is_anisotropic) {
+    stop("Provide either gamma_space for isotropic or gamma_space_x and gamma_space_y for anisotropic case.")
+  }
+
+  # Determine gamma components
+  if (!any(is.na(adv)) && all(adv == 0)) {
+    coords <- cbind(grid$shifted_x, grid$shifted_y)
+    coords <- coords[!duplicated(coords), ]
+  } else {
+    coords <- cbind(grid$shifted_x, grid$shifted_y)
+  }
+  if (is.vector(coords)) {
+    coords <- matrix(coords, nrow = 1)
+  }
+  nsites <- nrow(coords)
+  t_index <- grid$t + 1
+  gamma <- array(NA, dim = c(lx, ly, lt))
+
+  for (i in seq_along(t_index)) {
+    if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
+      ind_g_s <- if (i %% nsites == 0) {
+        i - nsites * (i %/% nsites - 1)
+      } else {
+        i - nsites * (i %/% nsites)
+      }
+    } else {
+      ind_g_s <- i
+    }
+
+    if (is_anisotropic) {
+      vario <- gamma_space_x[[ind_g_s]] + gamma_space_y[[ind_g_s]] +
+                                                      gamma_temp[[t_index[i]]]
+    } else {
+      vario <- gamma_space[[ind_g_s]] + gamma_temp[[t_index[i]]]
+    }
+
+    gamma[grid$x[i], grid$y[i], t_index[i]] <- vario
+  }
+
+  return(gamma)
+}
+
+
+compute_W_s_t <- function(grid, W_s, W_t, adv) {
+  lx <- length(unique(grid$x))
+  ly <- length(unique(grid$y))
+  lt <- length(unique(grid$t))
+  coords <- cbind(grid$shifted_x, grid$shifted_y)
+  if (all(adv == 0)) {
+    duplicates <- duplicated(coords)
+    filtered_coords <- coords[!duplicates, ]
+    coords <- filtered_coords
+  }
+  nsites <- nrow(coords)
+  W_s_t <- array(NA, dim = c(lx, ly, lt))
+  t_index <- grid$t + 1 # index starts at 1
+  for (i in seq_len(nrow(grid))) {
+      s_x <- grid$x[i]
+      s_y <- grid$y[i]
+      s <- c(s_x, s_y)
+      if (all(adv == 0) & i > nsites) {
+        if (i %% nsites == 0) {
+          ind_W_s <- i - nsites * (i %/% nsites - 1)
+        } else {
+          ind_W_s <- i - nsites * (i %/% nsites)
+        }
+      } else {
+        ind_W_s <- i
+      }
+      W_s_t[s[1], s[2], t_index[i]] <- W_s[ind_W_s] + W_t[t_index[i]]
+  }
+  return(W_s_t)
+}
+
+
+#' compute_st_gaussian_process function
+#'
+#' This function computes the spatio-temporal Gaussian random field given the
+#' spatial and temporal Gaussian random fields and the advection.
+#'
+#' @param grid The grid matrix.
+#' @param W_s The spatial Gaussian random field (for isotropic case).
+#' @param W_s_x The spatial Gaussian random field in the x direction (for anisotropic case).
+#' @param W_s_y The spatial Gaussian random field in the y direction (for anisotropic case).
+#' @param W_t The temporal Gaussian random field.
+#' @param adv The advection coordinates vector.
+#'
+#' @return The spatio-temporal Gaussian random field.
+#'
+#' @export
+compute_st_gaussian_process <- function(grid, W_s = NULL, 
+                                        W_s_x = NULL, W_s_y = NULL, W_t,
+                                        adv) {
+  lx <- length(unique(grid$x))
+  ly <- length(unique(grid$y))
+  lt <- length(unique(grid$t))
+  coords <- cbind(grid$shifted_x, grid$shifted_y)
+  
+
+  # Determine isotropic or anisotropic
+  is_anisotropic <- !is.null(W_s_x) && !is.null(W_s_y)
+  is_isotropic <- !is.null(W_s)
+
+  if (!is_isotropic && !is_anisotropic) {
+    stop("Provide either W_s for isotropic or W_s_x and W_s_y for anisotropic case.")
+  }
+
+  # Remove duplicates if no advection
+  if (!any(is.na(adv)) && all(adv == 0)) {
+    duplicates <- duplicated(coords)
+    filtered_coords <- coords[!duplicates, ]
+    coords <- filtered_coords
+  }
+
+  if (is.vector(coords)) {
+    coords <- matrix(coords, nrow = 1)
+  }
+  nsites <- nrow(coords)
+
+  W_s_t <- array(NA, dim = c(lx, ly, lt))  # Initialize the 3D array for results
+  t_index <- grid$t + 1  # Adjust for indexing (R is 1-based)
+  
+  # Loop over each grid point
+  for (i in seq_along(t_index)) {
+    s_x <- grid$x[i]
+    s_y <- grid$y[i]
+    t_idx <- t_index[i]
+    
+    # Handle advection: adjust the index based on the grid size
+    if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
+      if (i %% nsites == 0) {
+        ind_W_s <- i - nsites * (i %/% nsites - 1)
+      } else {
+        ind_W_s <- i - nsites * (i %/% nsites)
+      }
+    } else {
+      ind_W_s <- i
+    }
+
+    # Check if anisotropic or isotropic, and handle accordingly
+    if (is_anisotropic) {
+      # Anisotropic case: Combine W_s_x and W_s_y
+      W_s_t_point <- W_s_x[ind_W_s] + W_s_y[ind_W_s] + W_t[t_index[i]]
+    } else {
+      # Isotropic case: Use W_s directly
+      W_s_t_point <- W_s[ind_W_s] + W_t[t_index[i]]
+    }
+    # Store the result in the 3D array
+    W_s_t[s_x, s_y, t_idx] <- W_s_t_point
+  }
+
+
+  return(W_s_t)
+}
+
+
 # EXTREME EPISODES -------------------------------------------------------------
 
 #' get_spatiotemp_excess function
@@ -26,10 +313,10 @@ get_spatiotemp_excess <- function(data, quantile = NULL,
     if (remove_zeros) {
         thresholds_by_site <- apply(data, 2, function(col) {
         col <- col[!is.na(col) & col > 0]  # Retire NA et les 0
-        if (length(col) < 30) {
-          return(NA)
+        if (length(col) < 50) {
+          return(NA)  # Trop peu de données non-nulles pour estimer un seuil fiable
         }
-        stats::quantile(col, probs = quantile, na.rm = TRUE)
+        quantile(col, probs = q, na.rm = TRUE)
       }) 
     }
     else {
@@ -560,8 +847,7 @@ empirical_excesses_rpar <- function(data_rain, df_lags,
                                     t0 = 0) {
   # Init output
   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-  excesses$kij <- 0L
-  excesses$Tobs <- 1L
+  excesses[, `:=`(Tobs = 1L, kij = 0L)]
 
   unique_tau <- unique(df_lags$tau)
   ind_s1 <- df_lags$s1[1]  # site of interest
@@ -596,11 +882,68 @@ empirical_excesses_rpar <- function(data_rain, df_lags,
         rank_val <- rank(X_s2) / (length(X_s2) + 1)
         exceed <- rank_val[t_index] > quantile
       }
-      excesses$kij[excesses$s1 == ind_s1 & excesses$s2 == ind_s2 & 
-                   excesses$tau == tau] <- as.integer(exceed)
+      excesses[s1 == ind_s1 & s2 == ind_s2 & tau == tau,
+              kij := as.integer(exceed)]
     }
   }
 
+  return(excesses)
+}
+
+# #' empirical_excesses_rpar function
+# #'
+# #' This function calculates the empirical excesses based on indicators above a
+# #' quantile threshold for the r-Pareto process.
+# #'
+# #' @param data_rain The rainfall data.
+# #' @param quantile The quantile value.
+# #' @param df_lags The dataframe with spatial and temporal lag values.
+# #' @param threshold A boolean value to indicate if the quantile variable is a
+# #'                threshold value and not a uniform quantile. Default is FALSE.
+# #' @param t0 The starting time. Default is 1.
+# #'
+# #' @return The empirical excesses dataframe with the number of excesses kij and
+# #' the number of possible excesses Tobs, with the lag values.
+# #'
+# #' @export
+empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
+                                    threshold = FALSE, t0 = 0) {
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
+  excesses[, Tobs := 0L]
+  excesses$Tobs <- 1
+  excesses[, kij := 0L]
+  # excesses$kij <- NA
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+  ind_s1 <- df_lags$s1[1] # s0
+
+  for (tau in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      # get the data for the second site
+      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
+      if (all(is.na(X_s2))) {
+        next # skip if all values are NA
+      }
+
+      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+
+      # if (!threshold) {
+      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
+      # }
+      # shifted data
+      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
+      if (is.list(X_s_t)) {
+        X_s_t <- X_s_t[[1]] # extract the value if it's a list
+      }
+      nmargin <- sum(X_s_t > quantile) # 0 or 1
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == tau] <- nmargin
+    }
+  }
   return(excesses)
 }
 
@@ -641,83 +984,84 @@ empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 
   return(excesses)
 }
 
-# #' empirical_excesses function
-# #'
-# #' This function calculates the empirical excesses based on indicators above a
-# #' quantile threshold.
-# #'
-# #' @param data_rain The rainfall data.
-# #' @param quantile The quantile value.
-# #' @param df_lags The dataframe with spatial and temporal lag values.
-# #' @param threshold A boolean value to indicate if the quantile variable is a
-# #'                 threshold value and not a uniform quantile. Default is FALSE.
-# #' @param type The type of the process, "rpareto" or "brownresnick".
-# #'             Default is "rpareto".
-# #' @param t0 The conditioning time, for r-pareto process. Default is 1.
-# #'
-# #' @return The empirical excesses dataframe with the number of excesses kij and
-# #' the number of possible excesses Tobs, with the lag values.
-# #'
-# #' @import tidyr
-# #'
-# #' @export
-# empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
-#                                type = "rpareto", t0 = 0, threholds = NULL) {
-#   if (type == "rpareto") {
-#     excesses <- empirical_excesses_rpar(data_rain, df_lags,
-#                                       thresholds = threholds,
-#                                       quantile = quantile, t0 = t0)
-#   } else if (type == "brownresnick")  {
-#     excesses <- df_lags # copy the dataframe
-#     unique_tau <- unique(df_lags$tau) # unique temporal lags
 
-#     for (t in unique_tau) { # loop over temporal lags
-#       df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
 
-#       for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-#         # get the indices of the sites
-#         ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-#         ind_s1 <- df_h_t$s1[i]
+#' empirical_excesses function
+#'
+#' This function calculates the empirical excesses based on indicators above a
+#' quantile threshold.
+#'
+#' @param data_rain The rainfall data.
+#' @param quantile The quantile value.
+#' @param df_lags The dataframe with spatial and temporal lag values.
+#' @param threshold A boolean value to indicate if the quantile variable is a
+#'                 threshold value and not a uniform quantile. Default is FALSE.
+#' @param type The type of the process, "rpareto" or "brownresnick".
+#'             Default is "rpareto".
+#' @param t0 The conditioning time, for r-pareto process. Default is 1.
+#'
+#' @return The empirical excesses dataframe with the number of excesses kij and
+#' the number of possible excesses Tobs, with the lag values.
+#'
+#' @import tidyr
+#'
+#' @export
+empirical_excesses <- function(data_rain, quantile, df_lags, threshold = FALSE,
+                               type = "rpareto", t0 = 0) {
+  if (type == "rpareto") {
+    excesses <- empirical_excesses_rpar(data_rain, quantile, df_lags, threshold,
+                t0)
+  } else if (type == "brownresnick")  {
+    excesses <- df_lags # copy the dataframe
+    unique_tau <- unique(df_lags$tau) # unique temporal lags
 
-#         # get the data for the pair of sites
-#         rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
-#         rain_cp <- as.data.frame(na.omit(rain_cp))
-#         colnames(rain_cp) <- c("s1", "s2")
+    for (t in unique_tau) { # loop over temporal lags
+      df_h_t <- df_lags[df_lags$tau == t, ] # get the dataframe for each tau lag
 
-#         Tmax <- nrow(rain_cp) # number of total observations
-#         rain_nolag <- rain_cp$s1[1:(Tmax - abs(t))] # get the data without lag
-#         rain_lag <- rain_cp$s2[(1 + abs(t)):Tmax] # get the data with lag
-#         Tobs <- length(rain_nolag) # number of observations for the lagged pair
-#                                    # i.e. T - tau
+      for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+        # get the indices of the sites
+        ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+        ind_s1 <- df_h_t$s1[i]
 
-#         # transform the data in uniform data
-#         if (!threshold) {
-#           rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
-#                             rank(rain_lag) / (Tobs + 1))
-#         } else {
-#           rain_unif <- cbind(rain_nolag, rain_lag)
-#         }
+        # get the data for the pair of sites
+        rain_cp <- data_rain[, c(ind_s1, ind_s2), drop = FALSE]
+        rain_cp <- as.data.frame(na.omit(rain_cp))
+        colnames(rain_cp) <- c("s1", "s2")
 
-#         # number of joint excesses
-#         joint_excesses <- sum(rain_unif[, 2] > quantile &
-#                               rain_unif[, 1] > quantile)
+        Tmax <- nrow(rain_cp) # number of total observations
+        rain_nolag <- rain_cp$s1[1:(Tmax - abs(t))] # get the data without lag
+        rain_lag <- rain_cp$s2[(1 + abs(t)):Tmax] # get the data with lag
+        Tobs <- length(rain_nolag) # number of observations for the lagged pair
+                                   # i.e. T - tau
 
-#         # store the number of excesses and T - tau
-#         excesses$Tobs[excesses$s1 == ind_s1
-#                         & excesses$s2 == ind_s2
-#                         & excesses$tau == t] <- Tobs
+        # transform the data in uniform data
+        if (!threshold) {
+          rain_unif <- cbind(rank(rain_nolag) / (Tobs + 1),
+                            rank(rain_lag) / (Tobs + 1))
+        } else {
+          rain_unif <- cbind(rain_nolag, rain_lag)
+        }
 
-#         excesses$kij[excesses$s1 == ind_s1
-#                       & excesses$s2 == ind_s2
-#                       & excesses$tau == t] <- joint_excesses
-#       }
-#     }
-#   } else {
-#     print("The variable 'type' is not valid. It has to be 'rpareto' 
-#           or 'brownresnick'.")
-#   }
-#   return(excesses)
-# }
+        # number of joint excesses
+        joint_excesses <- sum(rain_unif[, 2] > quantile &
+                              rain_unif[, 1] > quantile)
+
+        # store the number of excesses and T - tau
+        excesses$Tobs[excesses$s1 == ind_s1
+                        & excesses$s2 == ind_s2
+                        & excesses$tau == t] <- Tobs
+
+        excesses$kij[excesses$s1 == ind_s1
+                      & excesses$s2 == ind_s2
+                      & excesses$tau == t] <- joint_excesses
+      }
+    }
+  } else {
+    print("The variable 'type' is not valid. It has to be 'rpareto' 
+          or 'brownresnick'.")
+  }
+  return(excesses)
+}
 
 # THEORETICAL CHI --------------------------------------------------------------
 
@@ -885,9 +1229,9 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #'
 #' @export
 neg_ll <- function(params, df_lags, excesses,
-                   hmax = NA,  rpar = TRUE, threshold = FALSE,
-                   latlon = FALSE, quantile = NA, data = NA,
-                   directional = TRUE) {
+                      hmax = NA,  rpar = TRUE, threshold = FALSE,
+                      latlon = FALSE, quantile = NA, data = NA,
+                      directional = TRUE) {
   if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
@@ -1023,11 +1367,11 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     }
 
     nll_i <- neg_ll(params = params_adv,
-                    df_lags = lags,
-                    hmax = hmax, excesses = excesses,
-                    latlon = latlon, directional = directional,
-                    threshold = threshold, rpar = rpar,
-                    data = data, quantile = quantile)
+                     df_lags = lags,
+                     hmax = hmax, excesses = excesses,
+                     latlon = latlon, directional = directional,
+                     threshold = threshold, rpar = rpar,
+                     data = data, quantile = quantile)
 
     nll_composite <- nll_composite + nll_i
   }
@@ -1597,12 +1941,6 @@ process_simulation_mem <- function(list_episodes, u, s0_list,
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param wind_df The wind dataframe. Default is NA.
 #' @param directional Directional variogram or not. Default is FALSE.
-#' @param fixed_eta1 A boolean value to indicate if eta1 is fixed. Default is
-#'                  FALSE.
-#' @param fixed_eta2 A boolean value to indicate if eta2 is fixed. Default is
-#'                  FALSE.
-#' @param hessian A boolean value to indicate if the Hessian matrix should be
-#'               computed. Default is FALSE.
 #'
 #' @return The optimized parameters.
 #'
@@ -1612,15 +1950,14 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
                                init_params, hmax = NA, wind_df = NA,
                                directional = FALSE,
                                fixed_eta1 = FALSE,
-                               fixed_eta2 = FALSE, hessian = FALSE) {
+                               fixed_eta2 = FALSE) {
   # Bounds
   lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
   upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
   if (all(!is.na(wind_df))) {
     lower_bounds[5:6] <- c(1e-8, 1e-8)
   }
-
-  # Get the m corresponding episodes for the simulations i
+  # Get the m corresponding simulations from list_simu inside a list
   list_episodes <- list_simu[((i - 1) * m + 1):(i * m)]
   lags_episodes <- list_lags[((i - 1) * m + 1):(i * m)]
   excesses_episodes <- list_excesses[((i - 1) * m + 1):(i * m)]
@@ -1643,76 +1980,84 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
     lower = lower_bounds,
     upper = upper_bounds,
     control = list(maxit = 10000),
-    hessian = hessian
+    hessian = TRUE
   )
 
   estimates <- result$par
   conv <- (result$convergence == 0)
-  print(conv)
-
   if (!conv) {
-    # no convergence: put only NA
     estimates <- rep(NA, length(init_params))
+    ci_lower <- ci_upper <- rep(NA, length(init_params))
     results_df <- data.frame(
       beta1 = estimates[1],
       beta2 = estimates[2],
       alpha1 = estimates[3],
       alpha2 = estimates[4],
       adv1 = estimates[5],
-      adv2 = estimates[6]
+      adv2 = estimates[6],
+      beta1_lower = NA,
+      beta1_upper = NA,
+      beta2_lower = NA,
+      beta2_upper = NA,
+      alpha1_lower = NA,
+      alpha1_upper = NA,
+      alpha2_lower = NA,
+      alpha2_upper = NA,
+      adv1_lower = NA,
+      adv1_upper = NA,
+      adv2_lower = NA,
+      adv2_upper = NA
     )
   } else {
-    if (hessian) {
-      # If Hessian requested compute CIs
-      hess <- result$hessian
-      if (is.null(hess) || any(!is.finite(hess)) ||
-          inherits(try(solve(hess), silent = TRUE), "try-error")) {
-        ci_lower <- ci_upper <- rep(NA, length(init_params))
-      } else {
-        cov_matrix <- solve(hess)
-        se <- sqrt(diag(cov_matrix))
-        z_val <- qnorm(0.975)
-        ci_lower <- estimates - z_val * se
-        ci_upper <- estimates + z_val * se
-      }
-
-      results_df <- data.frame(
-        beta1 = estimates[1], beta1_lower = ci_lower[1], beta1_upper = ci_upper[1],
-        beta2 = estimates[2], beta2_lower = ci_lower[2], beta2_upper = ci_upper[2],
-        alpha1 = estimates[3], alpha1_lower = ci_lower[3], alpha1_upper = ci_upper[3],
-        alpha2 = estimates[4], alpha2_lower = ci_lower[4], alpha2_upper = ci_upper[4],
-        adv1 = estimates[5], adv1_lower = ci_lower[5], adv1_upper = ci_upper[5],
-        adv2 = estimates[6], adv2_lower = ci_lower[6], adv2_upper = ci_upper[6]
-      )
+    # If convergence, extract the Hessian matrix and compute CIs
+    hessian <- result$hessian
+    # Check if hessian is valid
+    if (is.null(hessian) || any(!is.finite(hessian)) || inherits(try(solve(hessian), silent = TRUE), "try-error")) {
+      estimates <- rep(NA, length(init_params))
+      ci_lower <- ci_upper <- rep(NA, length(init_params))
     } else {
-      # Hessian not requested, only estimates, no ICs
+      # Compute standard errors from inverse Hessian
+      cov_matrix <- solve(hessian)
+      se <- sqrt(diag(cov_matrix))
+      
+      # 95% confidence intervals
+      z_val <- qnorm(0.975)  # ≈1.96
+      ci_lower <- estimates - z_val * se
+      ci_upper <- estimates + z_val * se
+      
+      # Optionally, combine into a data frame
       results_df <- data.frame(
         beta1 = estimates[1],
+        beta1_lower = ci_lower[1],
+        beta1_upper = ci_upper[1],
         beta2 = estimates[2],
+        beta2_lower = ci_lower[2],
+        beta2_upper = ci_upper[2],
         alpha1 = estimates[3],
+        alpha1_lower = ci_lower[3],
+        alpha1_upper = ci_upper[3],
         alpha2 = estimates[4],
+        alpha2_lower = ci_lower[4],
+        alpha2_upper = ci_upper[4],
         adv1 = estimates[5],
-        adv2 = estimates[6]
+        adv1_lower = ci_lower[5],
+        adv1_upper = ci_upper[5],
+        adv2 = estimates[6],
+        adv2_lower = ci_lower[6],
+        adv2_upper = ci_upper[6]
       )
     }
   }
-
   if (!is.na(wind_df)) {
-    # Rename adv1/adv2 in eta1/eta2
+    # change adv1, adv2 and their CIs to eta1, eta2 and their CIs
     results_df$eta1 <- results_df$adv1
     results_df$eta2 <- results_df$adv2
-    if (hessian) {
-      results_df$eta1_lower <- results_df$adv1_lower
-      results_df$eta1_upper <- results_df$adv1_upper
-      results_df$eta2_lower <- results_df$adv2_lower
-      results_df$eta2_upper <- results_df$adv2_upper
-      results_df <- results_df[, -c("adv1", "adv2",
-                                    "adv1_lower", "adv1_upper",
-                                    "adv2_lower", "adv2_upper")]
-    } else {
-      results_df <- results_df[, -c("adv1", "adv2")]
-    }
+    results_df$eta1_lower <- results_df$adv1_lower
+    results_df$eta1_upper <- results_df$adv1_upper
+    results_df$eta2_lower <- results_df$adv2_lower
+    results_df$eta2_upper <- results_df$adv2_upper
+    results_df <- results_df[, -c("adv1", "adv2", "adv1_lower", "adv1_upper",
+                                  "adv2_lower", "adv2_upper")]
   }
-
   return(results_df)
 }

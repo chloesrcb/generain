@@ -121,6 +121,7 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #' @param type The type of simulation.
 #' @param forcedtemp The number of time steps to include in the GIF.
 #' @param s0 The conditional site.
+#' @param threshold The threshold value to indicate on the plot. Default is 1.
 #'
 #' @return None, but saves the GIF to a file.
 #'
@@ -131,7 +132,7 @@ wlse_tablatex <- function(summary_df, ind, filename = "") {
 #' @export
 create_simu_gif <- function(simulation_data, sites_coords, params,
                             foldername, type = "rpar", forcedtemp = NA, 
-                            s0 = NULL) {
+                            s0 = NULL, threshold = 1) {
   ngrid <- sqrt(ncol(simulation_data)) # Number of grid points in each dimension
   Tmax <- nrow(simulation_data) # Number of time steps
   if (is.na(forcedtemp)) {
@@ -155,19 +156,16 @@ create_simu_gif <- function(simulation_data, sites_coords, params,
   simulation_data_long <- melt(simulation_data) # Convert to long format
   simulation_data_long$Time <- as.numeric(simulation_data_long$Time)
 
-  # simulation_data_long$uniform_value <- ave(
-  #   simulation_data_long$value,
-  #   simulation_data_long$Time,
-  #   FUN = function(x) rank(x) / (length(x) + 1)
-  # )
   # Create a dataframe to represent grid points
   grid <- sites_coords
+  if (dim(grid)[2] == 3) {
+    grid <- grid[, 2:3] # Keep only x and y coordinates
+  }
   colnames(grid) <- c("x", "y")
 
   plots <- list()
   cropped_data <- simulation_data_long[simulation_data_long$Time %in% temp, ]
 
-  threshold <- 1
   max_val <- max(cropped_data$value)
   min_val <- min(cropped_data$value)
   # for each time step

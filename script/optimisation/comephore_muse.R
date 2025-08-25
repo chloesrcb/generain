@@ -88,7 +88,7 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q_no0_spa <- 0.97
+q_no0_spa <- 0.95
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                           quantile = q_no0_spa, hmax = hmax, zeros = FALSE)
 
@@ -305,6 +305,20 @@ result <- optim(par = init_param, fn = neg_ll_composite,
                       trace = 1),
         hessian = T)
 
+
+filename <- paste0(data_folder, "comephore/optim_results/results_q",
+                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+
+
+# convert as a data frame
+result_df <- data.frame(beta1 = result$par[1],
+                        beta2 = result$par[2],
+                        alpha1 = result$par[3],
+                        alpha2 = result$par[4],
+                        eta1 = result$par[5],
+                        eta2 = result$par[6])
+write.csv(result_df, filename, row.names = FALSE)
+
 # CIs using Jackknife blocks
 n_total <- length(episodes_opt)
 block_size <- 15
@@ -351,7 +365,9 @@ jack_estimates <- do.call(rbind, jack_estimates_list)
 jack_estimates <- na.omit(jack_estimates)
 n_eff <- nrow(jack_estimates)
 
-filename <- paste0(data_folder, "comephore/optim_results_all_estimates.csv")
+filename <- paste0(data_folder, "comephore/optim_results/all_jk_",
+                    block_size, "_blocks_n", n_eff, "_q",
+                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jack_estimates, filename, row.names = FALSE)
 
 jack_mean <- colMeans(jack_estimates)
@@ -370,7 +386,9 @@ jackknife_block_results <- data.frame(
   CI_upper = upper_ci
 )
 
-filename <- paste0(data_folder, "comephore/optim_results_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+filename <- paste0(data_folder, "comephore/optim_results/results_jk_",
+                    block_size, "_blocks_n", n_eff, "_q",
+                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jackknife_block_results, filename, row.names = FALSE)
 
 

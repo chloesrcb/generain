@@ -83,6 +83,11 @@ grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
 grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
 grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
 
+
+# save grid coordinates
+filename <- paste0(data_folder, "comephore/grid/grid_coords_5km.csv")
+write.csv(grid_coords_km, file = filename, row.names = TRUE)
+
 # ncol(df_comephore)
 # p1 <- ggplot(grid_coords_km, aes(x = Longitude, y = Latitude)) +
 #   geom_point(color = "blue", size = 2) +
@@ -151,7 +156,7 @@ df_result <- df_result_all[df_result_all$q_spa == 0.92 & df_result_all$q_temp ==
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-q <- 0.98 # quantile
+q <- 0.95 # quantile
 
 # get central site from sites_coords
 comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
@@ -209,6 +214,12 @@ for (i in 1:length(selected_points$s0)) {
     stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
   }
 }
+
+# save s0 and t0 pairs 
+filename <- paste0(data_folder, "comephore/episodes/s0t0_pairs_q", q * 100,
+                   "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+
+write.csv(selected_points, file = filename, row.names = FALSE)
 
 datetimes <- selected_points$t0_date
 

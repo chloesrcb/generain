@@ -33,7 +33,7 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
 # SIMULATION ###################################################################
-result_folder <- paste0(data_folder, "simulations_rpar/")
+result_folder <- paste0(data_folder, "simulations_rpar/coords/")
 if (!dir.exists(result_folder)) {
   dir.create(result_folder, recursive = TRUE)
 }
@@ -91,7 +91,7 @@ if (use_wind_data) {
 
 # Folder name to save the data
 foldername <- file.path(
-  paste0(data_folder, "simulations_rpar"),
+  paste0(data_folder, "simulations_rpar/coords"),
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
@@ -115,13 +115,14 @@ num_cores <- detectCores() - 1
 cl <- makeCluster(num_cores)
 
 # Export variables and functions to the cluster
+# Export variables and functions to the cluster
 clusterExport(cl, varlist = c(
-  "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
+  "sim_rpareto_coords", "beta1", "beta2", "alpha1", "alpha2",
   "spa", "temp", "adv_real", "t0", "m", "random_s0", "s0",
   "s0_radius", "is_anisotropic",
-  "foldername", "generate_grid_coords", "save_simulations",
-  "ngrid", "compute_st_gaussian_process",
-  "compute_st_variogram", "convert_simulations_to_list",
+  "foldername", "generate_grid_coords", "save_simu",
+  "ngrid", "compute_st_gaussian_process_coords",
+  "compute_st_variogram_coords", "convert_simulations_to_list",
   "empirical_excesses_rpar", "get_conditional_lag_vectors",
   "t0", "u", "tau_vect", "sites_coords"
 ))
@@ -142,34 +143,36 @@ clusterEvalQ(cl, {
 
 # Simulate the process in parallel
 result_list <- parLapply(cl, 1:M, function(i) {
-  simu <- sim_rpareto(
+
+  simu <- sim_rpareto_coords(
     beta1 = beta1,
     beta2 = beta2,
     alpha1 = alpha1,
     alpha2 = alpha2,
-    x = spa,
-    y = spa,
+    coords = sites_coords,
     t = temp,
     adv = adv_real,
     t0 = t0,
     nres = m,
-    random_s0 = random_s0,
+    random_s0 = FALSE,
     s0 = s0,
     s0_radius = s0_radius,
     anisotropic = is_anisotropic
   )
-
-  list_rpar <- convert_simulations_to_list(simu$Z, ngrid)
+  
+  list_s0 <- simu$s0_used
+  list_rpar <- save_simu(simu$Z, sites_coords, folder = foldername)
 
   list_lags_excesses <- lapply(1:m, function(j) {
-    s0_x <- simu$s0_used[[j]]$x
-    s0_y <- simu$s0_used[[j]]$y
+    s0_df <- list_s0[[j]]
+    s0_x <- s0_df$x
+    s0_y <- s0_df$y
     s0_coords <- sites_coords[sites_coords$Longitude == s0_x &
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
-    excesses <- empirical_excesses_rpar(list_rpar[[j]], u, lags,
-                                       t0 = t0, threshold = TRUE)
+    excesses <- empirical_excesses_rpar(list_rpar[[j]], df_lags = lags,
+                                        thresholds = u, t0 = t0)
     list(lags = lags, excesses = excesses)
   })
 
@@ -184,6 +187,7 @@ result_list <- parLapply(cl, 1:M, function(i) {
     list_lags = list_lags
   ))
 })
+
 stopCluster(cl) # Stop the cluster
 
 # Get the list of data.frames
@@ -191,6 +195,7 @@ list_rpar <- do.call(c, lapply(result_list, function(res) res$list_rpar))
 list_excesses <- do.call(c, lapply(result_list,
                                    function(res) res$list_excesses))
 list_lags <- do.call(c, lapply(result_list, function(res) res$list_lags))
+list_s0 <- do.call(c, lapply(result_list, function(res) res$s0_used))
 
 ### Optimization ###############################################################
 
@@ -213,6 +218,8 @@ if (init_diff) {
 
 
 # Optimization
+fixed_eta1 <- FALSE
+fixed_eta2 <- FALSE
 result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
@@ -253,7 +260,8 @@ eta_type <- if (fixed_eta1 && fixed_eta2) {
 
 # save data in csv
 foldername_result <- file.path(
-  "./data/optim_results/rpar",
+  data_folder,
+  "optim_results/coords/rpar",
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
@@ -346,7 +354,7 @@ bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = valu
 # folder to save the plots
 foldername_image <- file.path(
   im_folder,
-  "/optim_results/rpar",
+  "/optim_results/coords/rpar",
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
