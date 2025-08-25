@@ -8,7 +8,7 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- TRUE
+muse <- FALSE
 
 if (muse) {
   # Get the muse folder
@@ -191,6 +191,15 @@ list_rpar <- do.call(c, lapply(result_list, function(res) res$list_rpar))
 list_excesses <- do.call(c, lapply(result_list,
                                    function(res) res$list_excesses))
 list_lags <- do.call(c, lapply(result_list, function(res) res$list_lags))
+
+# Do an histogram of the sum of kij for all kij
+if (!muse) {
+  sum_kij <- 0
+  for (excesses in list_excesses) {
+    sum_kij <- c(sum_kij, sum(excesses$kij))
+  }
+  hist(sum_kij, main = "Histogram of sum of kij", xlab = "sum of kij")
+}
 
 ### Optimization ###############################################################
 

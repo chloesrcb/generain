@@ -555,91 +555,133 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 #'
 #' @return A data.table with lag values, number of excesses (kij), and number of observed times (Tobs).
 #' @export
-empirical_excesses_rpar <- function(data_rain, df_lags,
-                                    thresholds = NULL, quantile = 0.9,
-                                    t0 = 0) {
-  # Init output
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-  excesses$kij <- 0L
-  excesses$Tobs <- 1L
+# empirical_excesses_rpar <- function(data_rain, df_lags,
+#                                     thresholds = NULL, quantile = 0.9,
+#                                     t0 = 0) {
+#   # Init output
+#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
+#   excesses$kij <- 0L
+#   excesses$Tobs <- 1L
 
-  unique_tau <- unique(df_lags$tau)
-  ind_s1 <- df_lags$s1[1]  # site of interest
+#   unique_tau <- unique(df_lags$tau)
+#   ind_s1 <- df_lags$s1[1]  # site of interest
 
-  for (tau in unique_tau) {
-    df_tau <- df_lags[df_lags$tau == tau, ]
+#   for (tau in unique_tau) {
+#     df_tau <- df_lags[df_lags$tau == tau, ]
 
-    for (i in seq_len(nrow(df_tau))) {
-      ind_s2 <- as.numeric(df_tau$s2[i])
-      X_s2 <- data_rain[, ind_s2, drop = FALSE]
+#     for (i in seq_len(nrow(df_tau))) {
+#       ind_s2 <- as.numeric(df_tau$s2[i])
+#       X_s2 <- data_rain[, ind_s2, drop = FALSE]
 
-      if (all(is.na(X_s2))) next
-      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+#       if (all(is.na(X_s2))) next
+#       X_s2 <- as.vector(na.omit(X_s2[, 1]))
 
-      t_index <- t0 + 1 + tau
-      if (t_index > length(X_s2)) next
+#       t_index <- t0 + 1 + tau
+#       if (t_index > length(X_s2)) next
 
-      X_s_t <- X_s2[t_index]
-      if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
+#       X_s_t <- X_s2[t_index]
+#       if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
 
-      # Determine the threshold to use
-      if (!is.null(thresholds)) {
-        if (length(thresholds) == 1) {
-          threshold_val <- thresholds
-        } else {
-          threshold_val <- thresholds[ind_s2]
-          if (is.na(threshold_val)) next
-        }
-        exceed <- X_s_t > threshold_val
-      } else {
-        # Use uniform quantile
-        rank_val <- rank(X_s2) / (length(X_s2) + 1)
-        exceed <- rank_val[t_index] > quantile
-      }
-      excesses$kij[excesses$s1 == ind_s1 & excesses$s2 == ind_s2 & 
-                   excesses$tau == tau] <- as.integer(exceed)
-    }
-  }
+#       # Determine the threshold to use
+#       if (!is.null(thresholds)) {
+#         if (length(thresholds) == 1) {
+#           threshold_val <- thresholds
+#         } else {
+#           threshold_val <- thresholds[ind_s2]
+#           if (is.na(threshold_val)) next
+#         }
+#         exceed <- X_s_t > threshold_val
+#       } else {
+#         # Use uniform quantile
+#         rank_val <- rank(X_s2) / (length(X_s2) + 1)
+#         exceed <- rank_val[t_index] > quantile
+#       }
+#       excesses$kij[excesses$s1 == ind_s1 & excesses$s2 == ind_s2 & 
+#                    excesses$tau == tau] <- as.integer(exceed)
+#     }
+#   }
 
-  return(excesses)
-}
+#   return(excesses)
+# }
 
-empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-  excesses[, Tobs := 1L]
+# MARCHE
+empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
+                                    threshold = FALSE, t0 = 0) {
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
+  excesses[, Tobs := 0L]
+  excesses$Tobs <- 1
   excesses[, kij := 0L]
-  unique_tau <- unique(df_lags$tau)
-  ind_s1 <- df_lags$s1[1]
+  # excesses$kij <- NA
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+  ind_s1 <- df_lags$s1[1] # s0
 
-  for (tau in unique_tau) {
-    df_h_t <- df_lags[df_lags$tau == tau, ]
+  for (tau in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
 
-    for (i in seq_len(nrow(df_h_t))) {
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      # get the data for the second site
       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      if (all(is.na(X_s2))) next
-
-      X_s2 <- as.vector(na.omit(X_s2[, 1]))
-      if ((t0 + 1 + tau) > length(X_s2)) next
-      X_s_t <- X_s2[t0 + 1 + tau]
-      if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
-
-      if (!is.null(thresholds)) {
-        q_s2 <- thresholds[ind_s2]
-        if (is.na(q_s2)) next
-        nmargin <- as.integer(X_s_t > q_s2)
-      } else {
-        # fallback: uniformization or binary indicator
-        nmargin <- as.integer(X_s_t > 0)  # ou autre logique si tu veux
+      if(all(is.na(X_s2))) {
+        next # skip if all values are NA
       }
 
-      excesses$kij[excesses$s1 == ind_s1 &
-                   excesses$s2 == ind_s2 &
-                   excesses$tau == tau] <- nmargin
+      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+
+      # if (!threshold) {
+      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
+      # }
+      # shifted data
+      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
+      if (is.list(X_s_t)) {
+        X_s_t <- X_s_t[[1]] # extract the value if it's a list
+      }
+      nmargin <- sum(X_s_t > quantile) # 0 or 1
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == tau] <- nmargin
     }
   }
   return(excesses)
 }
+
+# empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
+#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
+#   excesses[, Tobs := 1L]
+#   excesses[, kij := 0L]
+#   unique_tau <- unique(df_lags$tau)
+#   ind_s1 <- df_lags$s1[1]
+
+#   for (tau in unique_tau) {
+#     df_h_t <- df_lags[df_lags$tau == tau, ]
+
+#     for (i in seq_len(nrow(df_h_t))) {
+#       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+#       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
+#       if (all(is.na(X_s2))) next
+
+#       X_s2 <- as.vector(na.omit(X_s2[, 1]))
+#       if ((t0 + 1 + tau) > length(X_s2)) next
+#       X_s_t <- X_s2[t0 + 1 + tau]
+#       if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
+
+#       if (!is.null(thresholds)) {
+#         q_s2 <- thresholds[ind_s2]
+#         if (is.na(q_s2)) next
+#         nmargin <- as.integer(X_s_t > q_s2)
+#       } else {
+#         # fallback: uniformization or binary indicator
+#         nmargin <- as.integer(X_s_t > 0)  # ou autre logique si tu veux
+#       }
+
+#       excesses$kij[excesses$s1 == ind_s1 &
+#                    excesses$s2 == ind_s2 &
+#                    excesses$tau == tau] <- nmargin
+#     }
+#   }
+#   return(excesses)
+# }
 
 # #' empirical_excesses function
 # #'
