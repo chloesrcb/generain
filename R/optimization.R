@@ -555,6 +555,48 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 #'
 #' @return A data.table with lag values, number of excesses (kij), and number of observed times (Tobs).
 #' @export
+empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
+                                    threshold = FALSE, t0 = 0) {
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
+  excesses[, Tobs := 0L]
+  excesses$Tobs <- 1
+  excesses[, kij := 0L]
+  # excesses$kij <- NA
+  unique_tau <- unique(df_lags$tau) # unique temporal lags
+  ind_s1 <- df_lags$s1[1] # s0
+
+  for (tau in unique_tau) { # loop over temporal lags
+    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
+
+    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
+      # get the indices of the sites
+      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      # get the data for the second site
+      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
+      if(all(is.na(X_s2))) {
+        next # skip if all values are NA
+      }
+
+      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+
+      # if (!threshold) {
+      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
+      # }
+      # shifted data
+      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
+      if (is.list(X_s_t)) {
+        X_s_t <- X_s_t[[1]] # extract the value if it's a list
+      }
+      nmargin <- sum(X_s_t > quantile) # 0 or 1
+      excesses$kij[excesses$s1 == ind_s1
+                    & excesses$s2 == ind_s2
+                    & excesses$tau == tau] <- nmargin
+    }
+  }
+  return(excesses)
+}
+
+
 # empirical_excesses_rpar <- function(data_rain, df_lags,
 #                                     thresholds = NULL, quantile = 0.9,
 #                                     t0 = 0) {
@@ -603,48 +645,6 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 
 #   return(excesses)
 # }
-
-# MARCHE
-empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
-                                    threshold = FALSE, t0 = 0) {
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
-  excesses[, Tobs := 0L]
-  excesses$Tobs <- 1
-  excesses[, kij := 0L]
-  # excesses$kij <- NA
-  unique_tau <- unique(df_lags$tau) # unique temporal lags
-  ind_s1 <- df_lags$s1[1] # s0
-
-  for (tau in unique_tau) { # loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
-
-    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-      # get the indices of the sites
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      # get the data for the second site
-      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      if(all(is.na(X_s2))) {
-        next # skip if all values are NA
-      }
-
-      X_s2 <- as.vector(na.omit(X_s2[, 1]))
-
-      # if (!threshold) {
-      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
-      # }
-      # shifted data
-      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
-      if (is.list(X_s_t)) {
-        X_s_t <- X_s_t[[1]] # extract the value if it's a list
-      }
-      nmargin <- sum(X_s_t > quantile) # 0 or 1
-      excesses$kij[excesses$s1 == ind_s1
-                    & excesses$s2 == ind_s2
-                    & excesses$tau == tau] <- nmargin
-    }
-  }
-  return(excesses)
-}
 
 # empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
 #   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
@@ -1684,14 +1684,11 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
     method = "L-BFGS-B",
     lower = lower_bounds,
     upper = upper_bounds,
-    control = list(maxit = 10000),
-    hessian = hessian
+    control = list(maxit = 10000)
   )
 
   estimates <- result$par
   conv <- (result$convergence == 0)
-  print(conv)
-
   if (!conv) {
     # no convergence: put only NA
     estimates <- rep(NA, length(init_params))
@@ -1704,56 +1701,22 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
       adv2 = estimates[6]
     )
   } else {
-    if (hessian) {
-      # If Hessian requested compute CIs
-      hess <- result$hessian
-      if (is.null(hess) || any(!is.finite(hess)) ||
-          inherits(try(solve(hess), silent = TRUE), "try-error")) {
-        ci_lower <- ci_upper <- rep(NA, length(init_params))
-      } else {
-        cov_matrix <- solve(hess)
-        se <- sqrt(diag(cov_matrix))
-        z_val <- qnorm(0.975)
-        ci_lower <- estimates - z_val * se
-        ci_upper <- estimates + z_val * se
-      }
-
-      results_df <- data.frame(
-        beta1 = estimates[1], beta1_lower = ci_lower[1], beta1_upper = ci_upper[1],
-        beta2 = estimates[2], beta2_lower = ci_lower[2], beta2_upper = ci_upper[2],
-        alpha1 = estimates[3], alpha1_lower = ci_lower[3], alpha1_upper = ci_upper[3],
-        alpha2 = estimates[4], alpha2_lower = ci_lower[4], alpha2_upper = ci_upper[4],
-        adv1 = estimates[5], adv1_lower = ci_lower[5], adv1_upper = ci_upper[5],
-        adv2 = estimates[6], adv2_lower = ci_lower[6], adv2_upper = ci_upper[6]
-      )
-    } else {
-      # Hessian not requested, only estimates, no ICs
-      results_df <- data.frame(
-        beta1 = estimates[1],
-        beta2 = estimates[2],
-        alpha1 = estimates[3],
-        alpha2 = estimates[4],
-        adv1 = estimates[5],
-        adv2 = estimates[6]
-      )
-    }
+    results_df <- data.frame(
+      beta1 = estimates[1],
+      beta2 = estimates[2],
+      alpha1 = estimates[3],
+      alpha2 = estimates[4],
+      adv1 = estimates[5],
+      adv2 = estimates[6]
+    )
   }
 
-  if (!is.na(wind_df)) {
+  if (all(!is.na(wind_df))) {
     # Rename adv1/adv2 in eta1/eta2
     results_df$eta1 <- results_df$adv1
     results_df$eta2 <- results_df$adv2
-    if (hessian) {
-      results_df$eta1_lower <- results_df$adv1_lower
-      results_df$eta1_upper <- results_df$adv1_upper
-      results_df$eta2_lower <- results_df$adv2_lower
-      results_df$eta2_upper <- results_df$adv2_upper
-      results_df <- results_df[, -c("adv1", "adv2",
-                                    "adv1_lower", "adv1_upper",
-                                    "adv2_lower", "adv2_upper")]
-    } else {
-      results_df <- results_df[, -c("adv1", "adv2")]
-    }
+    # Remove adv1/adv2 columns
+    results_df <- results_df[, setdiff(names(results_df), c("adv1","adv2"))]
   }
 
   return(results_df)
