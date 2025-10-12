@@ -182,79 +182,7 @@ compute_gamma_point <- function(grid, gamma_space, gamma_temp, adv, s=NA, t=NA) 
 }
 
 
-# #' compute_st_variogram function (supports isotropic and anisotropic variograms)
-# #'
-# #' Computes the spatio-temporal variogram over a grid.
-# #'
-# #' @param grid The grid data.frame with columns x, y, t, shifted_x, shifted_y.
-# #' @param gamma_space The isotropic spatial variogram (optional).
-# #' @param gamma_space_x The spatial variogram in the x direction (optional).
-# #' @param gamma_space_y The spatial variogram in the y direction (optional).
-# #' @param gamma_temp The temporal variogram.
-# #' @param adv The advection vector (length 2 numeric).
-# #'
-# #' @return A 3D array with the spatio-temporal variogram values over the grid.
-# #'
-# #' @export
-# compute_st_variogram <- function(grid,
-#                                  gamma_space = NULL,
-#                                  gamma_space_x = NULL,
-#                                  gamma_space_y = NULL,
-#                                  gamma_temp,
-#                                  adv) {
-#   lx <- length(unique(grid$x))
-#   ly <- length(unique(grid$y))
-#   lt <- length(unique(grid$t))
-
-#   # Determine isotropic or anisotropic
-#   is_anisotropic <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
-#   is_isotropic <- !is.null(gamma_space)
-
-#   if (!is_isotropic && !is_anisotropic) {
-#     stop("Provide either gamma_space for isotropic or gamma_space_x and gamma_space_y for anisotropic case.")
-#   }
-
-#   # Determine gamma components
-#   if (!any(is.na(adv)) && all(adv == 0)) {
-#     coords <- cbind(grid$shifted_x, grid$shifted_y)
-#     coords <- coords[!duplicated(coords), ]
-#   } else {
-#     coords <- cbind(grid$shifted_x, grid$shifted_y)
-#   }
-#   if (is.vector(coords)) {
-#     coords <- matrix(coords, nrow = 1)
-#   }
-#   nsites <- nrow(coords)
-#   t_index <- grid$t + 1
-#   gamma <- array(NA, dim = c(lx, ly, lt))
-
-#   for (i in seq_along(t_index)) {
-#     if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
-#       ind_g_s <- if (i %% nsites == 0) {
-#         i - nsites * (i %/% nsites - 1)
-#       } else {
-#         i - nsites * (i %/% nsites)
-#       }
-#     } else {
-#       ind_g_s <- i
-#     }
-
-#     if (is_anisotropic) {
-#       vario <- gamma_space_x[[ind_g_s]] + gamma_space_y[[ind_g_s]] +
-#                                                       gamma_temp[[t_index[i]]]
-#     } else {
-#       vario <- gamma_space[[ind_g_s]] + gamma_temp[[t_index[i]]]
-#     }
-
-#     gamma[grid$x[i], grid$y[i], t_index[i]] <- vario
-#   }
-
-#   return(gamma)
-# }
-
-
-
-#' compute_st_variogram function (supports isotropic and anisotropic variograms)
+#' compute_st_variogram function
 #'
 #' Computes the spatio-temporal variogram over a grid.
 #'
@@ -278,12 +206,12 @@ compute_st_variogram <- function(grid,
   ly <- length(unique(grid$y))
   lt <- length(unique(grid$t))
 
-  # Determine isotropic or anisotropic
-  is_anisotropic <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
-  is_isotropic <- !is.null(gamma_space)
+  # Determine distance type
+  is_lalpha <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
+  is_euclidean <- !is.null(gamma_space)
 
-  if (!is_isotropic && !is_anisotropic) {
-    stop("Provide either gamma_space for isotropic or gamma_space_x and gamma_space_y for anisotropic case.")
+  if (!is_euclidean && !is_lalpha) {
+    stop("Provide either gamma_space for euclidean or gamma_space_x and gamma_space_y for lalpha case.")
   }
 
   # Determine gamma components
@@ -311,7 +239,7 @@ compute_st_variogram <- function(grid,
       ind_g_s <- i
     }
 
-    if (is_anisotropic) {
+    if (is_lalpha) {
       vario <- gamma_space_x[[ind_g_s]] + gamma_space_y[[ind_g_s]] +
                                                       gamma_temp[[t_index[i]]]
     } else {
@@ -376,9 +304,9 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
 #' spatial and temporal Gaussian random fields and the advection.
 #'
 #' @param grid The grid matrix.
-#' @param W_s The spatial Gaussian random field (for isotropic case).
-#' @param W_s_x The spatial Gaussian random field in the x direction (for anisotropic case).
-#' @param W_s_y The spatial Gaussian random field in the y direction (for anisotropic case).
+#' @param W_s The spatial Gaussian random field (for euclidean case).
+#' @param W_s_x The spatial Gaussian random field in the x direction (for lalpha case).
+#' @param W_s_y The spatial Gaussian random field in the y direction (for lalpha case).
 #' @param W_t The temporal Gaussian random field.
 #' @param adv The advection coordinates vector.
 #'
@@ -394,12 +322,12 @@ compute_st_gaussian_process <- function(grid, W_s = NULL,
   coords <- cbind(grid$shifted_x, grid$shifted_y)
   
 
-  # Determine isotropic or anisotropic
-  is_anisotropic <- !is.null(W_s_x) && !is.null(W_s_y)
-  is_isotropic <- !is.null(W_s)
+  # Determine distance type
+  is_lalpha <- !is.null(W_s_x) && !is.null(W_s_y)
+  is_euclidean <- !is.null(W_s)
 
-  if (!is_isotropic && !is_anisotropic) {
-    stop("Provide either W_s for isotropic or W_s_x and W_s_y for anisotropic case.")
+  if (!is_euclidean && !is_lalpha) {
+    stop("Provide either W_s for euclidean or W_s_x and W_s_y for lalpha case.")
   }
 
   # Remove duplicates if no advection
@@ -434,12 +362,12 @@ compute_st_gaussian_process <- function(grid, W_s = NULL,
       ind_W_s <- i
     }
 
-    # Check if anisotropic or isotropic, and handle accordingly
-    if (is_anisotropic) {
-      # Anisotropic case: Combine W_s_x and W_s_y
+    # Check if lalpha or euclidean, and handle accordingly
+    if (is_lalpha) {
+      # lalpha case: Combine W_s_x and W_s_y
       W_s_t_point <- W_s_x[ind_W_s] + W_s_y[ind_W_s] + W_t[t_index[i]]
     } else {
-      # Isotropic case: Use W_s directly
+      # euclidean case: Use W_s directly
       W_s_t_point <- W_s[ind_W_s] + W_t[t_index[i]]
     }
     # Store the result in the 3D array
@@ -969,9 +897,8 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 
 #' sim_rpareto function
 #'
-#' This function simulates a spatio-temporal r-Pareto process using either 
-#' an isotropic or anisotropic fractional Brownian motion model. It is a unified 
-#' version of sim_rpareto (isotropic) and sim_rpareto_dir (anisotropic).
+#' This function simulates a spatio-temporal r-Pareto process using either
+#' a fractional Brownian motion model.
 #'
 #' @param beta1, beta2 Variogram scale parameters for space and time.
 #' @param alpha1, alpha2 Variogram smoothness parameters for space and time.
@@ -982,7 +909,7 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #' @param random_s0 If TRUE, selects conditioning point s0 randomly within radius.
 #' @param s0 Conditioning spatial location (default = c(1, 1)).
 #' @param s0_radius Radius used if random_s0 is TRUE.
-#' @param anisotropic If TRUE, uses directional (anisotropic) model.
+#' @param distance Type of distance metric to use ("euclidean" or "lalpha").
 #'
 #' @return A list with simulated field Z and list of conditioning points s0_used.
 #' @export
@@ -990,10 +917,14 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
                                 adv = c(0, 0), t0 = 0, nres = 1,
                                 random_s0 = FALSE, s0 = c(1, 1),
                                 s0_radius = Inf,
-                                anisotropic = FALSE) {
+                                distance = "euclidean") {
   # Ensure RandomFields works with duplicated coordinates if needed
   RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
                           install = "no")
+
+  if (!(distance %in% c("euclidean", "lalpha"))) {
+    stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+  }
 
   # Dimensions
   lx <- length(x)
@@ -1047,8 +978,8 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
     # Temporal variogram centered at t0
     gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
 
-    if (anisotropic) {
-      # Anisotropic: separate space into x and y directions
+    if (distance == "lalpha") {
+      # lalpha: separate space into x and y components
       gamma_space_x <- RandomFields::RFvariogram(modelSpace,
                                 x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
       gamma_space_y <- RandomFields::RFvariogram(modelSpace,
@@ -1073,7 +1004,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
         grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
       )
     } else {
-      # Isotropic case: compute single spatial variogram
+      # Euclidean case: compute single spatial variogram
       gamma_space <- RandomFields::RFvariogram(modelSpace,
                           x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
                           y = coords$shifted_y - grid$shifted_y[ind_s0_t0])
@@ -1109,7 +1040,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' sim_rpareto function (extended)
 #'
 #' This function simulates a spatio-temporal r-Pareto process using either 
-#' an isotropic or anisotropic fractional Brownian motion model.
+#' a fractional Brownian motion model.
 #' It supports conditioning on one or multiple spatial points s0.
 #'
 #' @param beta1, beta2 Variogram scale parameters for space and time.
@@ -1122,7 +1053,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 #' @param s0 Conditioning spatial location(s). 
 #'        Either a vector c(x,y) for one point, or a matrix/data.frame with 2 columns for multiple points.
 #' @param s0_radius Radius used if random_s0 is TRUE.
-#' @param anisotropic If TRUE, uses directional (anisotropic) model.
+#' @param distance Type of distance metric to use ("euclidean" or "lalpha").
 #'
 #' @return A list with simulated field Z (5D array: x × y × t × nres × n_s0)
 #'         and list of conditioning points s0_used.
@@ -1131,12 +1062,16 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
                         adv = c(0, 0), t0 = 0, nres = 1,
                         random_s0 = FALSE, s0 = c(1, 1),
                         s0_radius = Inf,
-                        anisotropic = FALSE, seed = NULL) {
+                        distance = "euclidean", seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   # Ensure RandomFields allows duplicate coordinates
   RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
                           install = "no")
+
+  if (!(distance %in% c("euclidean", "lalpha"))) {
+    stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+  }
   
   # Dimensions of the grid
   lx <- length(x)
@@ -1207,9 +1142,9 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
       
       # Temporal variogram centered at t0
       gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
-      
-      if (anisotropic) {
-        # Anisotropic case: separate space into x and y directions
+
+      if (distance == "lalpha") {
+        # lalpha case: separate space into x and y directions
         gamma_space_x <- RandomFields::RFvariogram(
           modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
         gamma_space_y <- RandomFields::RFvariogram(
@@ -1232,7 +1167,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
           grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
         )
       } else {
-        # Isotropic case: single spatial variogram
+        # Euclidean case: single spatial variogram
         gamma_space <- RandomFields::RFvariogram(
           modelSpace,
           x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
@@ -1265,348 +1200,6 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   return(list(Z = Z, s0_used = s0_list))
 }
 
-#' sim_rpareto_coords function
-#'
-#' Simulates a spatio-temporal r-Pareto process on arbitrary coordinates
-#' (not necessarily on a rectangular grid).
-#'
-#' Supports isotropic or anisotropic fractional Brownian motion models, 
-#' conditioning on one or multiple spatial points s0, and random selection 
-#' of conditioning points within a given radius.
-#'
-#' @param beta1,beta2 Variogram scale parameters for space and time.
-#' @param alpha1,alpha2 Variogram smoothness parameters for space and time.
-#' @param coords A data.frame with columns (Longitude, Latitude) for spatial sites.
-#' @param t Vector of time points.
-#' @param adv Advection vector (default = c(0, 0)).
-#' @param t0 Time point at which the process is conditioned.
-#' @param nres Number of simulations.
-#' @param random_s0 If TRUE, randomly selects conditioning point(s) within a radius.
-#' @param s0 Conditioning location(s). Either a vector c(x,y) or a data.frame with 2 columns.
-#' @param s0_radius Radius used if random_s0 = TRUE.
-#' @param anisotropic If TRUE, uses anisotropic (directional) model.
-#'
-#' @return A list with simulated field Z (array: sites × time × nres × n_s0)
-#'         and list of conditioning points s0_used.
-#' @export
-sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, t,
-                               adv = c(0, 0), t0 = 0, nres = 1,
-                               random_s0 = FALSE, s0 = coords[1, ],
-                               s0_radius = Inf,
-                               anisotropic = FALSE) {
-  
-  # RandomFields options
-  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
-                          install = "no")
-  
-  n_sites <- nrow(coords)
-  lt <- length(t)
-  
-  # Build spatio-temporal grid
-  grid <- expand.grid(site = seq_len(n_sites), t = t)
-  grid$x <- rep(coords$Longitude, times = lt)
-  grid$y <- rep(coords$Latitude,  times = lt)
-
-  grid$shifted_x <- grid$x - grid$t * adv[1]
-  grid$shifted_y <- grid$y - grid$t * adv[2]
-  
-  # Define spatial and temporal models
-  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
-  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
-  
-  # Normalize s0 input
-  if (is.null(dim(s0))) {
-    s0_df <- data.frame(x = s0[1], y = s0[2])
-  } else {
-    s0_df <- as.data.frame(s0)
-    names(s0_df) <- c("x", "y")
-  }
-  
-  # If random selection of s0: restrict to coords within radius
-  if (random_s0) {
-    s0_center <- as.numeric(s0_df[1, ])  # first point as center
-    grid_points <- coords
-    colnames(grid_points) <- c("s", "x", "y")
-    distances <- sqrt((grid_points$x - s0_center[1])^2 +
-                      (grid_points$y - s0_center[2])^2)
-    candidate_points <- grid_points[distances <= s0_radius, ]
-    if (nrow(candidate_points) == 0) {
-      stop("No coordinates found within specified radius of s0_center.")
-    }
-  }
-  
-  # Prepare output containers
-  n_s0 <- nrow(s0_df)
-  s0_list <- vector("list", nres)   # store s0 used for each simulation
-  Z <- array(NA, dim = c(n_sites, lt, nres, n_s0))
-  
-  # Loop over simulations
-  for (i in seq_len(nres)) {
-    s0_list[[i]] <- list()
-    
-    # Loop over conditioning points
-    for (j in seq_len(n_s0)) {
-      s0_curr <- s0_df[j, , drop = FALSE]
-      
-      # If random_s0: pick one candidate at random
-      if (random_s0) {
-        selected_index <- sample(nrow(candidate_points), 1)
-        s0_curr <- candidate_points[selected_index, , drop = FALSE]
-      }
-      s0_list[[i]][[j]] <- s0_curr
-      
-      # Find index in grid for conditioning point at time t0
-      ind_s0_t0 <- which(grid$x == s0_curr$x & 
-                         grid$y == s0_curr$y & 
-                         grid$t == t0)
-      
-      # Temporal variogram centered at t0
-      gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
-      
-      if (anisotropic) {
-        # Anisotropic: separate x and y directions
-        gamma_space_x <- RandomFields::RFvariogram(
-          modelSpace, x = grid$shifted_x - grid$shifted_x[ind_s0_t0])
-        gamma_space_y <- RandomFields::RFvariogram(
-          modelSpace, x = grid$shifted_y - grid$shifted_y[ind_s0_t0])
-        
-        gamma_0 <- compute_st_variogram(
-          grid,
-          gamma_space_x = gamma_space_x,
-          gamma_space_y = gamma_space_y,
-          gamma_temp = gamma_temp,
-          adv = adv
-        )
-        
-        # Simulate Gaussian processes in x, y, and time
-        W_s_x <- RandomFields::RFsimulate(modelSpace, coords$Longitude, grid = FALSE)
-        W_s_y <- RandomFields::RFsimulate(modelSpace, coords$Latitude,  grid = FALSE)
-        W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-        
-        W <- compute_st_gaussian_process(
-          grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
-        )
-      } else {
-        # Isotropic: single spatial variogram
-        gamma_space <- RandomFields::RFvariogram(
-          modelSpace,
-          x = grid$shifted_x - grid$shifted_x[ind_s0_t0],
-          y = grid$shifted_y - grid$shifted_y[ind_s0_t0]
-        )
-        
-        gamma_0 <- compute_st_variogram(
-          grid,
-          gamma_space = gamma_space,
-          gamma_temp = gamma_temp,
-          adv = adv
-        )
-
-        # Simulate isotropic Gaussian field
-        W_s <- RandomFields::RFsimulate(modelSpace, 
-                                        coords$Longitude, coords$Latitude, 
-                                        grid = FALSE)
-        W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-
-        W <- compute_st_gaussian_process(
-          grid, W_s = W_s, W_t = W_t, adv = adv
-        )
-      }
-      # Build r-Pareto process for this conditioning point
-      Y <- exp(W - W[ind_s0_t0] - gamma_0)  # normalize and shift
-      R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)  # radial component
-      Z[,, i, j] <- R * Y
-    }
-  }
-  
-  return(list(Z = Z, s0_used = s0_list))
-}
-
-
-
-sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, t,
-                               adv = c(0, 0), t0 = 0, nres = 1,
-                               random_s0 = FALSE, s0 = coords[1, ],
-                               s0_radius = Inf,
-                               anisotropic = FALSE) {
-  
-  # Options RandomFields
-  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
-                          install = "no")
-  
-  n_sites <- nrow(coords)
-  lt <- length(t)
-  
-  # Build spatio-temporal grid
-  grid <- expand.grid(site = seq_len(n_sites), t = t)
-  grid$x <- rep(coords$Longitude, times = lt)
-  grid$y <- rep(coords$Latitude,  times = lt)
-  grid$shifted_x <- grid$x - grid$t * adv[1]
-  grid$shifted_y <- grid$y - grid$t * adv[2]
-  
-  # Normalize s0 input
-  if (is.null(dim(s0))) {
-    s0_df <- data.frame(x = s0[1], y = s0[2])
-  } else {
-    s0_df <- as.data.frame(s0)
-    names(s0_df) <- c("x", "y")
-  }
-  
-  # Si random_s0: choisir points dans le rayon
-  if (random_s0) {
-    s0_center <- as.numeric(s0_df[1, ])
-    grid_points <- coords
-    colnames(grid_points) <- c("s", "x", "y")
-    distances <- sqrt((grid_points$x - s0_center[1])^2 +
-                      (grid_points$y  - s0_center[2])^2)
-    candidate_points <- grid_points[distances <= s0_radius, ]
-    if (nrow(candidate_points) == 0) stop("No points within s0_radius")
-  }
-  
-  n_s0 <- nrow(s0_df)
-  s0_list <- vector("list", nres)
-  Z <- array(NA, dim = c(n_sites, lt, nres, n_s0))
-  
-  # Models
-  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
-  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
-  
-  for (i in seq_len(nres)) {
-    s0_list[[i]] <- list()
-    
-    for (j in seq_len(n_s0)) {
-      s0_curr <- s0_df[j, , drop = FALSE]
-      
-      if (random_s0) {
-        selected_index <- sample(nrow(candidate_points), 1)
-        s0_curr <- candidate_points[selected_index, , drop = FALSE]
-      }
-      s0_list[[i]][[j]] <- s0_curr
-      
-      # Index du point de conditionnement
-      ind_s0_t0 <- which(grid$x == s0_curr$x & 
-                         grid$y == s0_curr$y & 
-                         grid$t == t0)
-      
-      # Variogramme temporel centré sur t0
-      gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - t0)
-      
-      if (anisotropic) {
-        # Anisotropic: séparé en x et y
-        gamma_space_x <- RandomFields::RFvariogram(modelSpace,
-                                  x = grid$shifted_x - s0_curr$x)
-        gamma_space_y <- RandomFields::RFvariogram(modelSpace,
-                                  x = grid$shifted_y - s0_curr$y)
-        
-        gamma_0 <- compute_st_variogram(grid,
-                                        gamma_space_x = gamma_space_x,
-                                        gamma_space_y = gamma_space_y,
-                                        gamma_temp = gamma_temp,
-                                        adv = adv)
-        
-        W_s_x <- RandomFields::RFsimulate(modelSpace, coords$Longitude, grid = FALSE)
-        W_s_y <- RandomFields::RFsimulate(modelSpace, coords$Latitude,  grid = FALSE)
-        W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-        
-        W <- compute_st_gaussian_process(grid, W_s_x = W_s_x, W_s_y = W_s_y,
-                                         W_t = W_t, adv = adv)
-      } else {
-        # Isotropic
-        gamma_space <- RandomFields::RFvariogram(modelSpace,
-                                x = grid$shifted_x - s0_curr$x,
-                                y = grid$shifted_y - s0_curr$y)
-        
-        gamma_0 <- compute_st_variogram(grid,
-                                        gamma_space = gamma_space,
-                                        gamma_temp = gamma_temp,
-                                        adv = adv)
-        
-        W_s <- RandomFields::RFsimulate(modelSpace, coords$Longitude, coords$Latitude,
-                                        grid = FALSE)
-        W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-        
-        W <- compute_st_gaussian_process(grid, W_s = W_s, W_t = W_t, adv = adv)
-      }
-      
-      # r-Pareto
-      Y <- exp(W - W[ind_s0_t0] - gamma_0)
-      R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
-      Z[,, i, j] <- R * Y
-    }
-  }
-  
-  return(list(Z = Z, s0_used = s0_list))
-}
-
-# Compute spatio-temporal Gaussian field aligned with grid rows
-# - W_s (isotropic) has length n_sites
-# - W_s_x, W_s_y (anisotropic) each have length n_sites
-# - W_t has length lt (number of unique times)
-# Returns a numeric vector of length nrow(grid), aligned with grid rows.
-compute_st_gaussian_process <- function(grid, W_s = NULL, 
-                                        W_s_x = NULL, W_s_y = NULL, 
-                                        W_t, adv = c(0,0)) {
-  # Unique sites and times
-  sites <- unique(grid[, c("x","y")])
-  t_vals <- sort(unique(grid$t))
-  n_sites <- nrow(sites)
-  lt <- length(t_vals)
-
-  # Coerce to numeric vectors
-  if (!is.null(W_s))   W_s   <- as.numeric(W_s)
-  if (!is.null(W_s_x)) W_s_x <- as.numeric(W_s_x)
-  if (!is.null(W_s_y)) W_s_y <- as.numeric(W_s_y)
-  W_t <- as.numeric(W_t)
-
-  # Sanity checks
-  if (!is.null(W_s) && length(W_s) != n_sites)
-    stop("length(W_s) must equal number of unique sites.")
-  if (!is.null(W_s_x) && length(W_s_x) != n_sites)
-    stop("length(W_s_x) must equal number of unique sites.")
-  if (!is.null(W_s_y) && length(W_s_y) != n_sites)
-    stop("length(W_s_y) must equal number of unique sites.")
-  if (length(W_t) != lt)
-    stop("length(W_t) must equal number of unique times.")
-
-  # Map each grid row to (site index, time index)
-  key_sites <- paste(sites$x, sites$y, sep = "|")
-  s_idx <- match(paste(grid$x, grid$y, sep = "|"), key_sites)   # length nrow(grid)
-  t_idx <- match(grid$t, t_vals)                                # length nrow(grid)
-
-  if (any(is.na(s_idx)))
-    stop("Some (x,y) in grid not found in unique sites mapping.")
-
-  # Build W along grid rows
-  if (!is.null(W_s)) {
-    # isotropic: spatial field W_s
-    W <- W_s[s_idx] + W_t[t_idx]
-  } else {
-    # anisotropic: sum of directional fields
-    W <- (W_s_x[s_idx] + W_s_y[s_idx]) + W_t[t_idx]
-  }
-
-  return(W)
-}
-
-compute_st_gaussian_process <- function(grid, W_s = NULL, 
-                                        W_s_x = NULL, W_s_y = NULL, 
-                                        W_t, adv = c(0,0)) {
-  # Unique sites et temps
-  sites  <- unique(grid[, c("x","y")])
-  t_vals <- sort(unique(grid$t))
-  
-  key_sites <- paste(sites$x, sites$y, sep = "|")
-  s_idx <- match(paste(grid$x, grid$y, sep = "|"), key_sites)
-  t_idx <- match(grid$t, t_vals)
-
-  # Construction en vectoriel
-  if (!is.null(W_s)) {
-    W <- W_s[s_idx] + W_t[t_idx]
-  } else {
-    W <- (W_s_x[s_idx] + W_s_y[s_idx]) + W_t[t_idx]
-  }
-  
-  return(W)  # vecteur length = nrow(grid)
-}
 
 
 #' save_simulations function

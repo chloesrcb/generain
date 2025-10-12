@@ -1,0 +1,35 @@
+#!/bin/bash
+##
+#SBATCH --job-name=rpar_adv
+#SBATCH --ntasks-per-node=27
+#SBATCH --ntasks-per-core=1
+#SBATCH --mem=80G
+#SBATCH --partition=imag
+#SBATCH --output=%x_%j.out
+
+export LD_LIBRARY_PATH=$HOME/local/udunits2/lib:$LD_LIBRARY_PATH
+export PKG_CONFIG_PATH=$HOME/local/udunits2/lib/pkgconfig:$PKG_CONFIG_PATH
+
+WORK_DIR="/home/serrec/work_rainstsimu/rpareto"
+CONFIG_FILE=$WORK_DIR/config.R
+
+module load R/4.0.2
+
+cat << EOF > $CONFIG_FILE
+adv <- c(0.1, 0.5)
+params <- c(0.01, 0.2, 1.5, 1)
+ngrid <- 7
+temp <- 0:29
+s0 <- c(1, 1)
+t0 <- 0
+random_s0 <- TRUE
+M <- 10
+m <- 500
+is_anisotropic <- TRUE
+s0_radius <- 7
+fixed_eta1 <- FALSE
+fixed_eta2 <- FALSE
+use_wind_data <- TRUE
+EOF
+
+Rscript $WORK_DIR/optim_rpar.R

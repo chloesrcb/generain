@@ -13,7 +13,6 @@ library(reshape2)
 library(animation)
 library(RandomFields)
 library(RandomFieldsUtils)
-source("./script/load_libraries.R")
 
 # Get all files in the folder "R"
 functions_folder <- "./R"
@@ -60,7 +59,7 @@ simu_rpar <- sim_rpareto_coords(alpha1 = alpha1, alpha2 = alpha2,
                                 coords = grid_comephore,
                                 t = temp, adv = adv, t0 = t0, nres = n.res,
                                 random_s0 = random_s0, s0 = s0,
-                                s0_radius = Inf, anisotropic = FALSE,
+                                s0_radius = Inf, distance = "euclidean",
                                 threshold = threshold)
 
 params <- c(param, adv)

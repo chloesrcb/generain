@@ -50,9 +50,6 @@ RFoptions(
   printlevel = 0
 )
 
-
-
-# Formatage des paramètres pour la sauvegarde
 param_str <- format_value(true_param)
 adv_str <- format_value(adv)
 s0_str <- format_value(s0)
@@ -64,7 +61,6 @@ if (random_s0) {
   s0_str <- paste0("s0_", s0_str)
 }
 
-# Créer le dossier de sauvegarde dans chaque worker
 foldername <- paste0(data_folder, "simulations/simulations_rpar/rpar_",
                       param_str, "/sim_", ngrid^2, "s_", length(temp), "t_",
                       s0_str, "_t0_", t0_str, "/")
@@ -73,7 +69,7 @@ if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
 
-num_cores <- detectCores() - 1
+num_cores <- 27
 cl <- makeCluster(num_cores)
 
 clusterExport(cl, varlist = c(
@@ -219,8 +215,7 @@ result_list <- mclapply(1:2, process_simulation, m = m,
                         list_excesses = list_excesses,
                         init_params = init_params,
                         hmax = 7, wind_df = wind_df,
-                        directional = FALSE,
-                        fixed_eta1 = FALSE, fixed_eta2 = FALSE,
+                        distance = "euclidean",
                         mc.cores = num_cores)
 
 
@@ -515,8 +510,7 @@ result_list <- mclapply(1:M, process_simulation, m = m,
                         list_excesses = list_excesses,
                         init_params = init_param,
                         hmax = 7, wind_df = wind_df,
-                        directional = FALSE,
-                        fixed_eta1 = FALSE, fixed_eta2 = FALSE,
+                        distance = "euclidean",
                         mc.cores = num_cores)
 result
 
@@ -562,7 +556,7 @@ df_lags <- get_conditional_lag_vectors(sites_coords, s0, t0,
                                         tau_vect = 0:10)
 
 chi_theorical <- theoretical_chi(params, df_lags, latlon = FALSE,
-                                            directional = FALSE)
+                                            distance = "euclidean")
 chi <- unique(chi_theorical$chi)
 plot(chi)
 tau <- 0:10 # temporal lags

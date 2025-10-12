@@ -54,9 +54,14 @@ sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, t,
                                adv = c(0, 0), t0 = 0, nres = 1,
                                random_s0 = FALSE, s0 = coords[1, ],
                                s0_radius = Inf,
-                               anisotropic = FALSE, threshold = 1, 
+                               distance = "euclidean", threshold = 1, 
                                seed = NULL) {
   
+  # distance: "euclidean" or "lalpha" (lalpha = sum of 1D distances)
+  if (!(distance %in% c("euclidean", "lalpha"))) {
+    stop("Invalid distance type. Choose 'euclidean' or 'lalpha'.")
+  }
+
   if (!is.null(seed)) {
     set.seed(seed)
   }
@@ -134,7 +139,7 @@ sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, t,
     # Temporal variogram
     gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - t0)
     
-    if (anisotropic) {
+    if (distance == "lalpha") {
       gamma_space_x <- RandomFields::RFvariogram(modelSpace,
                         x = grid$shifted_x - grid$shifted_x[ind_s0_t0])
       gamma_space_y <- RandomFields::RFvariogram(modelSpace,

@@ -30,6 +30,8 @@ df_dist <- reshape_distances(dist_mat)
 # get rain data from omsev
 filename_omsev <- paste0(data_folder,
                          "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+# filename_omsev <- paste0(data_folder,
+#                          "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
 
 load(filename_omsev)
 rain <- rain.all5[c(1, 6:ncol(rain.all5))]
@@ -109,7 +111,7 @@ chimat_dt_mean <- chimat_dt_mean[-1]
 
 # plot mean chi
 df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE, lag_unit = 5)
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
 
 c2 <- as.numeric(wlse_temp[[1]])
 beta2 <- as.numeric(wlse_temp[[2]])
@@ -137,7 +139,7 @@ chitemp_eta_estim
 
 # spatial structure with an almost constant amount of pairs in each intervals
 df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 20
+num_intervals <- 12
 quantiles_rad <- quantile(df_dist_order$value,
                             probs = seq(0, 1, length.out = num_intervals + 1))
 radius_intervals <- unique(quantiles_rad)
@@ -185,7 +187,7 @@ chimat_dslag <- matrix(1, nrow = n - 1, ncol = nb_col)
 
 # plot chi for each distance
 chispa_df <- spatial_chi(rad_mat, rain_new,
-                         quantile = 0.99, zeros = F)
+                         quantile = 0.95, zeros = F)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))

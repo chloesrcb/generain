@@ -4,13 +4,23 @@ rm(list = ls())
 # clear console
 cat("\014")
 
-# Get the muse folder
-folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"
-setwd(folder_muse)
-# Load libraries and set theme
-source("load_libraries.R")
-im_folder <- "./images"
-source("config.R")
+muse <- TRUE
+
+if (muse) {
+  # Get the muse folder
+  folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"
+  setwd(folder_muse)
+  # Load libraries and set theme
+  source("load_libraries.R")
+  im_folder <- "./images"
+  source("config_com.R")
+  data_folder <- "./data/"
+} else {
+  # Load libraries and set theme
+  source("./script/load_libraries.R")
+  source("./script/optimisation/config_com.R")
+}
+
 
 # Get all files in the folder "R"
 functions_folder <- "./R"
@@ -34,7 +44,6 @@ loc_px <- read.csv(filename_loc, sep = ",")
 
 # remove pixel in loc_px that are not in comephore_raw
 loc_px <- loc_px[loc_px$pixel_name %in% colnames(comephore_raw)[-1], ]
-nrow(loc_px) # number of pixels
 # reindex
 rownames(loc_px) <- NULL
 df_comephore <- as.data.frame(comephore_raw)
@@ -45,6 +54,22 @@ df_comephore$date <- as.POSIXct(df_comephore$date,
 df_comephore <- df_comephore[df_comephore$date >= "2008-01-01", ]
 rownames(df_comephore) <- format(as.POSIXct(df_comephore$date), "%Y-%m-%d %H:%M:%S")
 comephore <- df_comephore[-1] # remove dates column
+
+# Get wind data from data gouv 
+filename_wind <- paste0(data_folder, "wind/data_gouv/wind_mtp.csv")
+wind_mtp <- read.csv(filename_wind)
+
+# When datetime do not have hours and minutes, add 00:00:00
+wind_mtp$datetime <- ifelse(nchar(wind_mtp$datetime) == 10,
+                            paste0(wind_mtp$datetime, " 00:00:00"),
+                            wind_mtp$datetime)
+# Convert datetime to POSIXct
+wind_mtp$datetime <- as.POSIXct(wind_mtp$datetime,
+                                format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# Apply function to the DD column
+wind_mtp$cardDir <- sapply(wind_mtp$DD, convert_to_cardinal)
+wind_mtp$cardDir <- as.character(wind_mtp$cardDir)  # Ensure it's character
+wind_mtp$cardDir[is.na(wind_mtp$DD)] <- NA
 
 # DISTANCE AND COORDS ##########################################################
 
@@ -88,13 +113,12 @@ hmax <- h_vect[10] # 10th value
 
 hmax <- 7
 
-q_no0_spa <- 0.97
+q_no0_spa <- 0.95
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                           quantile = q_no0_spa, hmax = hmax, zeros = FALSE)
 
 etachispa_df <- data.frame(chi = eta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
-
 
 # WLSE
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
@@ -107,7 +131,7 @@ alpha1 <- wlse_spa[[3]]
 # Temporal chi WLSE ############################################################
 
 tmax <- 10
-q_no0_temp <- 0.92 # quantile for temporal chi
+q_no0_temp <- 0.95 # quantile for temporal chi
 
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
@@ -143,8 +167,6 @@ colnames(df_result) <- c("beta1", "beta2", "alpha1", "alpha2")
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-q <- 0.92 # quantile
-
 # get central site from sites_coords
 comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
 set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q,
@@ -174,8 +196,8 @@ for (i in seq_along(list_s)) {
 
 # unique(list_u) # check unique excess values
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5 # in km
-delta <- 30 # in hours
+# min_spatial_dist <- 5 # in km
+# delta <- 30 # in hours
 s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore_subset,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = delta,
@@ -236,6 +258,10 @@ matching_indices <- matching_indices[!is.na(matching_indices)]
 adv_df <- adv_df[matching_indices, ]
 rownames(adv_df) <- NULL  # reset row names
 
+# convert adv in m/s to km/h
+adv_df$mean_dx_kmph <- adv_df$mean_dx_mps * 3.6
+adv_df$mean_dy_kmph <- adv_df$mean_dy_mps * 3.6
+
 selected_episodes <- selected_points
 selected_episodes$adv_x <- rep(NA, nrow(selected_episodes))
 selected_episodes$adv_y <- rep(NA, nrow(selected_episodes))
@@ -250,143 +276,92 @@ for (i in 1:nrow(selected_episodes)) {
   } else {
     # if there are multiple rows, take the first one
     adv_row <- adv_row[1, ]
-    adv_x <- adv_row$mean_dx_mps
-    adv_y <- adv_row$mean_dy_mps
+    adv_x <- adv_row$mean_dx_kmph
+    adv_y <- adv_row$mean_dy_kmph
     selected_episodes$adv_x[i] <- adv_x
     selected_episodes$adv_y[i] <- adv_y
   }
 }
 
-head(selected_episodes)
-nrow(selected_episodes)
+
 # Remove episodes with NA advection values
 ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
 selected_episodes_nona <- selected_episodes[-ind_NA_adv, ]
 
-wind_df <- selected_episodes[, c("adv_x", "adv_y")]
-colnames(wind_df) <- c("vx", "vy")
-length(wind_df$vx) # should be the same as number of episodes
+V_episodes <- data.frame(
+  v_x = selected_episodes$adv_x,
+  v_y = selected_episodes$adv_y
+)
+colnames(V_episodes) <- c("vx", "vy")
 
-# convert m/s to km/h
-wind_df$vx <- selected_episodes$adv_x * 3.6  # convert to km/h
-wind_df$vy <- selected_episodes$adv_y * 3.6  # convert to km/h
+wind_per_episode <- Map(compute_wind_episode, list_episodes,
+                        MoreArgs = list(wind_df = wind_mtp))
+wind_ep_df <- do.call(rbind, wind_per_episode)
+head(wind_ep_df)
+# get wind vector for each episode w_x, w_y
+W_episodes <- data.frame(
+  wx = -wind_ep_df$FF_mean * sin(wind_ep_df$DD_mean * pi / 180),
+  wy = -wind_ep_df$FF_mean * cos(wind_ep_df$DD_mean * pi / 180)
+)
+# wind_ep_df$vx <- -wind_ep_df$FF_vector_mean * sin(wind_ep_df$DD_vector_mean * pi / 180)
+# wind_ep_df$vy <- -wind_ep_df$FF_vector_mean * cos(wind_ep_df$DD_vector_mean * pi / 180)
 # OPTIMIZATION #################################################################
 
-ind_NA <- which(is.na(wind_df$vx))
-ind_NA <- ind_NA_adv
-wind_opt <- wind_df
+ind_NA_adv <- which(is.na(V_episodes$vx))
+ind_NA_wind <- which(is.na(W_episodes$wx))
+ind_NA <- unique(c(ind_NA_adv, ind_NA_wind))
+V_ep_opt <- V_episodes
+W_ep_opt <- W_episodes
 if (any(ind_NA > 0)) {
   # remove these episodes
-  # wind_opt <- wind_df[-ind_NA, ]
+  V_ep_opt <- V_episodes[-ind_NA, ]
+  W_ep_opt <- W_episodes[-ind_NA, ]
   episodes_opt <- list_episodes[-ind_NA]
   lags_opt <- list_lags[-ind_NA]
   excesses_opt <- list_excesses[-ind_NA]
 } else {
-  wind_opt <- wind_df
   episodes_opt <- list_episodes
   lags_opt <- list_lags
   excesses_opt <- list_excesses
 }
 
 
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+foldername <- paste0(data_folder, "comephore/optim_results/omega_etas/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+
+filename <- paste0(foldername, "/results_q",
+           q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+
+
+print("Starting optimization")
+init_param <- c(beta1, beta2, alpha1, alpha2, 0.5, 1, 1) # with etas
 result <- optim(par = init_param, fn = neg_ll_composite,
-        list_lags = lags_opt, list_episodes = episodes_opt,
-        list_excesses = excesses_opt, hmax = 7,
-        wind_df = wind_opt,
-        latlon = FALSE,
-        directional = TRUE,
-        fixed_eta1 = FALSE,
-        fixed_eta2 = FALSE,
-        method = "L-BFGS-B",
-        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(10, 10, 1.999, 1.999, 10, 10),
-        control = list(maxit = 10000,
-                      trace = 1),
-        hessian = T)
-
-filename <- paste0(data_folder, "comephore/optim_results/results_q",
-                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-
-# convert as a data frame
-result_df <- data.frame(beta1 = result$par[1],
-                        beta2 = result$par[2],
-                        alpha1 = result$par[3],
-                        alpha2 = result$par[4],
-                        eta1 = result$par[5],
-                        eta2 = result$par[6])
-write.csv(result_df, filename, row.names = FALSE)
-
-# CIs using Jackknife blocks
-n_total <- length(episodes_opt)
-block_size <- 15
-n_blocks <- floor(n_total / block_size)
-blocks <- split(1:(block_size * n_blocks), rep(1:n_blocks, each = block_size))
-
-n_cores <- detectCores() - 1
-
-jack_estimates_list <- mclapply(1:n_blocks, function(i) {
-  cat("Bloc", i, "over", n_blocks, "\n")
-  
-  exclude_idx <- blocks[[i]]
-  
-  jack_episodes <- episodes_opt[-exclude_idx]
-  jack_lags <- lags_opt[-exclude_idx]
-  jack_excesses <- excesses_opt[-exclude_idx]
-  jack_wind <- wind_opt[-exclude_idx, , drop = FALSE]
-  
-  res <- tryCatch({
-    optim(par = init_param, fn = neg_ll_composite,
-          list_lags = jack_lags, list_episodes = jack_episodes,
-          list_excesses = jack_excesses, hmax = 7,
-          wind_df = jack_wind,
+          list_lags = lags_opt, list_episodes = episodes_opt,
+          list_excesses = excesses_opt, hmax = 10,
+          V_episode = V_ep_opt,
+          W_episode = W_ep_opt,
           latlon = FALSE,
-          directional = TRUE,
-          fixed_eta1 = FALSE,
-          fixed_eta2 = FALSE,
+          fixed_omega = NA,
+          distance = "lalpha",
           method = "L-BFGS-B",
-          lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-          upper = c(10, 10, 1.999, 1.999, 10, 10),
-          control = list(maxit = 10000),
-          hessian = FALSE)
-  }, error = function(e) NULL)
-  
-  if (!is.null(res)) {
-    return(res$par)
-  } else {
-    return(rep(NA, length(init_param)))
-  }
-}, mc.cores = n_cores)
-
-jack_estimates <- do.call(rbind, jack_estimates_list)
-
-jack_estimates <- na.omit(jack_estimates)
-n_eff <- nrow(jack_estimates)
-
-filename <- paste0(data_folder, "comephore/optim_results/all_jk_",
-                    block_size, "_blocks_n", n_eff, "_q",
-                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-write.csv(jack_estimates, filename, row.names = FALSE)
-
-jack_mean <- colMeans(jack_estimates)
-jack_var <- (n_eff - 1) / n_eff * colSums((jack_estimates - matrix(rep(jack_mean, each = n_eff), ncol=6))^2)
-jack_se <- sqrt(jack_var)
-
-z <- qnorm(0.975)
-lower_ci <- result$par - z * jack_se
-upper_ci <- result$par + z * jack_se
-
-jackknife_block_results <- data.frame(
-  Parameter = c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2"),
-  Estimate = result$par,
-  StdError = jack_se,
-  CI_lower = lower_ci,
-  CI_upper = upper_ci
-)
-
-filename <- paste0(data_folder, "comephore/optim_results/results_jk_",
-                    block_size, "_blocks_n", n_eff, "_q",
-                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-write.csv(jackknife_block_results, filename, row.names = FALSE)
-
-
+          lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+          upper = c(10, 10, 1.999, 1.999, 1, 10, 10),
+          control = list(maxit = 10000, trace = 1),
+          hessian = TRUE)
+if (result$convergence != 0) {
+    stop("Optimization did not converge")
+} else {
+  print("Optimization converged")
+  # convert as a data frame
+  result_df <- data.frame(beta1 = result$par[1],
+                          beta2 = result$par[2],
+                          alpha1 = result$par[3],
+                          alpha2 = result$par[4],
+                          omega = result$par[5],
+                          eta1 = result$par[6],
+                          eta2 = result$par[7],
+                          nll = result$value)
+  write.csv(result_df, filename, row.names = FALSE)
+}

@@ -126,7 +126,7 @@ for(i in 1:length(eta1_seq)) {
         list_lags = list_lags,
         list_excesses = list_excesses,
         hmax = 7, wind_df = wind_df,
-        directional = TRUE,
+        distance = "lalpha",
         latlon = FALSE,,
         rpar = TRUE
         )
@@ -174,7 +174,7 @@ for(i in 1:length(eta1_seq)) {
     list_lags = list_lags,
     list_excesses = list_excesses,
     hmax = 7, wind_df = wind_df,
-    directional = TRUE,
+    distance = "lalpha",
     latlon = FALSE,
     rpar = TRUE
   )
@@ -207,7 +207,7 @@ for(i in 1:length(eta2_seq)) {
     list_lags = list_lags,
     list_excesses = list_excesses,
     hmax = 7, wind_df = wind_df,
-    directional = TRUE,
+    distance = "lalpha",
     latlon = FALSE,
     rpar = TRUE
   )

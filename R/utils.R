@@ -265,8 +265,8 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 #'            Default is FALSE.
 #' @param latlon A logical value indicating whether to use latitude and
 #'              longitude coordinates. Default is FALSE.
-#' @param directional A logical value indicating whether to use directional
-#'                   variogram. Default is FALSE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha".
+#'                 Default is "euclidean".
 #'
 #' @return None, but generates plots.
 #'
@@ -275,7 +275,7 @@ generate_data_for_tau <- function(tau, empirical_df, theorical_df) {
 #' @export
 generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
                                      chi = FALSE, latlon = FALSE,
-                                     directional = FALSE) {
+                                     distance = "euclidean") {
   # Get the estimated variogram
   if(typeof(result) == "list" && "beta1" %in% colnames(result)){
     beta1_hat <- result$beta1
@@ -295,8 +295,8 @@ generate_variogram_plots <- function(result, df_lags, true_param, tau_values,
 
   empirical_df <- theoretical_chi(c(beta1_hat, beta2_hat, alpha1_hat, 
                                   alpha2_hat, adv1_hat, adv2_hat), df_lags,
-                                  latlon, directional)
-  theorical_df <- theoretical_chi(true_param, df_lags, latlon, directional)
+                                  latlon, distance)
+  theorical_df <- theoretical_chi(true_param, df_lags, latlon, distance)
 
   combined_data <- do.call(rbind, lapply(tau_values, generate_data_for_tau,
                             empirical_df, theorical_df))

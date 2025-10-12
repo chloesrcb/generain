@@ -221,7 +221,7 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
     } else {
       rain_Xs <- as.vector(rain_Xs)
     }
-    
+
     if (length(rain_Xs) <= tmax) next  # skip if not enough data
 
     # transform to uniform using rank
@@ -256,8 +256,8 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
   }
   
   # restrict values to [1e-8, 1 - 1e-8]
-  chi_temp[chi_temp <= 0] <- 1e-8
-  chi_temp[chi_temp >= 1] <- 1 - 1e-8
+  # chi_temp[chi_temp <= 0] <- 1e-8
+  # chi_temp[chi_temp >= 1] <- 1 - 1e-8
   
   return(chi_temp)
 }
@@ -602,7 +602,7 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     # get index pairs
     df_dist_h <- df_dist[df_dist$value == h, ]
     ind_s2 <- as.numeric(as.character(df_dist_h$X)) # get index of s2
-    ind_s1 <- df_dist_h$Y # get index of s1
+    ind_s1 <- as.numeric(as.character(df_dist_h$Y)) # get index of s1
     for (i in seq_along(ind_s1)){ # loop over each pair of sites
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])]) # get couple
       colnames(rain_cp) <- c("s1", "s2") # rename columns
@@ -720,12 +720,12 @@ eta <- function(chi) {
   return(chi)
 }
 
-eta <- function(chi) {
-  chi <- pmin(pmax(chi, 1e-6), 1 - 1e-6)  # clamp chi into (0,1)
-  stdnorm <- qnorm(1 - 0.5 * chi)
-  transformed <- 2 * log(stdnorm)
-  return(transformed)
-}
+# eta <- function(chi) {
+#   chi <- pmin(pmax(chi, 1e-6), 1 - 1e-6)  # clamp chi into (0,1)
+#   stdnorm <- qnorm(1 - 0.5 * chi)
+#   transformed <- 2 * log(stdnorm)
+#   return(transformed)
+# }
 
 
 #' Calculate the theorical spatio-temporal variogram
@@ -965,7 +965,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   # eta transformation
   etachispa_df <- data.frame(chi = eta(chispa$chi),
-                           lagspa = log(chispa$lagspa))
+                           lagspa = log(chispa$lagspa /1000)) # in km
 
   if (weights == "residuals") {
     # LS reg (clasical model)
@@ -973,16 +973,16 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
     # define weights to use
     ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
   } else if (weights == "exp") {
-    ws <- exp(-(etachispa_df$lagspa))
+    ws <- exp(-(chispa$lagspa / 1000))
   } else if (weights == "exp2") {
-    ws <- exp(-(etachispa_df$lagspa)^2)
+    ws <- exp(-(chispa$lagspa / 1000)^2)
   } else if (weights == "expbw") {
     if (is.null(bw)) {
       stop("Please provide a bandwidth for 'expbw' weights.")
     }
-    ws <- exp(-(etachispa_df$lagspa / bw)^2)
+    ws <- exp(-(chispa$lagspa / bw)^2)
   } else if (weights == "none") {
-    ws <- rep(1, length(etachispa_df$lagspa))
+    ws <- rep(1, length(chispa$lagspa))
   }
 
   # perform weighted least squares regression
@@ -1001,3 +1001,28 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   }
   return(c(c_spa, beta_spa, alpha_spa))
 }
+
+
+# get_estimate_variospa <- function (chispa, weights, summary = FALSE) {
+#     etachispa_df <- data.frame(chi = eta(chispa$chi), lagspa = log(chispa$lagspa))
+#     if (weights == "residuals") {
+#         model <- lm(chi ~ lagspa, data = etachispa_df)
+#         ws <- 1/lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+#     }
+#     else if (weights == "exp") {
+#         ws <- exp(-(etachispa_df$lagspa)^2)
+#     }
+#     else if (weights == "none") {
+#         ws <- rep(1, length(etachispa_df$lagspa))
+#     }
+#     wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
+#     sum_wls_lag <- summary(wls_model_spa)
+#     wls_coef <- data.frame(sum_wls_lag$coefficients)
+#     alpha_spa <- wls_coef$Estimate[2]
+#     c_spa <- wls_coef$Estimate[1]
+#     beta_spa <- exp(c_spa)
+#     if (summary) {
+#         print(sum_wls_lag)
+#     }
+#     return(c(c_spa, beta_spa, alpha_spa))
+# }

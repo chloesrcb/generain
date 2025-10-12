@@ -445,7 +445,7 @@ if (!dir.exists(foldername)) {
 
 
 
-test_that("compute_st_variogram returns gamma_s + gamma_t (isotropic)", {
+test_that("compute_st_variogram returns gamma_s + gamma_t", {
   # Define a simple 1x1x1 grid (only one point in space and time)
   grid <- data.frame(
     x = 1, y = 1, t = 0,
@@ -470,7 +470,7 @@ test_that("compute_st_variogram returns gamma_s + gamma_t (isotropic)", {
 })
 
 
-test_that("compute_st_variogram returns gamma_s + gamma_t (anisotropic)", {
+test_that("compute_st_variogram returns gamma_s + gamma_t", {
   # Define a simple 1x1x1 grid (only one point in space and time)
   grid <- data.frame(
     x = 1, y = 1, t = 0,
@@ -498,7 +498,7 @@ test_that("compute_st_variogram returns gamma_s + gamma_t (anisotropic)", {
 
 
 
-test_that("compute_st_gaussian_process works for isotropic and anisotropic cases", {
+test_that("compute_st_gaussian_process works for different cases", {
   # Define mock data for isotropic case
   spa <- 1:3
   temp <- 0:2
@@ -514,23 +514,23 @@ test_that("compute_st_gaussian_process works for isotropic and anisotropic cases
   W_t <- seq(1, 3, length.out = length(temp))  # 1 to 3 over time
   adv <- c(0, 0)  # No advection
 
-  # Run isotropic case
-  result_isotropic <- compute_st_gaussian_process(grid, W_s = W_s, W_t = W_t, adv = adv)
-  
+  # Run euclidean case
+  result_euclidean <- compute_st_gaussian_process(grid, W_s = W_s, W_t = W_t, adv = adv)
+
   # Check that the result is a 3D array with appropriate dimensions
-  expect_equal(dim(result_isotropic), c(3, 3, 3))
-  
-  # For anisotropic case
+  expect_equal(dim(result_euclidean), c(3, 3, 3))
+
+  # For lalpha case
   W_s_x <- seq(1, 2, length.out = length(spa)^2)
   W_s_y <- seq(1, 5, length.out = length(spa)^2)
   
-  result_anisotropic <- compute_st_gaussian_process(grid, 
+  result_lalpha <- compute_st_gaussian_process(grid, 
                             W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv)
   
   # Check that the result is a 3D array with appropriate dimensions
-  expect_equal(dim(result_anisotropic), c(3, 3, 3))
-  
-  # Ensure that the anisotropic result is the sum of W_s_x, W_s_y, and W_t
-  expect_equal(result_anisotropic[1,1,1], W_s_x[1] + W_s_y[1] + W_t[1])
+  expect_equal(dim(result_lalpha), c(3, 3, 3))
+
+  # Ensure that the lalpha result is the sum of W_s_x, W_s_y, and W_t
+  expect_equal(result_lalpha[1,1,1], W_s_x[1] + W_s_y[1] + W_t[1])
   expect_equal(result_isotropic[1,1,1], W_s[1] + W_t[1])
 })

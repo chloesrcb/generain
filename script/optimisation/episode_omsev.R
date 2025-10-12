@@ -358,40 +358,6 @@ for (ep in 1:length(list_episodes)) {
 }
 
 
-library(ggplot2)
-library(data.table)
-library(reshape2)  # pour melt()
-
-# s0 <- "mse"  # Choisis ton site ici
-# episode_indices <- which(selected_points$s0 == s0)
-# episodes_for_site <- list_episodes[episode_indices]
-# u_site <- unique(selected_points$u_s0[episode_indices])  # même seuil pour tous les épisodes
-
-# Créer une table longue avec toutes les séries pour ce site
-# episodes_combined <- rbindlist(
-#   lapply(seq_along(episodes_for_site), function(i) {
-#     df <- as.data.frame(episodes_for_site[[i]])
-#     data.frame(
-#       Time = 0:(nrow(df) - 1),
-#       Value = df[[s0]],
-#       Episode = paste0("Episode ", i)
-#     )
-#   })
-# )
-
-# # Tracer
-# ggplot(episodes_combined, aes(x = Time, y = Value, color = Episode)) +
-#   geom_line(size = 1) +
-#   geom_hline(yintercept = u_site, color = "red", linetype = "dashed") +
-#   labs(title = paste("Site", s0),
-#        x = "Relative time", y = "Rain (mm)",
-#        color = "Episode") +
-#   theme_minimal()
-
-
-library(ggplot2)
-library(data.table)
-
 plots_list <- list()
 s0_list <- unique(selected_points$s0)
 

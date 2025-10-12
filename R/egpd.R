@@ -154,7 +154,7 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
       # if (RMSE > prev_rmse & RMSE != Inf) {
       #   next
       # }
-
+      
       if (RMSE < df_score$RMSE[i]) {
         df_score$RMSE[i] <- RMSE
         df_score$censoreRMSE[i] <- censore
@@ -168,26 +168,26 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
 
 
 # Get left censoring
-compute_rmse <- function(y, left_censore) {
-  inits <- init_values(y, 0)
-  sigma_0 <- inits[1]
-  xi_0 <- inits[2]
-  kappa_0 <- 1
+# compute_rmse <- function(y, left_censore) {
+#   inits <- init_values(y, 0)
+#   sigma_0 <- inits[1]
+#   xi_0 <- inits[2]
+#   kappa_0 <- 1
 
-  fit <- fit.extgp(y, model = 1, method = "mle",
-                   init = c(kappa_0, sigma_0, xi_0),
-                   censoring = c(left_censore, Inf),
-                   plots = FALSE, confint = FALSE, ncpus = 1)
+#   fit <- fit.extgp(y, model = 1, method = "mle",
+#                    init = c(kappa_0, sigma_0, xi_0),
+#                    censoring = c(left_censore, Inf),
+#                    plots = FALSE, confint = FALSE, ncpus = 1)
 
-  param <- fit$fit$mle
+#   param <- fit$fit$mle
 
-  probs <- ppoints(length(y))
-  q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
-  q_emp <- sort(y)
+#   probs <- ppoints(length(y))
+#   q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
+#   q_emp <- sort(y)
 
-  rmse <- sqrt(mean((q_emp - q_theo)^2))
-  return(rmse)
-}
+#   rmse <- sqrt(mean((q_emp - q_theo)^2))
+#   return(rmse)
+# }
 
 
 
@@ -218,7 +218,7 @@ compute_rmse <- function(y, left_censore) {
               plots = FALSE, confint = FALSE, ncpus = 1)
   }, error = function(e) return(NULL))
 
-  if (is.null(fit)) return(Inf)
+  if (is.null(fit)) return(10^8)  # Return a large RMSE if fitting fails
 
   param <- fit$fit$mle
   probs <- ppoints(length(y))
@@ -228,17 +228,52 @@ compute_rmse <- function(y, left_censore) {
   sqrt(mean((q_emp - q_theo)^2))
 }
 
+compute_nrmse <- function(y, left_censore) {
+  inits <- init_values(y, 0)
+  sigma_0 <- inits[1]
+  xi_0 <- inits[2]
+  kappa_0 <- 1
+
+  fit <- tryCatch({
+    fit.extgp(y, model = 1, method = "mle",
+              init = c(kappa_0, sigma_0, xi_0),
+              censoring = c(left_censore, Inf),
+              plots = FALSE, confint = FALSE, ncpus = 1)
+  }, error = function(e) return(NULL))
+
+  if (is.null(fit)) return(10^8)  # Return a large NRMSE if fitting fails
+
+  param <- fit$fit$mle
+  probs <- ppoints(length(y))
+  q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
+  q_emp <- sort(y)
+
+  # RMSE
+  rmse <- sqrt(mean((q_emp - q_theo)^2))
+
+  # Normalization by mean of positive observations → NRMSE
+  nrmse <- rmse / mean(y)
+
+  return(nrmse)
+}
 
 
-process_site <- function(y, site_name, save_path, R = 1000) {
+
+best_cens_continuous <- function(y, lower, upper, function_obj = "RMSE") {
+  if (function_obj == "RMSE") {
+    opt <- optimize(function(c) compute_rmse(y, c), interval = c(lower, upper), tol = 1e-5)
+  } else if (function_obj == "NRMSE") {
+    opt <- optimize(function(c) compute_nrmse(y, c), interval = c(lower, upper), tol = 1e-5)
+  }
+  c(opt$minimum, opt$objective)
+}
+
+
+process_site <- function(y, site_name,
+                        save_path, best_cens, R = 1000) {
   y <- y[y > 0]
-  if (length(y) < 20) return(NULL)  # trop peu de données
-
-  censures <- seq(0.22, 0.25, by = 0.01)
-  rmse_vals <- sapply(censures, function(c) compute_rmse(y, c))
-  best_cens <- censures[which.min(rmse_vals)]
-  # best_cens <- 0.22
-  # Fit EGPD avec meilleure censure
+  if (length(y) < 20) return(NULL)
+  # Fit EGPD
   inits <- init_values(y, 0)
   fit <- fit.extgp(y, model = 1, method = "mle",
                    init = c(1, inits[1], inits[2]),
@@ -246,8 +281,11 @@ process_site <- function(y, site_name, save_path, R = 1000) {
                    plots = FALSE, confint = FALSE, ncpus = 7, R = R)
 
   param_mle <- fit$fit$mle
+  kappa <- param_mle[1]
+  sigma <- param_mle[2]
+  xi <- param_mle[3]
   probs <- ppoints(length(y))
-  q_mle <- qextgp(probs, type = 1, kappa = param_mle[1], sigma = param_mle[2], xi = param_mle[3])
+  q_mle <- qextgp(probs, type = 1, kappa = kappa, sigma = sigma, xi = xi)
   y_sorted <- sort(y)
 
   # Bootstrap for CI
@@ -265,10 +303,10 @@ process_site <- function(y, site_name, save_path, R = 1000) {
     return(fit_boot)
   }
 
+  set.seed(123)
   boot_res <- boot(data = y, statistic = boot_fun, R = R)
 
   # Compute quantiles for bootstrap samples
-  set.seed(123)
   probs <- c(1:length(y)) / (length(y) + 1)
 
   # Only keep valid rows (no NA/Inf/NaN)
@@ -297,34 +335,10 @@ process_site <- function(y, site_name, save_path, R = 1000) {
         panel.grid.major = element_line(color = "#d6d1d1"),
         panel.grid.minor = element_line(color = "#d6d1d1")
     )
-
+  p
   filename <- paste0(save_path, "qqplot_egpd_", site_name, "_lcensoring_", best_cens, ".png")
   ggsave(filename = filename, p, width = 6, height = 6, dpi = 400, device = "png", bg = "transparent")
 
-  return(data.frame(Site = site_name, BestCens = best_cens, RMSE = round(min(rmse_vals), 5)))
-}
-
-
-fit_egpd_site <- function(y, site_name) {
-  y <- y[y > 0]
-  if (length(y) < 20) return(NULL) 
-
-  censures <- seq(0.22, 0.26, by = 0.01)
-  rmse_vals <- sapply(censures, function(c) compute_rmse(y, c))
-  best_cens <- censures[which.min(rmse_vals)]
-
-  inits <- init_values(y, 0)
-  fit <- fit.extgp(y, model = 1, method = "mle",
-                   init = c(1, inits[1], inits[2]),
-                   censoring = c(best_cens, Inf),
-                   plots = FALSE, confint = FALSE, ncpus = 7, R = 1000)
-
-  param_mle <- fit$fit$mle
-  kappa <- param_mle[1]
-  sigma <- param_mle[2]
-  xi <- param_mle[3]
-
-  return(data.frame(Site = site_name, BestCens = best_cens, RMSE = round(min(rmse_vals), 5),
+  return(data.frame(Site = site_name, BestCens = best_cens,
                     kappa = kappa, sigma = sigma, xi = xi))
 }
-

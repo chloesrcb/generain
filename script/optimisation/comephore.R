@@ -127,7 +127,7 @@ df_dist_km <- df_dist
 df_dist_km$value <- round(df_dist$value / 1000, 1)
 
 
-# Spatial chi WLSE #############################################################
+# Spatial and temporal chi WLSE ################################################
 
 library(knitr)
 library(kableExtra)
@@ -156,109 +156,192 @@ df_result <- df_result_all[df_result_all$q_spa == 0.92 & df_result_all$q_temp ==
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
-q <- 0.95 # quantile
+# Define configurations
+configs <- expand.grid(
+  q = c(0.95, 0.97),
+  min_spatial_dist = c(5, 7),
+  delta = c(30)
+)
 
-# get central site from sites_coords
-comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
-set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q,
-                                      remove_zeros = TRUE)
-length(set_st_excess$list_s)
-# remove date column if exists
-if ("date" %in% colnames(comephore_subset)) {
-  comephore_subset <- comephore_subset[, -c(which(colnames(comephore_subset) == "date"))]
-}
+episode_counts <- data.frame()
 
-# # get only year 2024
-# plot(comephore_subset[, 50], type = "l", col = "blue",
-#      main = "Comephore data for pixel 1 in 2024", xlab = "Time", ylab = "Rain (mm)")
-list_s <- set_st_excess$list_s
-list_t <- set_st_excess$list_t
-list_u <- set_st_excess$list_u
+for (i in seq_len(nrow(configs))) {
+  q <- configs$q[i]
+  min_spatial_dist <- configs$min_spatial_dist[i]
+  delta <- configs$delta[i]
 
-# check that we have excess 
-for (i in seq_along(list_s)) {
-  s0 <- list_s[[i]]                     # station name as string
-  t0 <- list_t[[i]][1]                  # numeric index
-  u_s0 <- list_u[[i]][1]                # numeric threshold
-
-  # Check if the value at (t0, s0) is above threshold
-  if (comephore_subset[t0, s0] <= u_s0) {
-    message <- paste("Excess is not above threshold for s =", s0, "and t =", t0)
-    print(message)
-    stop()
+  comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
+  set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q, remove_zeros = TRUE)
+  starting_year <- as.character(year(rownames(comephore_subset)[1]))
+  if (starting_year == "2008") {
+    starting_year <- ""
+  } else {
+    starting_year <- paste0("_from", starting_year)
   }
-}
 
-# unique(list_u) # check unique excess values
-# Spatio-temporal neighborhood parameters
-min_spatial_dist <- 5 # in km
-delta <- 30 # in hours
-s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore_subset,
-                            min_spatial_dist = min_spatial_dist,
-                            episode_size = delta,
-                            set_st_excess = set_st_excess,
-                            n_max_episodes = 10000,
-                            latlon = FALSE)
-
-selected_points <- s0t0_set
-nrow(selected_points) # number of selected points
-# check that for all s0, t0 we have an excess above corresponding threshold
-for (i in 1:length(selected_points$s0)) {
-  s0 <- selected_points$s0[i]
-  t0 <- selected_points$t0[i]
-  u_s0 <- selected_points$u_s0[i]
-  # check that the excess is above the threshold
-  if (comephore_subset[t0, s0] <= u_s0) {
-  print(comephore_subset[t0, s0])
-  print(u_s0)
-    stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
+  if ("date" %in% colnames(comephore_subset)) {
+    comephore_subset <- comephore_subset[, -c(which(colnames(comephore_subset) == "date"))]
   }
+
+  list_s <- set_st_excess$list_s
+  list_t <- set_st_excess$list_t
+  list_u <- set_st_excess$list_u
+
+  # Check excesses
+  for (j in seq_along(list_s)) {
+    s0 <- list_s[[j]]
+    t0 <- list_t[[j]][1]
+    u_s0 <- list_u[[j]][1]
+    if (comephore_subset[t0, s0] <= u_s0) {
+      message <- paste("Excess is not above threshold for s =", s0, "and t =", t0)
+      print(message)
+      stop()
+    }
+  }
+
+  s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore_subset,
+                             min_spatial_dist = min_spatial_dist,
+                             episode_size = delta,
+                             set_st_excess = set_st_excess,
+                             n_max_episodes = 10000,
+                             latlon = FALSE)
+
+  selected_points <- s0t0_set
+
+  # Check excesses for selected points
+  for (j in seq_along(selected_points$s0)) {
+    s0 <- selected_points$s0[j]
+    t0 <- selected_points$t0[j]
+    u_s0 <- selected_points$u_s0[j]
+    if (comephore_subset[t0, s0] <= u_s0) {
+      print(comephore_subset[t0, s0])
+      print(u_s0)
+      stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
+    }
+  }
+
+  # Save s0 and t0 pairs
+  filename <- paste0(data_folder, "comephore/episodes/s0t0_pairs/s0t0_pairs_q", q * 100,
+                     "_delta", delta, "_dmin", min_spatial_dist, starting_year, ".csv")
+  write.csv(selected_points, file = filename, row.names = FALSE)
+
+  datetimes <- selected_points$t0_date
+
+  # Plot histogram of t0 months
+  library(ggplot2)
+  library(lubridate)
+  library(dplyr)
+  datetimes <- as.POSIXct(datetimes, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  df_months <- data.frame(month = month(datetimes, label = TRUE, locale = "en_US.UTF-8"))
+  df_months$month <- factor(df_months$month, levels = month.abb)
+  p <- ggplot(df_months, aes(x = month)) +
+    geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+    btf_theme +
+    xlab("Month") +
+    ylab("Count")
+  filename_plot <- paste(im_folder, "optim/comephore/episodes/t0_months_histogram_q",
+                        q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                        starting_year, ".png", sep = "")
+  ggsave(filename_plot, plot = p, width = 20, height = 15, units = "cm")
+
+  datetimes <- unique(datetimes)
+  datetimes_df <- data.frame(datetime = datetimes)
+  filename_dt <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes",
+                        "_q", q * 100, "_delta", delta,
+                        "_dmin", min_spatial_dist, starting_year, ".csv")
+  write.csv(datetimes_df, file = filename_dt, row.names = FALSE)
+
+  u_min <- min(selected_points$u_s0)
+  u_max <- max(selected_points$u_s0)
+  # Store episode count
+  episode_counts <- rbind(episode_counts, data.frame(
+    q = q,
+    min_spatial_dist = min_spatial_dist,
+    delta = delta,
+    n_episodes = nrow(selected_points),
+    u_min = u_min,
+    u_max = u_max
+  ))
 }
 
-# save s0 and t0 pairs 
-filename <- paste0(data_folder, "comephore/episodes/s0t0_pairs_q", q * 100,
-                   "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+print(episode_counts)
 
-write.csv(selected_points, file = filename, row.names = FALSE)
+# # save to csv
+foldername <- paste0(data_folder, "comephore/episodes/")
+write.csv(episode_counts, paste0(foldername, "episodes_selection_summary_zoom3km",
+                              starting_year, ".csv"), row.names = FALSE)
 
-datetimes <- selected_points$t0_date
+# get csv
+results_ep <- read.csv(paste0(foldername, "episodes_selection_summary_zoom3km",
+                              starting_year, ".csv"))
+head(results_ep)
 
-# plot histogram of t0 months in string character format in english
-library(ggplot2)
-library(lubridate)
-library(dplyr)
+# CUMULATIVE DISTANCE PAIRS #####################################################
+site_names <- loc_px$pixel_name
+df_dist <- df_dist_km
+thresholds_dist <- seq(500, 12500, by = 500) / 1000
+count_pairs <- sapply(thresholds_dist, function(th) {
+  nrow(df_dist %>% filter(value > th))
+})
 
-datetimes <- as.POSIXct(datetimes, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-# Extract months from datetimes
-df_months <- data.frame(month = month(datetimes, label = TRUE, locale = "en_US.UTF-8"))
-# in english
-df_months$month <- factor(df_months$month, levels = month.abb)
-ggplot(df_months, aes(x = month)) +
-  geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
-  btf_theme +
-  xlab("Month") +
-  ylab("Count") 
+df_counts <- data.frame(
+  threshold_m = thresholds_dist,
+  nb_pairs = count_pairs
+)
+
+df_counts <- data.frame(
+  threshold_m = thresholds_dist,
+  nb_pairs = sapply(thresholds_dist, function(th) nrow(df_dist %>% filter(value >= th)))
+)
+
+# Plot cumulatif
+ggplot(df_counts, aes(x = threshold_m, y = nb_pairs)) +
+  geom_line(color = btfgreen, size = 1.2) +
+  geom_point(color = "#668167", size = 3) +
+  scale_x_continuous(breaks = thresholds_dist) +
+  labs(
+    title = "",
+    x = "Distance threshold (m)",
+    y = "Number of pairs"
+  ) +
+  theme_minimal()
 
 # save plot
-filename <- paste(im_folder, "optim/comephore/episodes/t0_months_histogram_q",
-                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-                  ".png", sep = "")
+filename <- paste(im_folder, "rain/comephore/cumulative_distance_pairs.png", sep = "")
+ggsave(filename, width = 10, height = 5, units = "in", dpi = 300)
 
-ggsave(filename, width = 20, height = 15, units = "cm")
+# Plot interval of thresholds for each quantile
+ggplot(episode_counts, aes(y = as.factor(q), x = (u_min + u_max)/2, xmin = u_min, xmax = u_max)) +
+  geom_errorbarh(height = 0.2, size = 2, color = btfgreen) +
+  labs(title = "",
+       x = "Threshold (mm/h)",
+       y = "Quantile") +
+  theme_minimal()
 
-datetimes <- unique(datetimes)
-datetimes_df <- data.frame(datetime = datetimes)
+filename <- paste(im_folder, "optim/comephore/episodes_selection/threshold_intervals.png", sep = "")
+ggsave(filename, width = 10, height = 7)
 
-filename <- paste0(data_folder, "comephore/t0_episodes",
-           "_q", q * 100, "_delta", delta,
-           "_dmin", min_spatial_dist, ".csv")
+# remove delta = 48
+results_ep <- results_ep %>%
+  filter(delta != 48)
+# Reduce number of points for better visualization
+# results_ep_sample <- results_ep %>% 
+#   group_by(q, min_spatial_dist) %>% 
+#   slice(seq(1, n(), by = 2))
 
-write.csv(datetimes_df, file = filename, row.names = F)
+ggplot(results_ep, aes(x = min_spatial_dist, y = n_episodes, color = as.factor(delta))) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ q) +
+  labs(title = "",
+       x = "Episode period (5 min)",
+       y = "Number of episodes",
+       color = "Minimal distance (m)") +
+  theme_minimal()
+filename <- paste(im_folder, "optim/comephore/episodes_selection/number_episodes_summary.png", sep = "")
+ggsave(filename, width = 10, height = 7)
 
-
-# library(ggplot2)
-# library(dplyr)
-
+# PLOT RAINFALL EPISODES ########################################################
 # # Create output folder if it doesn't exist
 # rain_plot_folder <- file.path(im_folder, "optim/comephore/rain_episodes/")
 # if (!dir.exists(rain_plot_folder)) dir.create(rain_plot_folder, recursive = TRUE)
@@ -299,8 +382,15 @@ write.csv(datetimes_df, file = filename, row.names = F)
 # }
 
 
-
+# ANALYSE EPISODES #############################################################
 # get data  from csv
+q <- 0.95
+min_spatial_dist <- 5
+delta <- 30
+starting_year <- ""
+filename <- paste0(data_folder, "comephore/episodes/t0_episodes/zoom_3km/t0_episodes_q",
+                   q * 100, "_delta", delta, "_dmin", min_spatial_dist, 
+                   starting_year, ".csv")
 datetimes_df <- read.csv(filename, sep = ",")
 
 # when datetime is just a date put 00:00:00 as time
@@ -323,8 +413,9 @@ ggplot(df_threshold, aes(x = u_s0)) +
   btf_theme +
   xlab(TeX(paste0("Threshold for quantile $q = ", q, "$"))) +
   ylab("Count")
-filename <- paste(im_folder, "optim/comephore/after2019_5km_threshold_histogram_q",
+filename <- paste(im_folder, "optim/comephore/threshold_histogram_q",
                   q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  starting_year,
                   ".png", sep = "")
 ggsave(filename, width = 20, height = 15, units = "cm")
 
@@ -351,7 +442,7 @@ library(ggplot2)
 library(reshape2)  # for melting wide data to long format
  
 # Convert matrix to data frame
-index <- 1
+index <- 10
 sort(t0_list)
 which(t0_list == t0_list[index])
 episode_test <- list_episodes[[index]]
@@ -406,12 +497,12 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
-  # excesses <- empirical_excesses_rpar(episode, quantile = u,
-  #                                 threshold = TRUE, # !!!!!!!
-  #                                 df_lags = lags, t0 = ind_t0_ep)
+  excesses <- empirical_excesses_rpar(episode, quantile = u,
+                                  threshold = TRUE, # !!!!!!!
+                                  df_lags = lags, t0 = ind_t0_ep)
 
-  excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
-                                      df_lags = lags, t0 = ind_t0_ep)
+  # excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
+  #                                     df_lags = lags, t0 = ind_t0_ep)
   lags$tau <- lags$tau # convert tau from hours to seconds
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
   # lags$hx <- lags$hx / 1000 # convert hx from m to km
@@ -593,59 +684,6 @@ if (any(ind_NA > 0)) {
   excesses_opt <- list_excesses
 }
 
-# eta1 <- 1
-# eta2 <- 1
-# i <- 1
-# excesses <- list_excesses[[i]]
-# lags <- list_lags[[i]]
-# head(lags)
-# # Choisir advection (varie selon wind_df)
-# if (!all(is.na(wind_df))) {
-#   adv <- as.numeric(wind_df[i, ])
-#   # if adv_x or adv_y are really close
-# } else {
-#   adv <- c(0, 0)
-# }
-
-# adv_x <- adv[1]  # vx
-# adv_y <- adv[2]  # vy
-# params_adv <- c(beta1, beta2, alpha1, alpha2, adv_x, adv_y)  # add adv to params
-# adv <- params_adv[5:6]  # adv_x, adv_y
-# # Obtenir la table chi complète
-# chi_df <- theoretical_chi(params = params_adv, df_lags = lags,
-#                           latlon = FALSE, directional = TRUE)
-# hnorm <- chi_df$hnorm
-# hnormV <- chi_df$hnormV
-# summary(hnorm - hnormV)
-# library(ggplot2)
-
-# # 1. Vecteurs de déplacement (hx, hy)
-# ggplot(chi_df, aes(x = hx, y = hy)) +
-#   geom_point(alpha = 0.6) +
-#   labs(title = "Vecteurs de déplacement hx/hy",
-#        x = "hx (km)", y = "hy (km)") +
-#   theme_minimal()
-
-# # 2. Variogramme (vario) vs distance and for different time lags as factor
-# ggplot(chi_df, aes(x = hnormV, y = vario, color = factor(tau))) +
-#   geom_point(alpha = 0.6) +
-#   labs(title = "",
-#        x = "Distance (km)", y = "Variogramme",
-#        color = "Time Lag (tau)") +
-#   theme_minimal()
-
-# # 3. Chi vs distance
-# ggplot(chi_df, aes(x = hnormV, y = chi, color = factor(tau))) +
-#   geom_point(alpha = 0.6) +
-#   labs(title = "Chi vs Distance", x = "Distance (km)", y = "Chi") +
-#   theme_minimal()
-
-# # 4. Chi vs vario (fonction de transformation)
-# ggplot(chi_df, aes(x = vario, y = chi)) +
-#   geom_point(color = "purple") +
-#   labs(title = "Chi vs Variogramme", x = "Variogramme", y = "Chi") +
-#   theme_minimal()
-
 df_result
 beta1 <- df_result$beta1
 beta2 <- df_result$beta2
@@ -661,9 +699,7 @@ result <- optim(par = init_param, fn = neg_ll_composite,
         list_excesses = excesses_opt, hmax = 7,
         wind_df = wind_opt,
         latlon = FALSE,
-        directional = TRUE,
-        fixed_eta1 = FALSE,
-        fixed_eta2 = FALSE,
+        distance = "lalpha",
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(10, 10, 1.999, 1.999, 10, 10),
@@ -673,73 +709,6 @@ result <- optim(par = init_param, fn = neg_ll_composite,
 
 
 result
-
-# Jackknife CI
-
-# n_total <- length(episodes_opt)
-# block_size <- 20
-# n_blocks <- floor(n_total / block_size)
-# blocks <- split(1:(block_size * n_blocks), rep(1:n_blocks, each = block_size))
-
-
-# jack_estimates <- matrix(NA, nrow = n_blocks, ncol = length(init_param))
-
-# for (i in 1:n_blocks) {
-#   cat("Bloc", i, "over", n_blocks, "\n")
-  
-#   # Index to exclude
-#   exclude_idx <- blocks[[i]]
-  
-#   # Sub sample the data
-#   jack_episodes <- episodes_opt[-exclude_idx]
-#   jack_lags <- lags_opt[-exclude_idx]
-#   jack_excesses <- excesses_opt[-exclude_idx]
-#   jack_wind <- wind_opt[-exclude_idx, , drop = FALSE]
-  
-#   # Optimisation
-#   jack_result <- tryCatch({
-#     optim(par = init_param, fn = neg_ll_composite,
-#           list_lags = jack_lags, list_episodes = jack_episodes,
-#           list_excesses = jack_excesses, hmax = 7,
-#           wind_df = jack_wind,
-#           latlon = FALSE,
-#           directional = TRUE,
-#           fixed_eta1 = FALSE,
-#           fixed_eta2 = FALSE,
-#           method = "L-BFGS-B",
-#           lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-#           upper = c(10, 10, 1.999, 1.999, 10, 10),
-#           control = list(maxit = 10000),
-#           hessian = FALSE)
-#   }, error = function(e) return(NULL))
-
-#   if (!is.null(jack_result)) {
-#     jack_estimates[i, ] <- jack_result$par
-#   }
-# }
-
-
-
-# jack_estimates <- na.omit(jack_estimates)
-# n_eff <- nrow(jack_estimates)
-
-# jack_mean <- colMeans(jack_estimates)
-# jack_var <- (n_eff - 1) / n_eff * colSums((jack_estimates - matrix(rep(jack_mean, each = n_eff), ncol=6))^2)
-# jack_se <- sqrt(jack_var)
-
-# z <- qnorm(0.975)
-# lower_ci <- result$par - z * jack_se
-# upper_ci <- result$par + z * jack_se
-
-# jackknife_block_results <- data.frame(
-#   Parameter = c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2"),
-#   Estimate = result$par,
-#   StdError = jack_se,
-#   CI_lower = lower_ci,
-#   CI_upper = upper_ci
-# )
-
-# print(jackknife_block_results)
 
 
 # VARIOGRAM PLOTS ##############################################################

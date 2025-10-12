@@ -1,0 +1,51 @@
+######################################################
+q = 0.95, dmin = 1200, delta = 12
+
+init_params_com =  0.2075651 0.7620159 0.3706967 0.6877291 0.8080527 3.0920977
+
+---If V_episodes = 0 and init = init_params_com, etas free
+# > result
+# $par
+# [1] 0.50886955 4.87047484 0.02650187 0.70188455 0.80805273 3.09209772
+# $value
+# [1] 19168.69
+
+---If V_episodes=V_final and init = c(0.38, 0.85, 0.035, 0.69, 0.1, 1) etas free
+# > result
+# $par
+# [1] 0.5618995 4.6630739 0.1316271 0.7270140 2.6119034 4.2281114
+# $value
+# [1] 19174.03
+
+---If V_episodes=V_final and init = init_params_com etas free
+# > result
+# $par
+# [1] 0.5618995 4.6630739 0.1316271 0.7270140 2.6119034 4.2281114
+# $value
+# [1] 19174.03
+
+---If V_episodes=V_final and init = estimated_adv0 etas free
+estimated_adv0 <- c(0.50886955, 4.87047484, 0.02650187, 0.70188455, 0, 1)
+$par
+[1] 0.50886955 4.87047484 0.02650187 0.70188455 0.00000000 1.00000000
+$value
+[1] 19168.69
+
+---If V_episodes=V_omsev  and init = init_params_com, etas free
+
+---If V_episodes=V_final and init = init_estim_adv0, etas free
+
+---If V_episodes=V_omsev and init = init_estim_adv0, etas free
+
+---If V_episodes=V_final and init = init_estim_adv0, etas fixed at comephore
+$par
+[1] 0.5950400 4.6880856 0.1853719 0.7144539 (0.8080527 3.0920977)
+$value
+[1] 19180.15
+
+---If V_episodes=V_final and init = init_params_com, etas fixed at comephore
+> result
+$par
+[1] 0.5950436 4.6881052 0.1853744 0.7144511 (0.8080527 3.0920977)
+$value
+[1] 19180.15

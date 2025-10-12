@@ -25,6 +25,10 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
   if (!is.na(dmax)) { # threshold
     dist_mat[dist_mat > dmax] <- 0
   }
+  # put names if Station column exists
+  if (!is.null(locations$Station)) {
+    rownames(dist_mat) <- colnames(dist_mat) <- locations$Station
+  }
 
   return(dist_mat)
 }
@@ -40,16 +44,16 @@ get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
 reshape_distances <- function(dist_mat) {
   # convert distance matrix into a dataframe
   df_dist <- as.data.frame(dist_mat)
-  n <- nrow(df_dist)
-  colnames(df_dist) <- c(1:n)
-  rownames(df_dist) <- c(1:n)
+  # n <- nrow(df_dist)
+  # colnames(df_dist) <- c(1:n)
+  # rownames(df_dist) <- c(1:n)
 
   # Make a triangle
   df_dist[lower.tri(df_dist)] <- NA
 
   # Convert to a data frame, and add tenure labels
   df_dist <- as.data.frame(df_dist)
-  df_dist$Y <- 1:n
+  df_dist$Y <- rownames(dist_mat)
 
   # Reshape to suit ggplot, remove NAs, and sort the labels
   df_dist <- na.omit(reshape2::melt(df_dist, "Y", variable_name = "X"))

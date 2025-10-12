@@ -223,8 +223,8 @@ hmax <- max(radius) # distance max in absolute value...
 nb_col <- length(unique(radius)) # we exclude 0 ?
 
 # quantiles
-q_spa_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99)
-q_temp_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95)
+q_spa_vals <- c(0.95)
+q_temp_vals <- c(0.95)
 tmax <- 10
 
 foldername <- paste0(data_folder, "/omsev/WLSE/")
@@ -269,7 +269,7 @@ for (q_no0_spa in q_spa_vals) {
   # Estimation WLSE
   spa_result <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
   c1 <- as.numeric(spa_result[[1]])
-  beta1 <- as.numeric(spa_result[[2]])
+  beta1 <- as.numeric(spa_result[[2]]) # km
   alpha1 <- as.numeric(spa_result[[3]])
 
   # Plot zeta(chi)
@@ -289,7 +289,7 @@ for (q_no0_spa in q_spa_vals) {
     geom_line(aes(x = lagspa, y = alpha1 * lagspa + c1), alpha = 0.6,
               color = "darkred", linewidth = 1.5)
 
-  ggsave(paste0(im_folder, "WLSE/omsev/spatial/full_spatial_chi_zeta_estim_exp_", q_no0_spa, ".pdf"),
+  ggsave(paste0(im_folder, "WLSE/omsev/spatial/new/full_spatial_chi_zeta_estim_exp_", q_no0_spa, ".pdf"),
          plot = chispa_eta_estim, width = 20, height = 15, units = "cm")
   
   # Save results

@@ -134,7 +134,7 @@ tmax <- 10
 nsites <- ncol(rain) # number of sites
 # remove when there is na every column
 # rain 
-q_temp <- 0.96 # quantile for temporal chi
+q_temp <- 0.95 # quantile for temporal chi
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
 start_time <- Sys.time()
@@ -154,13 +154,13 @@ chi_df_dt <- chi_df_dt[, -1] # remove lag 0
 # Reshape data using gather function
 df_gathered <- chi_df_dt %>% gather(key = "variable", value = "value")
 df_gathered$group <- factor(as.integer(df_gathered$variable),
-                            levels = seq(0, tmax) * 5)
+                            levels = seq(0, tmax))
 
 # Plot boxplots
 chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
   geom_boxplot(fill = btfgreen, alpha = 0.4, outlier.color = btfgreen) +
   btf_boxplot_theme +
-  xlab(TeX(r"($\tau$ (minutes))")) +
+  xlab(TeX(r"($\tau$ (5 minutes))")) +
   ylab(TeX(r"($\widehat{\chi}(0,\tau)$)"))
 
 chitemp
@@ -221,7 +221,7 @@ ggsave(filename, width = 20, height = 15, units = "cm")
 
 # spatial structure with an almost constant amount of pairs in each intervals
 df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 20
+num_intervals <- 12
 quantiles_rad <- quantile(df_dist_order$value,
                             probs = seq(0, 1, length.out = num_intervals + 1))
 radius_intervals <- unique(quantiles_rad)
@@ -267,13 +267,11 @@ hmax <- max(radius) # distance max in absolute value...
 nb_col <- length(unique(radius)) # we exclude 0 ?
 chimat_dslag <- matrix(1, nrow = n - 1, ncol = nb_col)
 
-q_spa <- 0.95
+q_spa <- 0.998
 # plot chi for each distance
 chispa_df <- spatial_chi(rad_mat, rain,
-                         quantile = q_spa, zeros = FALSE)
+                         quantile = q_spa, zeros = T)
 
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
-                           lagspa = log(chispa_df$lagspa))
 
 
 par(mfrow = c(1, 1))
@@ -297,31 +295,14 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
 
 chispa_plot
 
-ymin <- min(etachispa_df$chi)
-
-chispa_eta <- ggplot(etachispa_df, aes(lagspa, chi)) +
-  btf_theme +
-  geom_point(col = "darkred", size = 4) +
-  xlab(TeX(paste0("$ log ||", expression(bold("h")), "||$"))) +
-  ylab(TeX(paste0("$\\widehat{\\chi}(", expression(bold("h")), ", 0)$"))) +
-  theme(axis.ticks = element_blank(),
-        axis.line = element_blank(),
-        panel.border = element_blank(),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 15),
-        legend.position = "right",
-        legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
-        panel.grid = element_line(color = "#5c595943"))
-
-chispa_eta
-
+chispa_df$lagspa <- chispa_df$lagspa / 1000  # in km
+etachispa_df <- data.frame(chi = eta(chispa_df$chi),
+                           lagspa = log(chispa_df$lagspa))
 
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
-alpha1 <- wlse_spa[[2]]
-beta1 <- wlse_spa[[1]]
-c1 <- log(beta1)
-y <- alpha1 * etachispa_df$lagspa + c1  #idem
-
+c1 <- wlse_spa[[1]]
+beta1 <- wlse_spa[[2]]
+alpha1 <- wlse_spa[[3]]
 
 chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +

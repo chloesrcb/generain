@@ -31,7 +31,7 @@ df_dist <- reshape_distances(dist_mat)
 # load data
 # get rain data from omsev
 filename_omsev <- paste0(data_folder,
-                         "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+                         "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
 
 load(filename_omsev)
 rain <- rain.all5[c(1, 6:ncol(rain.all5))]
@@ -135,11 +135,14 @@ plot(agg_chi$distance_mid, agg_chi$chi,
 
 
 
-q <- 0.9 # quantile
+q <- 0.96 # quantile
 # plot chi for each distance
 # rain_new <- rain
-chispa_df <- spatial_chi(rain_new, dist_mat,
+chispa_df <- spatial_chi(rad_mat, rain_new,
                          q = q, zeros = F)
+
+chispa_df2 <- spatial_chi(rad_mat, rain_new,
+                         q = q, zeros = F, breaks = breaks, mid = T)
 
 
 par(mfrow = c(1, 1))
@@ -201,24 +204,25 @@ results_spa <- data.frame()
 
 for (q in quantiles) {
   # Spatial chi for each quantile
+  print(q)
   chispa_df <- spatial_chi(rad_mat, rain_new, breaks = breaks, quantile = q, zeros = F, mid = T)
   # Remove lag 0
 #   chispa_df <- chispa_df[chispa_df$lagspa != 0, ]
-  chispa_df$lagspa <- chispa_df$lagspa # convert to km
+  chispa_df$lagspa <- chispa_df$lagspa / 1000# convert to km
   # Estimate parameters using WLSE
   wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = T)
   c1 <- as.numeric(wlse_spa[[1]])
   beta1 <- as.numeric(wlse_spa[[2]])
   alpha1 <- as.numeric(wlse_spa[[3]])
-  signif_beta <- wlse_spa[[4]]
-  signif_alpha <- wlse_spa[[5]]
+  # signif_beta <- wlse_spa[[4]]
+  # signif_alpha <- wlse_spa[[5]]
   
-  results_spa <- rbind(results_spa,
-                       data.frame(quantile = q,
-                                  beta = beta1,
-                                  alpha = alpha1,
-                                  signif_beta = signif_beta,
-                                  signif_alpha = signif_alpha))
+  # results_spa <- rbind(results_spa,
+  #                      data.frame(quantile = q,
+  #                                 beta = beta1,
+  #                                 alpha = alpha1,
+  #                                 signif_beta = signif_beta,
+  #                                 signif_alpha = signif_alpha))
   
   # Add transformation
   etachispa_df <- data.frame(
@@ -245,9 +249,9 @@ for (q in quantiles) {
     ggtitle(paste0("Quantile = ", q))
   
   # save plot
-  filename <- paste(im_folder, "WLSE/omsev/2022/spatial_chi_",
-                        as.character(q), ".pdf", sep = "")
-  ggsave(filename, plot = p, width = 8, height = 6, dpi = 300)
+  # filename <- paste(im_folder, "WLSE/omsev/2022/spatial_chi_",
+  #                       as.character(q), ".pdf", sep = "")
+  # ggsave(filename, plot = p, width = 8, height = 6, dpi = 300)
 }
 
 

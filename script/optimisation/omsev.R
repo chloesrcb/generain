@@ -14,7 +14,6 @@ files <- list.files(functions_folder, full.names = TRUE)
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
-
 # get rain data from omsev
 filename_omsev <- paste0(data_folder,
                          "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
@@ -29,102 +28,43 @@ location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                              "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
                              "cines", "brives", "hydro")
 
+# save rain as csv
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
+# write.csv(rain, file = filename_rain, row.names = FALSE)
+
+rain_omsev <- read.csv(filename_rain)
+head(rain_omsev)
 
 
-# rain.all5 is the data frame name for 5 min data
-# get only stations records and dates
-rain <- as.data.frame(rain.all5[, c(1, 6:(ncol(rain.all5) - 1))])
+rain_test <- rain_omsev
+rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
+date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
+date_3_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 3)[1]]
+date_4_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 4)[1]]
+date_5_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 5)[1]]
 
-# remove rain before september 2019 and after january 2024
-# rain$dates <- as.POSIXct(rain.all5$dates, tz = "Europe/Paris")
-rain$dates <- with_tz(rain$dates, tzone = "UTC")
-rain <- rain[rain$dates >= "2019-01-01" & rain$dates <= "2024-02-01", ]
-rownames(rain) <- rain$dates
-head(rain)
-tail(rain)
-# Remove non real zeros
-filename_omsev1min <- paste0(data_folder,
-                      "omsev/omsev_1min/rain_mtp_1min_2019_2024.RData")
-load(filename_omsev1min)
-rain1min <- Rain.all.treated
-colnames(rain1min) <- c("dates", "archie", "archiw", "cefe", "chu1", "chu2",
-                        "chu3", "chu4", "chu5", "chu6", "chu7", "cines", "cnrs",
-                        "crbm", "hydro", "iem", "mse", "poly", "brives", "um",
-                        "um35")
 
-results <- data.frame(
-  Station = character(),
-  First_Date = as.Date(character()),
-  Last_Date = as.Date(character()),
-  stringsAsFactors = FALSE
-)
+# cat("Première date avec au moins 2 sites non NA :", date_2_sites, "\n")
+# cat("Première date avec au moins 3 sites non NA :", date_3_sites, "\n")
+# cat("Première date avec au moins 4 sites non NA :", date_4_sites, "\n")
+# cat("Première date avec au moins 5 sites non NA :", date_5_sites, "\n")
 
-rain1min$dates <- as.POSIXct(rain1min$dates, tz = "Europe/Paris")
-rain1min$dates <- with_tz(rain1min$dates, tzone = "UTC")
-# Loop through all columns except "Dates"
-for (col in colnames(rain1min)[colnames(rain1min) != "dates"]) {
-  values <- rain1min[[col]]
-  non_na_indices <- which(!is.na(values))
-  
-  if (length(non_na_indices) > 0) {
-    first_date <- rain1min$dates[non_na_indices[1]]
-    last_date <- rain1min$dates[non_na_indices[length(non_na_indices)]]
-    
-    results <- rbind(results, data.frame(
-      Station = col,
-      First_Date = first_date,
-      Last_Date = last_date
-    ))
-  }
-}
 
-results
-library(dplyr)
-library(tidyr)
+# begin in 2020-01-01
+rain_omsev <- rain_omsev[rain_omsev$dates >= date_5_sites, ]
+head(rain_omsev)
 
-# Pivot rain1min to long format
-rain_long <- rain %>%
-  pivot_longer(-dates, names_to = "Station", values_to = "Value")
 
-# Join with results to get First_Date and Last_Date
-rain_long <- rain_long %>%
-  left_join(results, by = "Station")
 
-# Replace false zeros (before first or after last date) with NA
-rain_long <- rain_long %>%
-  mutate(Value = if_else(
-    Value == 0 & (dates < First_Date | dates > Last_Date),
-    NA_real_,
-    Value
-  )) %>%
-  select(dates, Station, Value)  # Optional: drop First/Last date columns
 
-# Pivot back to wide format
-rain_clean <- rain_long %>%
-  pivot_wider(names_from = Station, values_from = Value)
 
-head(rain_clean)
-
-rain <- as.data.frame(rain_clean)
 # put dates as rownames
-rownames(rain) <- rain$dates
-rain <- rain[-1] # remove dates column
+rownames(rain_omsev) <- rain_omsev$dates
+rain <- rain_omsev[-1] # remove dates column
 # rain$mse
 # Get distances matrix
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
-# x11()
-plot(df_dist$value)
-max(df_dist$value)
-
-library(dplyr)
-
-# remove all rows with all NAs
-rain <- rain %>%
-  filter(!if_all(everything(), is.na))
-
-# in rain remove when all data are NA
-rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
 
 # remove cines, hydro, brives
 colnames(rain)
@@ -134,9 +74,79 @@ location_gauges <- location_gauges[location_gauges$Station != "cines" &
                                    location_gauges$Station != "hydro" &
                                    location_gauges$Station != "brives", ]
 dist_mat <- get_dist_mat(location_gauges)
+
 df_dist <- reshape_distances(dist_mat)
-plot(df_dist$value)
-max(df_dist$value)
+
+
+library(ggplot2)
+
+site_names <- location_gauges$Station
+
+# change order of X and Y based on location_gauges
+df_dist <- df_dist %>%
+  mutate(
+    X = factor(X, levels = rev(site_names)),
+    Y = factor(Y, levels = site_names),
+    diagonal = X == Y
+  )
+
+ggplot(df_dist, aes(x = X, y = Y, size = value)) +
+  geom_point(data = df_dist %>% filter(!diagonal), alpha = 0.7, color = btfgreen) +
+  scale_size_continuous(range = c(1, 10), breaks = c(100, 250, 500, 750, 1000, 1500)) +
+  labs(title = "",
+       x = "Site",
+       y = "Site",
+       size = "Distance") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(angle = 0, hjust = 1)
+  )
+# save plot
+filename <- paste(im_folder, "rain/OMSEV/distance_matrix.png", sep = "")
+ggsave(filename, width = 10, height = 5, units = "in", dpi = 300)
+
+# get only those with distance > 500 m
+# Seuils à tester
+thresholds_dist <- c(500, 600, 750, 1000, 1100, 1200, 1250, 1300, 1400, 1500, 2300)
+
+# Créer un tableau avec le nombre de paires pour chaque seuil
+count_pairs <- sapply(thresholds_dist, function(th) {
+  nrow(df_dist %>% filter(value > th))
+})
+
+# Transformer en data frame pour plus de lisibilité
+df_counts <- data.frame(
+  threshold_m = thresholds_dist,
+  nb_pairs = count_pairs
+)
+# Seuils à tester
+thresholds_dist <- seq(500, 1500, by = 50)
+
+# Nombre de paires avec distance >= seuil
+df_counts <- data.frame(
+  threshold_m = thresholds_dist,
+  nb_pairs = sapply(thresholds_dist, function(th) nrow(df_dist %>% filter(value >= th)))
+)
+
+# Plot cumulatif
+ggplot(df_counts, aes(x = threshold_m, y = nb_pairs)) +
+  geom_line(color = btfgreen, size = 1.2) +
+  geom_point(color = "#668167", size = 3) +
+  scale_x_continuous(breaks = thresholds_dist) +
+  labs(
+    title = "",
+    x = "Distance threshold (m)",
+    y = "Number of pairs"
+  ) +
+  theme_minimal() +
+  # add a line at y = 50
+  geom_hline(yintercept = 30, linetype = "dashed", color = "red") +
+  annotate("text", x = 500, y = 31, label = "30 pairs", color = "red", hjust = 0)
+
+# save plot
+filename <- paste(im_folder, "rain/OMSEV/cumulative_distance_pairs_redline30.png", sep = "")
+ggsave(filename, width = 10, height = 5, units = "in", dpi = 300)
 
 ################################################################################
 # QUANTILE ---------------------------------------------------------------------
@@ -291,73 +301,89 @@ sites_names <- colnames(rain)
 ################################################################################
 # WLSE results -----------------------------------------------------------------
 ################################################################################
-foldername <- paste0(data_folder, "omsev/WLSE/")
-df_spa_result <- read.csv(paste0(foldername, "wlse_spa_summary.csv"))
-df_temp_result <- read.csv(paste0(foldername, "wlse_temp_summary.csv"))
-df_result_all <- merge(df_spa_result, df_temp_result, by = NULL)
+# foldername <- paste0(data_folder, "omsev/WLSE/")
+# df_spa_result <- read.csv(paste0(foldername, "wlse_spa_summary.csv"))
+# df_temp_result <- read.csv(paste0(foldername, "wlse_temp_summary.csv"))
+# df_result_all <- merge(df_spa_result, df_temp_result, by = NULL)
 
-# select one row
-df_result <- df_result_all[df_result_all$q_spa == 0.95 &
-                             df_result_all$q_temp == 0.9, ]
+# # select one row
+# df_result <- df_result_all[df_result_all$q_spa == 0.97 &
+#                              df_result_all$q_temp == 0.95, ]
 
-beta1 <- df_result$beta1
-beta2 <- df_result$beta2
-alpha1 <- df_result$alpha1
-alpha2 <- df_result$alpha2
+# beta1 <- df_result$beta1
+# beta2 <- df_result$beta2
+# alpha1 <- df_result$alpha1
+# alpha2 <- df_result$alpha2
+
+# # estimates
+# wlse_omsev <- c(beta1, beta2, alpha1, alpha2) # m / 5 min
 
 ################################################################################
 # VARIOGRAM --------------------------------------------------------------------
 ################################################################################
 
-# estimates
-param_omsev <- c(beta1, beta2, alpha1, alpha2) # m / min
+sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 
-# in rain remove when all data are NA<
-rain <- rain[rowSums(is.na(rain)) < ncol(rain), ]
-q <- 0.97 # quantile
+rownames(sites_coords) <- location_gauges$Station
+sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"),
+                            crs = 4326)
+
+sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
+
+coords_m <- st_coordinates(sites_coords_sf)
+
+grid_coords_km <- sites_coords
+grid_coords_m <- sites_coords
+grid_coords_m$x_m <- (coords_m[, "X"] - min(coords_m[, "X"]))
+grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
+grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
+grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
+
+# get distance matrix
+grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
+grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
+colnames(grid_coords_m) <- c("Longitude", "Latitude")
+colnames(grid_coords_km) <- c("Longitude", "Latitude")
+dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
+
+# Spatial chi
+df_dist <- reshape_distances(dist_mat)
+df_dist_km <- df_dist
+df_dist_km$value <- df_dist$value / 1000
+################################################################################
+
+# in rain remove when all data are NA
+q <- 0.95 # quantile
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
 # verify that the excess is above the threshold
 # get list of sites and times
 list_s <- set_st_excess$list_s
-unique(unlist(list_s))
 list_t <- set_st_excess$list_t
-
-rain[list_t[[1]], list_s[[1]]]
-
 list_u <- set_st_excess$list_u
-list_u[[1]]
-unique(unlist(list_u))
 
-
-# Check all selected points to see if they exceed the threshold
-excess_check <- sapply(seq_along(list_s), function(i) {
-  value <- rain[list_t[[i]], list_s[[i]]]
-  threshold <- list_u[[i]]
-  value > threshold
-})
-
-# Print summary
-all(excess_check)  # Should be TRUE if all exceedances are valid
-
+min_u <- min(unlist(list_u))
+max_u <- max(unlist(list_u))
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 500 # m
+min_spatial_dist <- 1200 # m
 delta <- 12 # in * 5 min
 episode_size <- delta # size of the episode
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 tail(rain)
-s0t0_set <- get_s0t0_pairs(sites_coords, rain,
+s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = episode_size,
                             set_st_excess = set_st_excess,
                             n_max_episodes = 10000,
-                            latlon = TRUE)
+                            latlon = FALSE)
 
 selected_points <- s0t0_set
 selected_points[12,]
-
 length(selected_points$s0) # number of selected points
+
+selected_points <- selected_points %>%
+  mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
 
 # Assuming s0t0_set is a data.table or data.frame
@@ -398,6 +424,25 @@ for (i in 1:length(selected_points$s0)) {
   }
 }
 
+# Histogram of dates t0 of selected points
+df_hist_t0 <- data.frame(t0_date = as.POSIXct(selected_points$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
+df_hist_t0$month <- format(df_hist_t0$t0_date, "%Y-%m")
+selected_months <- unique(df_hist_t0$month)[seq(1, length(unique(df_hist_t0$month)), by = 3)]  # tous les 3 mois
+
+ggplot(df_hist_t0, aes(x = month)) +
+  geom_bar(fill = btfgreen, alpha = 0.5, color = "#5f5d5d") +
+  btf_theme +
+  xlab("Month of episode start") +
+  ylab("Count") +
+  scale_x_discrete(breaks = selected_months) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+filename <- paste(im_folder, "optim/omsev/episodes_histogram/t0_histogram_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+
+ggsave(filename, width = 20, height = 15, units = "cm")
+
 
 # Threshold histogram
 df_threshold <- data.frame(u_s0 = selected_points$u_s0)
@@ -415,10 +460,6 @@ filename <- paste(im_folder, "optim/omsev/threshold_histogram_q",
 ggsave(filename, width = 20, height = 15, units = "cm")
 
 n_episodes <- length(selected_points$s0)
-print(n_episodes)
-length(unique(selected_points$s0)) # can be same s0
-length(unique(selected_points$t0)) # never same t0?
-print(min(selected_points$u_s0)) # min threshold
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 
@@ -428,21 +469,28 @@ list_episodes_points <- get_extreme_episodes(selected_points, rain,
 
 list_episodes <- list_episodes_points$episodes
 episode <- list_episodes[[1]]
+head(episode)
+head(selected_points$t0_date)
+t0_1 <- selected_points$t0_date[1]
+# check excess for the episode
+s0_1 <- selected_points$s0[1]
+u_s0_1 <- selected_points$u_s0[1]
+episode[1, s0_1] > u_s0_1 # should be
+
+rain[as.POSIXct(rownames(rain), format = "%Y-%m-%d %H:%M:%S", tz = "UTC") == t0_1, s0_1] > u_s0_1 # should be true
 
 selected_points$t0_date <- as.POSIXct(selected_points$t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
-# selected_points$t0_date <- ifelse(
-#   nchar(format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")) == 10,
-#   paste0(format(selected_points$t0_date, "%Y-%m-%d"), " 00:00:00"),
-#   format(selected_points$t0_date, "%Y-%m-%d %H:%M:%S")
-# )
 
+# save 5min dates and hour
 library(lubridate)
 
 # Round to the next hour
 selected_points$t0_date_rounded <- ceiling_date(selected_points$t0_date, "hour")
 
 datetimes <- unique(selected_points$t0_date)
+
+
 datetimes_hour <- unique(selected_points$t0_date_rounded)
 
 
@@ -453,54 +501,80 @@ datetime_filename <- paste(data_folder, "/omsev/t0_episodes_q", q * 100,
 write.csv(data.frame(t0_date = datetimes_hour), datetime_filename, row.names = FALSE)
 
 
-library(ggplot2)
-library(dplyr)
-
-# Create output folder if it doesn't exist
-rain_plot_folder <- file.path(im_folder, "optim/omsev/rain_episodes/")
-if (!dir.exists(rain_plot_folder)) dir.create(rain_plot_folder, recursive = TRUE)
-
-# Loop over all datetimes and plot
-for (i in seq_along(datetimes)) {
-  # Define window -2h to +10h around dt
-  dt <- as.POSIXct(datetimes[i], tz = "UTC")
-  start_date <- dt - 2 * 3600
-  end_date <- dt + 10 * 3600
-
-  rain_subset <- rain[rownames(rain) >= start_date & rownames(rain) <= end_date, , drop = FALSE]
-  rain_subset$datetime <- as.POSIXct(rownames(rain_subset), tz = "UTC")
-
-  rain_subset_long <- rain_subset %>%
-    pivot_longer(cols = -datetime, names_to = "Station", values_to = "Value") %>%
-    filter(!is.na(Value))
-
-  plot_title <- paste0("Rainfall around ", format(dt, "%Y-%m-%d %H:%M"))
-  
-  rain_plot <- ggplot(rain_subset_long, aes(x = datetime, y = Value, color = Station)) +
-    geom_line(size = 0.5) +
-    geom_vline(xintercept = as.numeric(dt), linetype = "dashed", color = "black") +  # dashed vertical line at dt
-    labs(title = plot_title, x = "Time", y = "Rainfall (mm)") +
-    theme_minimal() +
-    theme(legend.position = "right")
-
-  # Save plot
-  plot_filename <- file.path(rain_plot_folder, paste0("rain_", format(dt, "%Y%m%d_%H%M"), ".png"))
-  ggsave(plot_filename, plot = rain_plot, width = 12, height = 6, units = "in", dpi = 150)
-}
-
+# save datetime list to csv
+datetime_filename <- paste(data_folder, "/omsev/t0_5min_episodes_q", q * 100,
+                           "_delta", delta, "_dmin", min_spatial_dist,
+                           ".csv", sep = "")
+write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
 
 # get comephore advection for each episode
+adv_omsev_filename <- paste(data_folder, "/omsev/adv_estim/bary_omsev/episode_advection_q",
+                          q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                          ".csv", sep = "")
+adv_omsev_df <- read.csv(adv_omsev_filename, sep = ",")
+head(adv_omsev_df)
 adv_filename <- paste(data_folder, "/omsev/adv_estim/advection_results_q",
                       q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                       ".csv", sep = "")
 adv_df <- read.csv(adv_filename, sep = ",")
 head(adv_df)
 
-# convert adv in m/s to km/h
-adv_df$mean_dx_kmph <- adv_df$mean_dx_mps * 3.6
-adv_df$mean_dy_kmph <- adv_df$mean_dy_mps * 3.6
-# Transform t0 to POSIXct
-adv_df$t0 <- as.POSIXct(adv_df$t0, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# number of 0 advection
+nrow(adv_df[adv_df$mean_dx_kmh == 0 & adv_df$mean_dy_kmh == 0, ])
+nrow(adv_df)
+
+
+# if durations is more than 48 hours, put nan in adv
+adv_df$mean_dx_kmh[adv_df$duration_hours > 24] <- 0
+adv_df$mean_dy_kmh[adv_df$duration_hours > 24] <- 0
+
+# Harmoniser les dates
+adv_df <- adv_df %>% mutate(t0 = ymd_hms(t0))
+adv_omsev_df <- adv_omsev_df %>% mutate(t0 = ymd_hms(t0_omsev))
+# adv_omsev_df$t0_hour <- ceiling_date(adv_omsev_df$t0, unit = "hour")
+# adv_df$t0 <- as.POSIXct(adv_df$t0, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+head(adv_omsev_df)
+
+library(dplyr)
+library(lubridate)
+library(fuzzyjoin)
+
+# Sélection des lignes où advection = 0
+adv_zero <- adv_df %>%
+  filter(mean_dx_kmh == 0 & mean_dy_kmh == 0)
+
+# Jointure approx sur ±1h (choisit le plus proche)
+adv_zero_match <- difference_inner_join(
+  adv_zero, adv_omsev_df,
+  by = "t0",
+  max_dist = dminutes(60),
+  distance_col = "time_diff"
+) %>%
+  group_by(t0.x) %>%
+  slice_min(time_diff) %>%
+  ungroup()
+
+# Remettre les valeurs omsev dans adv_df
+adv_df <- adv_df %>%
+  left_join(
+    adv_zero_match %>%
+      select(t0 = t0.x,
+             dx_omsev = mean_dx_kmh_omsev,
+             dy_omsev = mean_dy_kmh_omsev),
+    by = "t0"
+  ) %>%
+  mutate(mean_dx_kmh = ifelse(mean_dx_kmh == 0 & !is.na(dx_omsev), dx_omsev, mean_dx_kmh),
+         mean_dy_kmh = ifelse(mean_dy_kmh == 0 & !is.na(dy_omsev), dy_omsev, mean_dy_kmh)) %>%
+  select(-dx_omsev, -dy_omsev)
+
+
+nrow(adv_df[adv_df$mean_dx_kmh == 0 & adv_df$mean_dy_kmh == 0, ])
+
+
+head(adv_df)
+
+
 
 # get only matching episodes from selected_points
 matching_indices <- match(selected_points$t0_date_rounded, adv_df$t0)
@@ -509,9 +583,6 @@ matching_indices <- matching_indices[!is.na(matching_indices)]
 # get only matching rows
 adv_df <- adv_df[matching_indices, ]
 rownames(adv_df) <- NULL  # reset row names
-head(adv_df)
-
-nrow(adv_df) # number of episodes with advection estimates
 
 selected_episodes <- selected_points
 selected_episodes$adv_x <- rep(NA, nrow(selected_episodes))
@@ -527,8 +598,8 @@ for (i in 1:nrow(selected_episodes)) {
   } else {
     # if there are multiple rows, take the first one
     adv_row <- adv_row[1, ]
-    adv_x <- adv_row$mean_dx_kmph
-    adv_y <- adv_row$mean_dy_kmph
+    adv_x <- adv_row$mean_dx_kmh
+    adv_y <- adv_row$mean_dy_kmh
     selected_episodes$adv_x[i] <- adv_x
     selected_episodes$adv_y[i] <- adv_y
   }
@@ -536,14 +607,13 @@ for (i in 1:nrow(selected_episodes)) {
 
 head(selected_episodes)
 tail(selected_episodes)
-# Remove episodes with NA advection values
-# ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
-# ind_0_adv <- which(selected_episodes$adv_x == 0 & selected_episodes$adv_y == 0)
-# selected_episodes_nona <- selected_episodes[-ind_0_adv, ]
-selected_episodes_nona <- selected_episodes
-wind_df <- selected_episodes_nona[, c("adv_x", "adv_y")]
-colnames(wind_df) <- c("vx", "vy")
-length(wind_df$vx) # should be the same as number of episodes
+
+V_episodes <- data.frame(
+  v_x = selected_episodes$adv_x,
+  v_y = selected_episodes$adv_y
+)
+
+colnames(V_episodes) <- c("vx", "vy")
 
 tau_vect <- 0:10
 thresholds_by_site <- apply(rain, 2, function(col) {
@@ -556,7 +626,7 @@ thresholds_by_site <- apply(rain, 2, function(col) {
 library(ggplot2)
 library(grid)  # pour arrow()
 
-wind_df_plot <- ggplot(selected_episodes_nona, aes(x = 0, y = 0)) +
+wind_df_plot <- ggplot(selected_episodes, aes(x = 0, y = 0)) +
   geom_segment(aes(xend = adv_x, yend = adv_y), 
                arrow = arrow(length = unit(0.2, "cm")),
                color = btfgreen, size = 0.5) +
@@ -565,7 +635,7 @@ wind_df_plot <- ggplot(selected_episodes_nona, aes(x = 0, y = 0)) +
   coord_equal() +
   xlab("Advection in x (km/h)") +
   ylab("Advection in y (km/h)") +
-  ggtitle("Advection vectors for selected episodes") +
+  ggtitle("") +
   theme(plot.title = element_text(hjust = 0.5)) 
 
 wind_df_plot
@@ -577,22 +647,11 @@ filename <- paste(im_folder, "optim/omsev/advection_com_emp_plot_q",
 ggsave(filename, plot = wind_df_plot, width = 20, height = 15, units = "cm",
        dpi = 600, device = "png")
 
-selected_episodes_nona$speed <- sqrt(selected_episodes_nona$adv_x^2 + 
-                                       selected_episodes_nona$adv_y^2)
+# number of 0 advection
+nrow(selected_episodes[selected_episodes$adv_x == 0 & selected_episodes$adv_y == 0, ])
+nrow(selected_episodes)
 
-selected_episodes_nona$angle_deg <- atan2(selected_episodes_nona$adv_x, selected_episodes_nona$adv_y) * 180 / pi
-# Mettre l’angle dans [0, 360[
-selected_episodes_nona$angle_deg <- (selected_episodes_nona$angle_deg + 360) %% 360
-
-
-get_cardinal <- function(angle) {
-  directions <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-  idx <- round(angle / 45) %% 8 + 1
-  return(directions[idx])
-}
-
-selected_episodes_nona$direction <- sapply(selected_episodes_nona$angle_deg, get_cardinal)
-
+selected_episodes_nona <- selected_episodes[!is.na(selected_episodes$adv_x) & !is.na(selected_episodes$adv_y), ]
 
 # remove those with 0 advection
 # selected_points_adv <- selected_points_nona[
@@ -602,9 +661,10 @@ list_episodes_points <- get_extreme_episodes(selected_episodes_nona, rain,
                               episode_size = episode_size, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
-
+episode <- list_episodes[[1]]
+u0_list <- selected_episodes_nona$u_s0
 tmax <- max(tau_vect)
-df_coords <- as.data.frame(sites_coords)
+df_coords <- as.data.frame(grid_coords_km)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -614,14 +674,14 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   episode <- list_episodes[[i]]
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = TRUE)
+                                tau_vect, latlon = FALSE)
   # hnorm is in meters
-  lags$hnorm <- lags$hnorm / 1000 # convert to km
+  lags$hnorm <- lags$hnorm
 
   # excesses <- empirical_excesses_rpar(episode, q, lags, t0 = ind_t0_ep)
-
-  excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
-                                      lags, t0 = ind_t0_ep)
+  u <- u0_list[i]
+  excesses <- empirical_excesses_rpar(episode, quantile = u, threshold = TRUE,
+                                      df_lags = lags, t0 = ind_t0_ep)
   # tau is in 5 minutes
   lags$tau <- lags$tau * 5 / 60 # convert to hours
   list(lags = lags, excesses = excesses)
@@ -633,40 +693,397 @@ list_excesses <- lapply(list_results, `[[`, "excesses")
 s0 <- s0_list[1]
 col_s0 <- which(colnames(rain) == s0)
 s0_coords <- df_coords[col_s0, ]
-excesses <- list_excesses[[20]]
+excesses <- list_excesses[[2]]
 sum(excesses$kij)
 df_lags <- list_lags[[1]]
 tail(df_lags)
 
-# wind_df test
-# adv_df <- data.frame(vx = 1, vy = 1)
+# plot sum of kij
+kij_values <- sapply(list_excesses, function(excess) sum(excess$kij))
+hist(kij_values, breaks = 30, main = "Histogram of sum of kij",
+     xlab = "Sum of kij", col = btfgreen, border = "#5f5d5d")
 
-eta1_com <- 4
-eta2_com <- 2
 
-init_param <- c(beta1, beta2, alpha1, alpha2, eta1_com, eta2_com)
-init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
-# init_param <- c(0.02, 0.5, alpha1, alpha2, 1, 1)
+filename_com_res <- paste(data_folder, "/comephore/optim_results/lalpha/free_eta/combined_optim_results.csv", sep = "")
+com_results <- read.csv(filename_com_res)
 
+# get estimates from comephore
+params_com <- com_results[com_results$q == q*100 &
+                           com_results$delta == 30 &
+                           com_results$dmin == 5, ]
+
+# params_com <- params_com[2,]
+init_params_com <- c(params_com$beta1, params_com$beta2,
+                     params_com$alpha1, params_com$alpha2,
+                     params_com$eta1, params_com$eta2)
+# check for na in adv and wind
+V_episodes <- V_episodes[!is.na(V_episodes$vx) & !is.na(V_episodes$vy), ]
+
+# plot V_episodes
+# head(V_episodes)
+# plot(V_episodes$vx, V_episodes$vy, xlab = "vx (km/h)", ylab = "vy (km/h)",
+#      main = "Advection vectors from episodes", col = btfgreen, pch = 16)
+# abline(h = 0, v = 0, col = "gray", lty = 2)
+# With etas
 hmax <- max(dist_mat) / 1000 # convert to km
-result <- optim(par = init_param, fn = neg_ll_composite,
+df_lags <- list_lags[[1]]
+head(df_lags)
+
+# remove 0 advection episodes from all lists
+# nonzero_indices <- which(V_episodes$vx != 0 | V_episodes$vy != 0)
+# V_episodes_no0 <- V_episodes[nonzero_indices, ]
+# list_lags_no0 <- list_lags[nonzero_indices]
+# list_excesses_no0 <- list_excesses[nonzero_indices]
+# list_episodes_no0 <- list_episodes[nonzero_
+
+# remove adv < 0.1 km/h
+adv_magnitudes <- sqrt(V_episodes$vx^2 + V_episodes$vy^2)
+#plot histogram of adv magnitudes
+hist(adv_magnitudes, breaks = 30, main = "Histogram of advection magnitudes",
+     xlab = "Advection magnitude (km/h)", col = btfgreen, border = "#5f5d5d")
+nonzero_indices <- which(adv_magnitudes >= 0.1)
+V_episodes_no0 <- V_episodes[nonzero_indices, ]
+list_lags_no0 <- list_lags[nonzero_indices]
+list_excesses_no0 <- list_excesses[nonzero_indices]
+list_episodes_no0 <- list_episodes[nonzero_indices]
+
+
+convert_params <- function(beta1, beta2, alpha1, alpha2, 
+                           eta1, eta2, 
+                           c_x = 1, c_t = 1) {
+  beta1_new <- beta1 / (c_x^alpha1)
+  beta2_new <- beta2 / (c_t^alpha2)
+  
+  eta1_new <- eta1 * (c_t / c_x)^2  # depending on the model
+  
+  list(beta1 = beta1_new, 
+       beta2 = beta2_new, 
+       eta1 = eta1_new, 
+       eta2 = eta2)
+}
+
+
+
+init_params_com <- c(params_com$beta1, params_com$beta2,
+                     params_com$alpha1, params_com$alpha2,
+                     params_com$eta1, params_com$eta2)
+# 0 adv
+V_episodes_adv0 <- data.frame(vx = rep(0, nrow(V_episodes)), vy = rep(0, nrow(V_episodes)))
+# change_init <- c(0.2, 1, 1, 1, 8, 2)
+
+init_params <- c(0.38, 0.85, 0.035, 0.69, 0.1, 1)
+estimates_adv0 <- c(0.50886955, 4.87047484, 0.02650187, 0.70188455, 0, 1)
+
+result <- optim(par = init_params_com[1:4], fn = neg_ll_composite_fixed_eta,
         list_lags = list_lags, list_episodes = list_episodes,
         list_excesses = list_excesses, hmax = hmax,
-        wind_df = wind_df,
-        latlon = TRUE,
-        directional = TRUE,
-        fixed_eta1 = TRUE,
-        fixed_eta2 = TRUE,
+        wind_df = V_episodes,
+        latlon = FALSE,
+        fixed_eta1 = init_params_com[5],
+        fixed_eta2 = init_params_com[6],
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, -1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999, 10, 10),
+        control = list(maxit = 10000,
+                      trace = 1),
+        hessian = F)
+
+result
+
+
+
+
+
+# Different initial parameter sets
+init_list <- list(
+  init_params_com,              # comephore estimates
+  c(0.5, 5, 0.2, 0.7, 2, 4),   # close to first solution
+  c(1, 1, 0.5, 0.5, 1, 1),     # more balanced start
+  c(0.1, 0.1, 0.1, 0.1, 5, 5), # skewed towards small betas/alphas, large etas
+  c(2, 8, 0.3, 1.2, 3, 0.5)    # different spread
+)
+
+# Run optim for each set of initials
+results <- lapply(init_list, function(init_params_com) {
+  optim(par = init_params_com, fn = neg_ll_composite,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = NA,
+        wind_df = V_episodes,
+        latlon = FALSE,
+        distance = "lalpha",
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
         upper = c(10, 10, 1.999, 1.999, 10, 10),
+        control = list(maxit = 10000, trace = 0),
+        hessian = FALSE)
+})
+
+# Summarize results in a table: initial values and estimates
+results_table <- data.frame(
+  init_beta1 = sapply(init_list, function(x) x[1]),
+  init_beta2 = sapply(init_list, function(x) x[2]),
+  init_alpha1 = sapply(init_list, function(x) x[3]),
+  init_alpha2 = sapply(init_list, function(x) x[4]),
+  init_eta1 = sapply(init_list, function(x) x[5]),
+  init_eta2 = sapply(init_list, function(x) x[6]),
+  est_beta1 = sapply(results, function(res) res$par[1]),
+  est_beta2 = sapply(results, function(res) res$par[2]),
+  est_alpha1 = sapply(results, function(res) res$par[3]),
+  est_alpha2 = sapply(results, function(res) res$par[4]),
+  est_eta1 = sapply(results, function(res) res$par[5]),
+  est_eta2 = sapply(results, function(res) res$par[6]),
+  neg_loglik = sapply(results, function(res) res$value)
+)
+print(results_table)
+
+params <- c("beta1","beta2","alpha1","alpha2","eta1","eta2")
+plot_data <- data.frame(init = unlist(results_table[, paste0("init_", params)]),
+                        est  = unlist(results_table[, paste0("est_", params)]),
+                        param = rep(params, each = nrow(results_table)))
+
+# Box plot with params labels in latex
+library(ggplot2)
+library(latex2exp)
+# Define parameter labels in LaTeX
+param_labels <- c(
+  beta1 = TeX("$\\beta_1$"),
+  beta2 = TeX("$\\beta_2$"),
+  alpha1 = TeX("$\\alpha_1$"),
+  alpha2 = TeX("$\\alpha_2$"),
+  eta1 = TeX("$\\eta_1$"),
+  eta2 = TeX("$\\eta_2$")
+)
+ggplot(plot_data, aes(x = param, y = est)) +
+  geom_boxplot(alpha = 0.5, fill = btfgreen) +
+  scale_x_discrete(labels = param_labels) +
+  btf_theme +
+  labs(x = "Parameter (km/h)", y = "Estimated Values",
+       title = "")
+
+
+foldername <- paste(im_folder, "optim/omsev/estimations_robustness/boxplot_estimations_free_eta_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+ggsave(foldername, width = 20, height = 15, units = "cm")
+
+
+init_params_com <- c(params_com$beta1, params_com$beta2,
+                     params_com$alpha1, params_com$alpha2)
+
+# change_init <- c(0.2, 1, 1, 1, 8, 2)
+result <- optim(par = init_params_com[1:4], fn = neg_ll_composite_fixed_eta,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = hmax,
+        wind_df = V_episodes,
+        latlon = FALSE,
+        fixed_eta1 = params_com$eta1,
+        fixed_eta2 = params_com$eta2,
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999),
         control = list(maxit = 10000,
-                      trace = 1,
-                      parscale = c(1, 1, 1, 1, 1, 1)),
-        hessian = T)
+                      trace = 1),
+        hessian = F)
 
 result
+
+
+init_list_fixed <- list(
+  init_params_com,
+  c(0.5, 5, 0.2, 0.7),
+  c(1, 1, 0.5, 0.5),
+  c(0.1, 0.1, 0.1, 0.1),
+  c(2, 8, 0.3, 1.2)
+)
+
+results_fixed <- lapply(init_list_fixed, function(init_params_com) {
+  optim(par = init_params_com[1:4], fn = neg_ll_composite_fixed_eta,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = hmax,
+        wind_df = V_episodes,
+        latlon = FALSE,
+        fixed_eta1 = params_com$eta1,
+        fixed_eta2 = params_com$eta2,
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999),
+        control = list(maxit = 10000, trace = 0),
+        hessian = FALSE)
+})
+
+for (i in seq_along(results_fixed)) {
+  cat("\n--- Fixed-eta Init set", i, "---\n")
+  print(results_fixed[[i]]$par)
+  cat("Neg log-lik:", results_fixed[[i]]$value, "\n")
+}
+
+# plot results_fixed
+results_table_fixed <- data.frame(
+  init_beta1 = sapply(init_list_fixed, function(x) x[1]),
+  init_beta2 = sapply(init_list_fixed, function(x) x[2]),
+  init_alpha1 = sapply(init_list_fixed, function(x) x[3]),
+  init_alpha2 = sapply(init_list_fixed, function(x) x[4]),
+  est_beta1 = sapply(results_fixed, function(res) res$par[1]),
+  est_beta2 = sapply(results_fixed, function(res) res$par[2]),
+  est_alpha1 = sapply(results_fixed, function(res) res$par[3]),
+  est_alpha2 = sapply(results_fixed, function(res) res$par[4]),
+  neg_loglik = sapply(results_fixed, function(res) res$value)
+)
+print(results_table_fixed)
+params <- c("beta1","beta2","alpha1","alpha2")
+plot_data_fixed <- data.frame(init = unlist(results_table_fixed[, paste0("init_", params)]),
+                        est  = unlist(results_table_fixed[, paste0("est_", params)]),
+                        param = rep(params, each = nrow(results_table_fixed)))
+
+# Box plot
+param_labels <- c(
+  beta1 = TeX("$\\beta_1$"),
+  beta2 = TeX("$\\beta_2$"),
+  alpha1 = TeX("$\\alpha_1$"),
+  alpha2 = TeX("$\\alpha_2$")
+)
+ggplot(plot_data_fixed, aes(x = param, y = est)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1) +
+  scale_x_discrete(labels = param_labels) +
+  btf_theme +
+  labs(x = "Parameters (km/h)", y = "Estimated Values",
+       title = "")
+
+foldername <- paste(im_folder, "optim/omsev/estimations_robustness/boxplot_estimations_fixed_eta_q",
+                  q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                  ".png", sep = "")
+ggsave(foldername, width = 20, height = 15, units = "cm")
+
+
+# Conversion factors
+c_x_km <- 1      # for km/h
+c_t_h <- 1
+c_x_m <- 1000    # for m/5min
+c_t_5min <- 12   # 1 hour = 12 * 5min
+c_v_m5min <- 1000 / 12  # from km/h to m/5min
+# 0.5677 & 4.7658 & 0.1519 & 0.7126 & 2.0907 & 3.7794 & 19174.24 \\
+beta1_hat <- result$par[1]
+beta2_hat <- result$par[2]
+alpha1_hat <- result$par[3]
+alpha2_hat <- result$par[4]
+eta1_hat <- result$par[5]
+eta2_hat <- result$par[6]
+# Parameters in m/5min
+params_m5min <- convert_params(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat,
+                               eta1 = eta1_hat, eta2 = eta2_hat,
+                               c_x = c_x_m, c_t = c_t_5min)
+final_res <- c(params_m5min$beta1, params_m5min$beta2,
+                alpha1_hat, alpha2_hat)
+print(final_res)
+print(result$value)
+################################################################################
+# OTHER MODEL with omega
+################################################################################
+
+omega_com <- 1
+# With omega
+beta1_com <- init_params_com[1]
+beta2_com <- init_params_com[2]
+alpha1_com <- init_params_com[3]
+alpha2_com <- init_params_com[4]
+eta1_com <- init_params_com[5]
+eta2_com <- init_params_com[6]
+init_param <- c(beta1_com, beta2_com, alpha1_com, alpha2_com, omega_com, eta2_com)
+
+hmax <- max(dist_mat) / 1000 # convert to km
+df_lags <- list_lags[[1]]
+head(df_lags)
+# change_init <- c(0.2, 1, 1, 1, 8, 2)
+result <- optim(par = init_param, fn = neg_ll_composite_omega,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = hmax,
+        V_episode = V_episodes, W_episode = W_episodes,
+        latlon = TRUE,
+        fixed_omega = NA,
+        fixed_eta = 1,
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999, 1, 10),
+        control = list(maxit = 10000,
+                      trace = 1),
+        hessian = F)
+
+result$par
+
+# nothing fixed
+# [1] 0.5461316 4.7832909 0.0970711 0.7212678 0.9004272 3.3980109
+
+# eta2= 2
+# [1] 0.5520984 4.7973882 0.1083775 0.7234912 0.7719444 2.0600000
+
+init_param <- c(beta1_com, beta2_com, alpha1_com, alpha2_com, omega_com, eta1_com, eta2_com)
+
+result <- optim(par = init_param, fn = neg_ll_composite_new,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = hmax,
+        V_episode = V_episodes, W_episode = W_episodes,
+        latlon = TRUE,
+        fixed_omega = NA,
+        fixed_eta1 = init_param[6],
+        fixed_eta2 = init_param[7],
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999, 1, 10, 10),
+        control = list(maxit = 10000,
+                      trace = 1),
+        hessian = F)
+
+# count number of zero adv and zero wind
+sum(V_episodes$vx == 0 & V_episodes$vy == 0)
+sum(W_episodes$wx == 0 & W_episodes$wy == 0)
+
+V_episodes_etas <- V_episodes
+V_episodes_etas$vx <- eta1_com * sign(V_episodes$vx) * abs(V_episodes$vx)^eta2_com
+V_episodes_etas$vy <- eta1_com * sign(V_episodes$vy) * abs(V_episodes$vy)^eta2_com
+
+# put NA for outliers in V_episodes_etas
+V_episodes_etas$vx[abs(V_episodes_etas$vx) > 50] <- NA
+V_episodes_etas$vy[abs(V_episodes_etas$vy) > 50] <- NA
+
+na_indices <- is.na(V_episodes_etas$vx) | is.na(V_episodes_etas$vy)
+V_episodes_etas <- V_episodes_etas[!na_indices, ]
+list_lags_etas <- list_lags[!na_indices]
+list_excesses_etas <- list_excesses[!na_indices]
+list_episodes_etas <- list_episodes[!na_indices]
+
+
+result <- optim(par = init_params_com[1:4], fn = neg_ll_composite_fixed_eta,
+        list_lags = list_lags, list_episodes = list_episodes,
+        list_excesses = list_excesses, hmax = 7,
+        wind_df = V_episodes,
+        latlon = TRUE,
+        fixed_eta1 = init_params_com[5],
+        fixed_eta2 = init_params_com[6],
+        distance = "lalpha",
+        method = "L-BFGS-B",
+        lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+        upper = c(10, 10, 1.999, 1.999,  10, 10),
+        control = list(maxit = 10000,
+                      trace = 1),
+        hessian = F)
+
+result
+
+
+################################################################################
+
+# Fictive advection vectors for representation
+fictive_adv <- data.frame(
+  adv_x = c(0, -0.1, 5, 1, 10, -2, 1, -3),
+  adv_y = c(0, 0.5, -14, 1, 11, -1, -1, 2)
+)
 
 beta1_hat <- result$par[1]
 beta2_hat <- result$par[2]
@@ -674,161 +1091,21 @@ alpha1_hat <- result$par[3]
 alpha2_hat <- result$par[4]
 eta1_hat <- result$par[5]
 eta2_hat <- result$par[6]
-hessian <- result$hessian
-# remove eta1 and eta2 from the hessian
-hessian_noeta <- hessian[-(5:6), -(5:6)]
-vcov_matrix <- solve(hessian_noeta)
-
-
-library(numDeriv)
-
-compute_gamma_ic_grid <- function(h_vals, tau_vals, direction, wind_i,
-                                  theta_hat, vcov_matrix, eta1 = 1, eta2 = 1) {
-  df_out <- data.frame()
-  
-  for (tau in tau_vals) {
-    for (h in h_vals) {
-      hx <- h * direction[1]
-      hy <- h * direction[2]
-
-      gamma_func <- function(theta) {
-        beta1 <- theta[1]; beta2 <- theta[2]
-        alpha1 <- theta[3]; alpha2 <- theta[4]
-        if (length(theta) > 4) {
-          eta1 <- theta[5]; eta2 <- theta[6]
-        } 
-        vx <- eta1 * abs(wind_i$vx)^eta2 * sign(wind_i$vx)
-        vy <- eta1 * abs(wind_i$vy)^eta2 * sign(wind_i$vy)
-
-        term1 <- beta1 * abs(hx - vx * tau)^alpha1
-        term2 <- beta2 * abs(hy - vy * tau)^alpha1
-        term3 <- beta2 * tau^alpha2
-        return(term1 + term2 + term3)
-      }
-
-      grad_gamma <- grad(gamma_func, theta_hat)
-      var_gamma <- t(grad_gamma) %*% vcov_matrix %*% grad_gamma
-      se_gamma <- sqrt(var_gamma)
-      gamma_hat <- gamma_func(theta_hat)
-
-      df_out <- rbind(df_out, data.frame(
-        h = h,
-        tau = tau,
-        gamma = gamma_hat,
-        gamma_low = gamma_hat - 1.96 * se_gamma,
-        gamma_high = gamma_hat + 1.96 * se_gamma
-      ))
-    }
-  }
-
-  return(df_out)
-}
-
-# Paramètres estimés
-theta_hat <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
-library(ggplot2)
-library(numDeriv)
-
-# Named standard directions
-directions_named <- list(
-  EW = c(1, 0),
-  NS = c(0, 1),
-  Diagonal = c(1, 1) / sqrt(2)
-)
-
-# Selected episodes
-episode_ids <- c(1, 3, 5, 10, 20, 100)
-
-# Spatial and temporal lags
-dmax <- max(dist_mat) / 1000  # convert m to km
-dmax<- 1
-h_vals <- seq(0, dmax, by = 0.05)
-tau_vals <- c(0, 1, 3, 5, 10) * 5 / 60  # in hours (5-min intervals)
-
-
-
-str_zero_wind <- ""
-if (!any(wind_df$vx == 0 & wind_df$vy == 0)) {
-  str_zero_wind <- "_no_0adv"
-} 
-
-# Output folder
-foldername <- paste0(im_folder, "optim/omsev/variogram/q", q * 100,
-                     "_delta", delta, "_dmin", min_spatial_dist, 
-                     str_zero_wind, "/")
-
-if (!dir.exists(foldername)) dir.create(foldername, recursive = TRUE)
-
-# Main loop
-for (i in episode_ids) {
-  print(i)
-  wind_i <- wind_df[i, ]
-  vx_i <- wind_i$vx
-  vy_i <- wind_i$vy
-  V_vec <- c(vx_i, vy_i)
-
-  norm_V <- sqrt(sum(V_vec^2))
-  
-  # Skip advection if wind is zero
-  if (norm_V == 0) {
-    # message("Episode ", i, ": zero wind → skipping advection direction.")
-    directions_named_ext <- directions_named
-  } else {
-    direction_adv <- V_vec / norm_V
-    directions_named_ext <- c(directions_named, list(Advection = direction_adv))
-  }
-
-  # Loop over all directions
-  for (dname in names(directions_named_ext)) {
-    direction <- directions_named_ext[[dname]]
-
-    df_gamma <- compute_gamma_ic_grid(h_vals, tau_vals, direction,
-                                      wind_i, theta_hat, vcov_matrix,
-                                      eta1 = eta1_hat, eta2 = eta2_hat)
-    df_gamma$tau_min <- df_gamma$tau * 60  # for plotting in minutes
-
-    subtitle_txt <- paste0("Direction: ", dname,
-                           ", Episode ", i, ", V = (",
-                           round(vx_i * 1000 / 60, 4), ", ",
-                           round(vy_i * 1000 / 60, 4), ") m/s")
-
-    p <- ggplot(df_gamma, aes(x = h, y = gamma, color = factor(tau_min))) +
-      geom_line(size = 1.2) +
-      geom_ribbon(aes(ymin = gamma_low, ymax = gamma_high, fill = factor(tau_min)),
-                  alpha = 0.2, color = NA) +
-      labs(
-        title = "",
-        subtitle = subtitle_txt,
-        x = "Distance (km)",
-        y = expression(gamma(h, tau)),
-        color = expression(tau ~ "(min)"),
-        fill = expression(tau ~ "(min)")
-      ) +
-      theme_minimal()
-
-    filename <- paste0(foldername, "variogram_direction_",
-                       dname, "_episode_", i, ".pdf")
-    ggsave(filename, plot = p, width = 20, height = 15,
-           units = "cm", dpi = 600)
-  }
-}
-
-
-################################################################################
-
-# Fictive advection vectors for representation
-fictive_adv <- data.frame(
-  adv_x = c(0, 0.01, 0.1, -1, -1, 1, 10, -2, 1),
-  adv_y = c(0, 0.02, 0.5, -5, 5, 1, 11, -1, -1)
-)
+params_m5min <- convert_params(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat,
+                               eta1 = eta1_hat, eta2 = eta2_hat,
+                               c_x = c_x_m, c_t = c_t_5min)
 
 # Estimated parameters from optimization
-theta_hat <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
+theta_hat_kmh <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
+theta_hat_m5min <- c(params_m5min$beta1, params_m5min$beta2,
+                     alpha1_hat, alpha2_hat)
+theta_hat <- theta_hat_kmh
 eta1_hat <- result$par[5]
 eta2_hat <- result$par[6]
 
+
 # Lag distances (km)
-h_vals <- seq(0, 3, by = 0.05)
+h_vals <- seq(0, 15, by = 0.05)
 
 # Time lags (converted to hours)
 tau_vals <- c(0, 1, 3, 5, 7, 10) * 5 / 60
@@ -840,69 +1117,14 @@ directions_named <- list(
   Diagonal = c(1, 1) / sqrt(2)
 )
 
-# Function to compute variogram gamma over grid of h and tau
-# Arguments:
-# - h_vals: spatial distances
-# - tau_vals: temporal lags
-# - direction: spatial direction vector (unit vector)
-# - theta_hat: parameter vector (beta1, beta2, alpha1, alpha2)
-# - eta1, eta2: parameters controlling advection scaling
-# - fictive_v: advection velocity vector
-compute_gamma_grid <- function(h_vals, tau_vals, direction,
-                               theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
-  df_out <- data.frame()
-  
-  # Calculate scaled advection velocity components
-  vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
-  vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
-  
-  for (tau in tau_vals) {
-    for (h in h_vals) {
-      # Compute the spatial lag vector along given direction
-      hx <- h * direction[1]
-      hy <- h * direction[2]
-      
-      # Calculate the corrected spatial lag considering advection
-      # Distance between h vector and advected position tau*V
-      # dist_corr <- sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2)
-
-      vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
-      vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
-
-      # Projection sur la direction
-      h_proj <- hx * direction[1] + hy * direction[2]
-      v_proj <- vx * direction[1] + vy * direction[2]
-
-      dist_corr <- abs(h_proj - v_proj * tau)
-
-      beta1 <- theta_hat[1]
-      beta2 <- theta_hat[2]
-      alpha1 <- theta_hat[3]
-      alpha2 <- theta_hat[4]
-      
-      # Variogram model: sum of spatial and temporal components
-      term1 <- beta1 * dist_corr^alpha1
-      term2 <- beta2 * tau^alpha2
-      
-      gamma_hat <- term1 + term2
-      
-      # Save results with corrected distance and parameters
-      df_out <- rbind(df_out, data.frame(
-        h = h,
-        tau = tau,
-        tau_min = tau * 60,  # for plotting in minutes
-        gamma = gamma_hat,
-        dist_corr = dist_corr
-      ))
-    }
-  }
-  return(df_out)
-}
-
 # Output folder for saving plots (update path as needed)
 foldername <- paste0(im_folder, "optim/omsev/variogram/q", q * 100,
                      "_delta", delta, "_dmin", min_spatial_dist, "_fictive_adv/")
 if (!dir.exists(foldername)) dir.create(foldername, recursive = TRUE)
+foldername_hnorm <- paste0(foldername, "hnorm/")
+if (!dir.exists(foldername_hnorm)) dir.create(foldername_hnorm, recursive = TRUE)
+foldername_hnormV <- paste0(foldername, "hnormV/")
+if (!dir.exists(foldername_hnormV)) dir.create(foldername_hnormV, recursive = TRUE)
 
 # Loop over all fictive advection vectors
 for (i in seq_len(nrow(fictive_adv))) {
@@ -933,20 +1155,35 @@ for (i in seq_len(nrow(fictive_adv))) {
     subtitle_txt <- paste0("Advection: V = (",
                            round(fictive_v[1], 3), ", ", round(fictive_v[2], 3), "), direction: ", dname)
     
-    p <- ggplot(df_gamma, aes(x = dist_corr, y = gamma, color = factor(tau_min))) +
-      geom_line(size = 1.2) +
-      labs(
-        subtitle = subtitle_txt,
-        x = expression(abs(h - tau * V)),
-        y = expression(gamma(h, tau)),
-        color = expression(tau ~ "(min)")
-      ) +
-      theme_minimal()
+    p <- ggplot(df_gamma, aes(x = h_normV, y = gamma, color = factor(tau_min))) +
+        geom_line(size = 1.2) +
+        labs(
+          subtitle = subtitle_txt,
+          x = expression("||h|| (km)"),
+          y = expression(gamma(h, tau)),
+          color = expression(tau ~ "(min)")
+        ) +
+        theme_minimal()
+
+
     
-    filename <- paste0(foldername, "variogram_fictive", i, "_dir_", dname, ".pdf")
+    filename <- paste0(foldername_hnormV, "variogram_fictive", i, "_dir_", dname, ".pdf")
+    ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
+
+
+    p <- ggplot(df_gamma, aes(x = h_norm, y = gamma, color = factor(tau_min))) +
+        geom_line(size = 1.2) +
+        labs(
+          subtitle = subtitle_txt,
+          x = expression("||h|| (km)"),
+          y = expression(gamma(h, tau)),
+          color = expression(tau ~ "(min)")
+        ) +
+        theme_minimal()
+
+
+    
+    filename <- paste0(foldername_hnorm, "variogram_fictive", i, "_dir_", dname, ".pdf")
     ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
   }
 }
-
-
-

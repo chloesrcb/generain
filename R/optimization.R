@@ -9,6 +9,7 @@
 #' @param data The rainfall data as a matrix.
 #' @param quantile The quantile value to compute the threshold.
 #' @param threshold A fixed threshold value or vector.
+#' @param remove_zeros A boolean indicating whether to remove zeros when computing quantiles.
 #' 
 #' @return A list containing three vectors: list_s (sites), list_t (times),
 #' 
@@ -151,6 +152,92 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 
   return(selected_points)
 }
+
+
+# get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
+#                            episode_size, set_st_excess,
+#                            n_max_episodes = 10000, latlon = FALSE,
+#                            beta = 0) {
+#   # Convert data to matrix and keep site names
+#   data <- as.matrix(data)
+#   site_names <- colnames(data)
+
+#   list_s <- set_st_excess$list_s
+#   list_t <- set_st_excess$list_t
+#   list_u <- set_st_excess$list_u
+
+#   # Compute distance matrix
+#   if (latlon) {
+#     dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
+#   } else {
+#     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
+#     dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
+#   }
+#   rownames(dist_matrix) <- site_names
+#   colnames(dist_matrix) <- site_names
+
+#   # Initialization
+#   selected_points <- data.table(
+#     s0 = character(),
+#     t0 = integer(),
+#     t0_date = character(),
+#     u_s0 = numeric()
+#   )
+#   nb_episode <- 0
+#   nb_rejected <- 0
+
+#   # Sort excesses by time for consistent processing
+#   excess_dt <- data.table(
+#     s = unlist(list_s),
+#     t = unlist(list_t),
+#     t_dates = names(list_t),
+#     u = unlist(list_u)
+#   )
+#   setorder(excess_dt, t)
+
+#   for (i in seq_len(nrow(excess_dt))) {
+#     s0 <- excess_dt$s[i]
+#     t0 <- excess_dt$t[i]
+#     t0_date <- excess_dt$t_dates[i]
+#     u0 <- excess_dt$u[i]
+
+#     # Assume valid until proven otherwise
+#     is_valid <- TRUE
+
+#     # Check against previously selected points
+#     for (j in seq_len(nrow(selected_points))) {
+#       s_prev <- selected_points$s0[j]
+#       t_prev <- selected_points$t0[j]
+
+#       spatial_dist <- dist_matrix[s0, s_prev]
+#       temporal_dist <- abs(t0 - t_prev)
+
+#       # Reject if too close in space AND time (taking beta into account)
+#       if (spatial_dist < min_spatial_dist && temporal_dist < (episode_size + 2 * beta)) {
+#         is_valid <- FALSE
+#         nb_rejected <- nb_rejected + 1
+#         break
+#       }
+#     }
+
+#     # Add valid episode center
+#     if (is_valid) {
+#       selected_points <- rbind(selected_points, data.table(
+#         s0 = s0, t0 = t0, t0_date = t0_date, u_s0 = u0
+#       ))
+#       nb_episode <- nb_episode + 1
+#       if (nb_episode >= n_max_episodes) break
+#     }
+#   }
+
+#   # Log summary
+#   message("Selected ", nb_episode, " independent episodes (β = ", beta, ").")
+#   if (nb_rejected > 0) {
+#     message("Rejected ", nb_rejected, " points for being too close in space-time.")
+#   }
+
+#   return(selected_points)
+# }
 
 
 #' select_extreme_episodes function (Optimized)
@@ -471,15 +558,16 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
     data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
                                               (length(col) + 1))
   }
-
   # Store valid episodes and valid indices
   episodes <- list()
   valid_indices <- c()
-
+   print(beta)
+  print(str(beta))
   for (i in 1:nrow(selected_points)) {
     t0 <- selected_points$t0[i]
     # t_inf <- t0 - (delta) - beta
     # t_sup <- t0 + delta + 2 * beta
+
     t_inf <- max(1, t0 - beta)
     t_sup <- min(nrow(data), t0 + episode_size - 1 + beta)
     # print(i)
@@ -504,8 +592,6 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
   # Return both valid episodes and updated selected points
   return(list(episodes = episodes, selected_points = new_selected_points))
 }
-
-
 
 # EXCESSES ---------------------------------------------------------------------
 
@@ -595,7 +681,6 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
   }
   return(excesses)
 }
-
 
 # empirical_excesses_rpar <- function(data_rain, df_lags,
 #                                     thresholds = NULL, quantile = 0.9,
@@ -773,33 +858,26 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 #' @param df_lags A dataframe with spatial and temporal lag values.
 #' @param latlon A boolean value to indicate if the locations are in latitude
 #'             and longitude. Default is FALSE.
-#' @param directional A boolean value to indicate if the variogram is
-#'                  directional. Default is FALSE.
-#' @param convert_in_hours A boolean value to indicate if the time lag should be
-#'                       converted to hours at the end. Default is TRUE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha".
+#'                Default is "euclidean".
 #'
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi <- function(params, df_lags, latlon = FALSE,
-                            directional = FALSE) {
+theoretical_chi_old <- function(params, df_lags, latlon = FALSE,
+                            distance = "euclidean") {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
   adv <- params[5:6]
   chi_df <- df_lags[, c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
-  # chi_df$tau <- chi_df$tau
   if (latlon) {
     # Compute spatial distance in km (already in km in df_lags)
     haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
                                       chi_df$s2y, chi_df$s2x, adv,
                                       (chi_df$tau)) # seconds
     chi_df$hnormV <- haversine_df$distance # km
-    # chi_df$theta <- haversine_df$theta
-    # chi_df$hx <- chi_df$hnormV * cos(chi_df$theta)
-    # chi_df$hy <- chi_df$hnormV * sin(chi_df$theta)
-
     vector_dist <- vector_distance_with_advection(chi_df$s1y, chi_df$s1x,
                                       chi_df$s2y, chi_df$s2x, adv,
                                       (chi_df$tau)) # seconds
@@ -819,34 +897,15 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
    # Recompute distance and angle regardless of advection
    chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
                         (chi_df$s2yv - chi_df$s1yv)^2) # m
-   # Convert to km
-  #  chi_df$hx <- chi_df$hx / 1000 # km
-  #  chi_df$hy <- chi_df$hy / 1000 # km
-  #  chi_df$hnormV <- chi_df$hnormV / 1000 # km
-  #  chi_df$theta <- atan2(chi_df$s2yv - chi_df$s1yv, chi_df$s2xv - chi_df$s1xv)
-
   }
 
-  # if (convert_in_hours && any(chi_df$tau > 3600)) {
-  #   # Convert tau to hours
-  #   chi_df$tau <- chi_df$tau / 3600 # convert to hours
-  # }
-
-  # if (convert_in_km && any(chi_df$hnorm > 1000)) {
-  #   # Convert hnormV to km
-  #   chi_df$hnormV <- chi_df$hnormV / 1000 # convert to km
-  #   chi_df$hx <- chi_df$hx / 1000 # km
-  #   chi_df$hy <- chi_df$hy / 1000 # km
-  # }
-
-
-  if (directional) {
-    # Apply directional distance adjustment
+  if (distance == "lalpha") {
+    # Apply lalpha norm adjustment
     chi_df$vario <- (2 * beta1) * abs(chi_df$hx)^alpha1 +
                     (2 * beta1) * abs(chi_df$hy)^alpha1 +
                     (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
   } else {
-    # Only distance lag
+    # Only euclidean distance lag
     chi_df$hlag <-  chi_df$hnormV
     chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
                     (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
@@ -856,6 +915,74 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
   return(chi_df)
 }
+
+
+#' Compute the theoretical chi dataframe (stabilized version)
+#'
+#' This function calculates the theoretical chi dataframe, based on the given
+#' variogram parameters, including advection effects. It includes numerical
+#' safeguards for stability during optimization.
+#'
+#' @param params A vector of variogram parameters:
+#'   (beta1, beta2, alpha1, alpha2, adv_x, adv_y).
+#' @param df_lags A dataframe with spatial and temporal lag values.
+#' @param latlon A boolean value to indicate if the locations are in latitude
+#'   and longitude. Default is FALSE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha".
+#'   Default is "euclidean".
+#'
+#' @return A dataframe identical to df_lags, augmented with:
+#'   - hx, hy: advection-adjusted components of spatial lag
+#'   - hnormV: advection-adjusted spatial distance
+#'   - vario: theoretical variogram value
+#'   - chi: stabilized chi value in [1e-8, 1 - 1e-8]
+#'
+#' @export
+theoretical_chi <- function(params, df_lags, latlon = FALSE,
+                                 distance = "euclidean") {
+  beta1  <- params[1]
+  beta2  <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  adv    <- params[5:6]
+
+  chi_df <- df_lags[, c("s1","s2","tau","s1x","s1y","s2x","s2y","hnorm")]
+
+  if (latlon) {
+    haversine_df <- haversine_distance_with_advection(
+      chi_df$s1y, chi_df$s1x, chi_df$s2y, chi_df$s2x, adv, chi_df$tau
+    )
+    chi_df$hnormV <- haversine_df$distance
+    vector_dist <- vector_distance_with_advection(
+      chi_df$s1y, chi_df$s1x, chi_df$s2y, chi_df$s2x, adv, chi_df$tau
+    )
+    chi_df$hx <- vector_dist$hx; chi_df$hy <- vector_dist$hy
+  } else {
+    chi_df$s1xv <- chi_df$s1x; chi_df$s1yv <- chi_df$s1y
+    chi_df$s2xv <- chi_df$s2x - adv[1]*chi_df$tau
+    chi_df$s2yv <- chi_df$s2y - adv[2]*chi_df$tau
+    chi_df$hx <- chi_df$s2xv - chi_df$s1xv
+    chi_df$hy <- chi_df$s2yv - chi_df$s1yv
+    chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+  }
+
+  if (distance == "lalpha") {
+    chi_df$vario <- (2*beta1)*abs(chi_df$hx)^alpha1 +
+                    (2*beta1)*abs(chi_df$hy)^alpha1 +
+                    (2*beta2)*abs(chi_df$tau)^alpha2
+  } else {
+    chi_df$hlag <- chi_df$hnormV
+    chi_df$vario <- (2*beta1)*abs(chi_df$hlag)^alpha1 +
+                    (2*beta2)*abs(chi_df$tau)^alpha2
+  }
+
+  # garde-fous seulement (pas de changement d’échelle)
+  chi_df$vario <- pmax(pmin(abs(chi_df$vario), 1e6), 1e-10)
+  chi_df$chi <- 2*(1 - pnorm(sqrt(0.5*chi_df$vario)))
+  chi_df$chi <- pmin(pmax(chi_df$chi, 1e-8), 1 - 1e-8)
+  chi_df
+}
+
 
 
 #' get_chi_vect function
@@ -916,12 +1043,8 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #'             and longitude. Default is FALSE.
 #' @param quantile The quantile value. Default is NA.
 #' @param data The data dataframe (brown-resnick case). Default is NA.
-#' @param directional A boolean value to indicate if the variogram is
-#'                   directional. Default is TRUE.
-#' @param convert_in_hours A boolean value to indicate if the time lag should be
-#'                       converted to hours at the end. Default is TRUE.
-#' @param convert_in_km A boolean value to indicate if the spatial lag should be
-#'                    converted to kilometers at the end. Default is TRUE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha".
+#'                Default is "euclidean".
 #'
 #' @return The negative log-likelihood value.
 #'
@@ -929,7 +1052,7 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 neg_ll <- function(params, df_lags, excesses,
                    hmax = NA,  rpar = TRUE, threshold = FALSE,
                    latlon = FALSE, quantile = NA, data = NA,
-                   directional = TRUE) {
+                   distance = "euclidean") {
   if (rpar) { # if we have a conditioning location
     p <- 1 # sure excess for r-Pareto process in (s0,t0)
   } else {
@@ -946,30 +1069,24 @@ neg_ll <- function(params, df_lags, excesses,
   }
   
   # compute theoretical chi values
-  # df_lags$hnorm <- df_lags$hnorm / 1000 # convert to km
   if (!is.na(hmax)) {
     excesses <- excesses[df_lags$hnorm <= hmax, ]
     df_lags <- df_lags[df_lags$hnorm <= hmax, ]
   }
-  chi <- theoretical_chi(params, df_lags, latlon, directional)
+  chi <- theoretical_chi(params, df_lags, latlon, distance)
   ll_df <- df_lags # copy the dataframe
   ll_df$kij <- excesses$kij # number of excesses
   ll_df$Tobs <- excesses$Tobs
-  # ll_df$hnormV <- chi$hnormV
+
   ll_df$chi <- chi$chi
-  # ll_df$chi <- pmax(pmin(ll_df$chi, 1 - 1e-8), 1e-8)
-  ll_df$chi <- ifelse(ll_df$chi <= 0, 1e-10, ll_df$chi)
+  ll_df$chi <- ll_df$chi + 1e-10 * (ll_df$chi <= 0)
   ll_df$pchi <- 1 - p * ll_df$chi
-  # ll_df$pchi <- pmax(pmin(ll_df$pchi,  1 - 1e-8), 1e-8)
   ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
 
   # number of non-excesses
   ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
   ll_df$ll <- ll_df$kij * log(ll_df$chi) +
               ll_df$non_excesses * log(ll_df$pchi)
-  # if (!is.na(hmax)) {
-  #   ll_df <- ll_df[ll_df$hnorm <= hmax, ]
-  # }
 
   nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
@@ -984,212 +1101,242 @@ neg_ll <- function(params, df_lags, excesses,
 #'
 #' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2
 #'              eta1, eta2).
+#' @param list_episodes A list of episode data.
 #' @param list_lags A list of dataframes with spatial and temporal lag values.
 #' @param list_excesses A list of excesses dataframes.
 #' @param wind_df A dataframe with wind values. Default is NA.
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param latlon A boolean value to indicate if the locations are in latitude
 #'             and longitude. Default is TRUE.
-#' @param directional A boolean value to indicate if the variogram is
-#'                    directional. Default is TRUE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha". 
+#'                  Default is "euclidean".
 #' @param threshold A boolean value to indicate if the quantile variable is a
 #'               threshold value and not a uniform quantile. Default is FALSE.
 #' @param rpar A boolean value to indicate if the data is considered as a
 #'          r-Pareto process. Default is TRUE.
-#' @param fixed_eta1 A boolean value to indicate if eta1 is fixed. Default is
-#'                   FALSE.
-#' @param fixed_eta2 A boolean value to indicate if eta2 is fixed. Default is
-#'                  FALSE.
-#' @param convert_in_hours A boolean value to indicate if the time lag should be
-#'                      converted to hours at the end. Default is FALSE.
-#' @param convert_in_km A boolean value to indicate if the spatial lag should be
-#'                     converted to kilometers at the end. Default is FALSE.
-#'
+#' @param fixed_eta1 A value to fix eta1. Default is NA.
+#' @param fixed_eta2 A value to fix eta2. Default is NA.
+
 #' @return The negative log-likelihood value.
 #'
 #' @export
 neg_ll_composite <- function(params, list_episodes, list_excesses,
                              list_lags, wind_df = NA,
                              hmax = NA, latlon = TRUE,
-                             directional = TRUE, threshold = FALSE,
-                             rpar = TRUE, fixed_eta1 = FALSE,
-                             fixed_eta2 = FALSE) {
-  # Add default values for advection parameters
-  print(params)
+                             distance = "euclidean", threshold = FALSE,
+                             rpar = TRUE) {
+
   if (length(params) == 4) {
-    params <- c(params, 0, 0) # No advection
+    params <- c(params, 0, 0)
   }
-  if(rpar) {
+
+  if (rpar) {
     data <- NA
     quantile <- NA
   }
 
+  if (!(distance %in% c("lalpha", "euclidean"))) {
+    stop("Parameter 'distance' should be 'lalpha' or 'euclidean'")
+  }
+
   if (all(is.na(wind_df))) {
     adv <- params[5:6]
-    adv_df <- adv
+    adv_df <- matrix(adv, nrow = 1)
   } else {
     eta1 <- params[5]
     eta2 <- params[6]
-    if (fixed_eta1) {
-      eta1 <- 1
-    }
-    if (fixed_eta2) {
-      eta2 <- 1
-    }
-    adv_x <- (abs(wind_df$vx)^eta2) * sign(wind_df$vx) * eta1
-    adv_y <- (abs(wind_df$vy)^eta2) * sign(wind_df$vy) * eta1
-    # adv_x <- eta1 * wind_df$vx*(abs(wind_df$vx)^(eta2 - 1))
-    # adv_y <- eta1 *  wind_df$vy*(abs(wind_df$vy)^(eta2 - 1))
+
+    # v0 <- median(sqrt(wind_df$vx^2 + wind_df$vy^2), na.rm = TRUE)
+    # if (!is.finite(v0) || v0 <= 0) v0 <- 10
+
+    # vx_scaled <- abs(wind_df$vx) / v0
+    # vy_scaled <- abs(wind_df$vy) / v0
+
+    # adv_x <- eta1 * sign(wind_df$vx) * (pmax(vx_scaled, 1e-8))^eta2
+    # adv_y <- eta1 * sign(wind_df$vy) * (pmax(vy_scaled, 1e-8))^eta2
+    adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
+    adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
     adv_df <- cbind(adv_x, adv_y)
-    if (length(adv_df) == 2) {
-      adv <- as.vector(adv_df)
-    }
+    if (nrow(adv_df) == 1) adv <- as.vector(adv_df)
   }
 
 
-  m <- length(list_episodes) # Number of r-Pareto processes ie episodes
+  m <- length(list_episodes)
   nll_composite <- 0
-  for (i in 1:m) {
-    # extract episode and excesses from i-th r-pareto process from data
+
+  for (i in seq_len(m)) {
     excesses <- list_excesses[[i]]
     lags <- list_lags[[i]]
 
-    if (!all(is.na(wind_df)) && length(adv_df) != 2) {
-      adv <- as.vector(adv_df[i,])
+    if (!all(is.na(wind_df)) && nrow(adv_df) > 1) {
+      adv <- as.vector(adv_df[i, ])
     }
 
-    params_adv <- c(params[1:4], adv) # Add advection parameters
+    params_adv <- c(params[1:4], adv)
+
     if (!rpar) {
       data <- list_episodes[[i]]
       quantile <- quantile
     }
 
-    nll_i <- neg_ll(params = params_adv,
-                    df_lags = lags,
-                    hmax = hmax, excesses = excesses,
-                    latlon = latlon, directional = directional,
-                    threshold = threshold, rpar = rpar,
-                    data = data, quantile = quantile)
+    nll_i <- neg_ll(
+      params = params_adv,
+      df_lags = lags,
+      excesses = excesses,
+      hmax = hmax,
+      latlon = latlon,
+      distance = distance,
+      threshold = threshold,
+      rpar = rpar,
+      data = data,
+      quantile = quantile
+    )
 
     nll_composite <- nll_composite + nll_i
   }
 
   if (!is.finite(nll_composite)) {
-    cat("Warning: Non-finite value detected for parameters:", params, "\n")
+    cat("Non-finite value detected for parameters:", params, "\n")
   }
 
   return(nll_composite)
 }
 
-#' neg_ll_composite_mem function
-#'
+
+#' neg_ll_composite_fixed_eta function
+#'  
 #' Calculate the negative log-likelihood for a list of r-Pareto processes
-#' with wind covariates if wanted.
+#' with fixed advection parameters.
 #'
-#' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2
-#'              eta1, eta2).
-#' @param list_episodes A list of episodes (r-Pareto processes).
-#' @param s0_list A list of s0 coordinates (latitude and longitude).
-#' @param sites_coords A dataframe with the coordinates of the sites.
-#' @param wind_df A dataframe with the wind data (vx, vy).
+#' @param params Vector of variogram parameters (beta1, beta2, alpha1
+#'             alpha2).
+#' @param list_episodes A list of episode data.
+#' @param list_lags A list of dataframes with spatial and temporal lag values.
+#' @param list_excesses A list of excesses dataframes.
+#' @param wind_df A dataframe with wind values. Default is NA.
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param latlon A boolean value to indicate if the locations are in latitude
-#'            and longitude. Default is FALSE.
-#' @param directional A boolean value to indicate if the variogram is
-#'                 directional. Default is FALSE.
+#'             and longitude. Default is TRUE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha".
+#'                Default is "euclidean".
 #' @param threshold A boolean value to indicate if the quantile variable is a
 #'               threshold value and not a uniform quantile. Default is FALSE.
 #' @param rpar A boolean value to indicate if the data is considered as a
-#'           r-Pareto process. Default is TRUE.
-#' @param t0 The starting time. Default is 0.
-#' @param tau_vect The vector of temporal lags. Default is 0:10.
-#' @param fixed_eta1 A boolean value to indicate if eta1 is fixed. Default is
-#'                   FALSE.
-#' @param fixed_eta2 A boolean value to indicate if eta2 is fixed. Default is
-#'                   FALSE.
-#'
+#'          r-Pareto process. Default is TRUE.
+#' @param fixed_eta1 A value to fix eta1.
+#' @param fixed_eta2 A value to fix eta2.
 #' @return The negative log-likelihood value.
-#'
+#' 
 #' @export
-neg_ll_composite_mem <- function(params, list_episodes, s0_list, sites_coords,
-                             wind_df = NA,
-                             hmax = NA, latlon = TRUE,
-                             directional = TRUE, threshold = FALSE,
-                             rpar = TRUE, t0 = 0, tau_vect = 0:10,
-                             fixed_eta1 = FALSE,
-                             fixed_eta2 = FALSE) {
-  # Add default values for advection parameters
-  # print(params)
-  if (length(params) == 4) {
-    params <- c(params, 0, 0) # No advection
+neg_ll_composite_fixed_eta <- function(params, list_episodes, list_excesses,
+                                       list_lags, wind_df = NA,
+                                       hmax = NA, latlon = TRUE,
+                                       distance = "euclidean", threshold = FALSE,
+                                       rpar = TRUE,
+                                       fixed_eta1, fixed_eta2) {
+
+  full_params <- c(params, fixed_eta1, fixed_eta2)
+
+  neg_ll_composite(
+    params = full_params,
+    list_lags = list_lags,
+    list_episodes = list_episodes,
+    list_excesses = list_excesses,
+    hmax = hmax,
+    wind_df = wind_df,
+    latlon = latlon,
+    distance = distance,
+    threshold = threshold,
+    rpar = rpar
+  )
+}
+
+
+#' neg_ll_composite_new function
+#'
+#' Calculate the negative log-likelihood for a list of r-Pareto processes
+#' with wind covariates using a new parameterization.
+#'
+#' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2,
+#'               omega, eta1, eta2).  
+#' @param list_episodes List of episode data matrices.
+#' @param list_lags List of dataframes with spatial and temporal lag values.
+#' @param list_excesses List of excesses dataframes.  
+#' @param V_episode Matrix of V advection components per episode.
+#' @param W_episode Matrix of W wind components per episode.
+#' @param hmax Maximum spatial lag value (optional).
+#' @param latlon Boolean, TRUE if coordinates are lat/lon.
+#' @param distance Type of spatial norm ("euclidean" or "lalpha").
+#' @param threshold Boolean, TRUE if quantile is a threshold.
+#' @param rpar Boolean, TRUE for r-Pareto process.
+#' @param fixed_omega Optional fixed value for omega.
+#' @param fixed_eta1 Optional fixed value for eta1.
+#' @param fixed_eta2 Optional fixed value for eta2.
+#' @return The negative log-likelihood value.
+#' 
+#' @export
+neg_ll_composite_new <- function(params, list_episodes, list_excesses,
+                                   list_lags, V_episode, W_episode,
+                                   hmax = NA, latlon = TRUE,
+                                   distance = "euclidean", threshold = FALSE,
+                                   rpar = TRUE, fixed_omega = NA, fixed_eta1 = NA,
+                                   fixed_eta2 = NA) {
+  if (length(params) < 5) {
+    stop("params must contain at least 5 elements: beta1,beta2,alpha1,alpha2,phi")
   }
-  if(rpar) {
-    data <- NA
-    quantile <- NA
-  }
-  if (all(is.na(wind_df))) {
-    adv <- params[5:6]
-    adv_df <- adv
+  
+  beta1 <- params[1]
+  beta2 <- params[2]
+  alpha1 <- params[3]
+  alpha2 <- params[4]
+  if (!is.na(fixed_omega)) {
+    omega <- fixed_omega
   } else {
-    eta1 <- params[5]
-    eta2 <- params[6]
-    if (fixed_eta1) {
-      eta1 <- 1
-    }
-    if (fixed_eta2) {
-      eta2 <- 1
-    }
-    adv_x <- (abs(wind_df$vx)^eta1) * sign(wind_df$vx) * eta2
-    adv_y <- (abs(wind_df$vy)^eta1) * sign(wind_df$vy) * eta2
-    adv_df <- cbind(adv_x, adv_y)
-    if (length(adv_df) == 2) {
-      adv <- as.vector(adv_df)
-    }
+    omega <- params[5]
+  }
+  if(!is.na(fixed_eta1)) {
+    eta1 <- fixed_eta1
+  } else {
+    eta1 <- params[6]
+  }
+  if(!is.na(fixed_eta2)) {
+    eta2 <- fixed_eta2
+  } else {
+    eta2 <- params[7]
   }
 
-  m <- length(list_episodes) # Number of r-Pareto processes ie episodes
+  # print(c(params[1:4], omega, eta1, eta2))
+
+
+  m <- length(list_episodes)
+  if (!all(dim(V_episode)[1] == m, dim(W_episode)[1] == m)) {
+    stop("V_episode and W_episode must have same number of rows as episodes")
+  }
+
   nll_composite <- 0
-  for (i in 1:m) {
-    # extract episode and excesses from i-th r-pareto process from data
-    # excesses <- list_excesses[[i]]
-    # lags <- list_lags[[i]]
-    s0_x <- s0_list[[i]]$x
-    s0_y <- s0_list[[i]]$y
-    s0_coords <- sites_coords[sites_coords$Longitude == s0_x &
-                              sites_coords$Latitude == s0_y, ]
-    episode <- list_episodes[[i]]
-    lags <- get_conditional_lag_vectors(sites_coords, s0_coords,
-                                        t0, tau_vect, latlon = FALSE)
-    excesses <- empirical_excesses_rpar(episode, quantile = 1, lags,
-                                     t0 = t0, threshold = TRUE)
+  for (i in seq_len(m)) {
+    excesses <- list_excesses[[i]]
+    lags <- list_lags[[i]]
 
-    if (!all(is.na(wind_df)) && length(adv_df) != 2) {
-      adv <- as.vector(adv_df[i,])
-    }
+    Vi <- as.numeric(V_episode[i, ]) # c(Vx, Vy)
+    Wi <- as.numeric(W_episode[i, ]) # c(Wx, Wy)
+    # final advection per episode i
+    Vfinal <- omega * Vi + (1 - omega) * Wi
+    Vfinal <- eta1 * sign(Vfinal) * (abs(Vfinal)^eta2) # power transform
+    params_adv <- c(beta1, beta2, alpha1, alpha2, Vfinal)
 
-    params_adv <- c(params[1:4], adv) # Add advection parameters
-    if (!rpar) {
-      data <- list_episodes[[i]]
-      quantile <- quantile
-    }
-
+    # compute nll for episode i
     nll_i <- neg_ll(params = params_adv,
-                     df_lags = lags,
-                     hmax = hmax, excesses = excesses,
-                     latlon = latlon, directional = directional,
-                     threshold = threshold, rpar = rpar,
-                     data = data, quantile = quantile)
-
+                    df_lags = lags,
+                    hmax = hmax, excesses = excesses,
+                    latlon = latlon, distance = distance,
+                    threshold = threshold, rpar = rpar,
+                    data = NA, quantile = NA)
     nll_composite <- nll_composite + nll_i
-  }
-
-  if (!is.finite(nll_composite)) {
-    cat("Warning: Non-finite value detected for parameters:", params, "\n")
   }
 
   return(nll_composite)
 }
-
 
 
 # WIND COVARIATES --------------------------------------------------------------
@@ -1278,47 +1425,74 @@ get_mode_dir <- function(x) {
 #' Compute the wind speed and direction for a given extreme episode.
 #'
 #' @param episode The extreme episode dataframe.
-#' @param s0 The conditioning location name.
-#' @param u The quantile threshold.
 #' @param wind_df The wind dataframe.
-#' @param speed_time The time index for wind speed.
 #'
 #' @return The wind episode dataframe.
 #'
 #' @export
-compute_wind_episode <- function(episode, s0, u, wind_df, speed_time) {
-  timestamps <- as.POSIXct(rownames(episode),
-                            format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# get wind gouv data for these dates
+compute_wind_episode <- function(episode, wind_df) {
+  timestamps <- as.POSIXct(rownames(episode), tz = "UTC")
+  episode$timestamp <- timestamps
+  wind_subset <- wind_df %>% filter(hour(datetime) == hour(timestamps[1]) &
+                                    date(datetime) == date(timestamps[1]))
 
-  # Subset the wind data for the episode
-  wind_subset <- wind_df %>%
-    dplyr::filter(datetime %in% timestamps)
-
-  # get timestamp for which there is an excess above u in s0 in episode
-  t_excesses <- which(episode[, s0] > u)
-  
-  wind_subset_excess <- wind_df %>%
-    dplyr::filter(datetime %in% t_excesses)
-
-  # Compute the mean wind speed and direction for the episode if there is data
-  if (nrow(wind_subset) > 0) {
-    FF <- wind_subset$FF[speed_time + 1]
-    DD_t0 <- wind_subset$DD[speed_time + 1]
-    DD_mean <- mean(wind_subset$DD, na.rm = TRUE)
-    FF_mean <- mean(wind_subset$FF, na.rm = TRUE)
-    cardDir_t0 <- wind_subset$cardDir[speed_time + 1]
-  } else {
-    FF <- NA
-    DD_t0 <- NA
-    cardDir_t0 <- NA
-    DD_mean <- NA
-    FF_mean <- NA
+  if (nrow(wind_subset) == 0) {
+    return(data.frame(
+      FF_mean = NA, DD_mean = NA, 
+      FXY_max = NA, DXY_max = NA,
+      cardDir_max = NA
+    ))
   }
-
-  return(data.frame(FF = FF,
-                    DD_t0 = DD_t0, cardDir_t0 = cardDir_t0,
-                    FF_mean = FF_mean, DD_mean = DD_mean))
+  
+  theta <- wind_subset$DD * pi / 180
+  mean_theta <- atan2(mean(sin(theta), na.rm = TRUE), mean(cos(theta), na.rm = TRUE))
+  mean_theta_deg <- (mean_theta * 180 / pi) %% 360
+  
+  max_idx <- which.max(wind_subset$FXY)
+  
+  return(data.frame(
+    FF_mean = mean(wind_subset$FF, na.rm = TRUE),
+    DD_mean = mean_theta_deg,
+    FXY_max = max(wind_subset$FXY, na.rm = TRUE),
+    DXY_max = wind_subset$DXY[max_idx],
+    cardDir_max = wind_subset$cardDir[max_idx]
+  ))
 }
+
+# compute_wind_episode <- function(episode, s0, u, wind_df, speed_time) {
+#   timestamps <- as.POSIXct(rownames(episode),
+#                             format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+#   # Subset the wind data for the episode
+#   wind_subset <- wind_df %>%
+#     dplyr::filter(datetime %in% timestamps)
+
+#   # get timestamp for which there is an excess above u in s0 in episode
+#   t_excesses <- which(episode[, s0] > u)
+  
+#   wind_subset_excess <- wind_df %>%
+#     dplyr::filter(datetime %in% t_excesses)
+
+#   # Compute the mean wind speed and direction for the episode if there is data
+#   if (nrow(wind_subset) > 0) {
+#     FF <- wind_subset$FF[speed_time + 1]
+#     DD_t0 <- wind_subset$DD[speed_time + 1]
+#     DD_mean <- mean(wind_subset$DD, na.rm = TRUE)
+#     FF_mean <- mean(wind_subset$FF, na.rm = TRUE)
+#     cardDir_t0 <- wind_subset$cardDir[speed_time + 1]
+#   } else {
+#     FF <- NA
+#     DD_t0 <- NA
+#     cardDir_t0 <- NA
+#     DD_mean <- NA
+#     FF_mean <- NA
+#   }
+
+#   return(data.frame(FF = FF,
+#                     DD_t0 = DD_t0, cardDir_t0 = cardDir_t0,
+#                     FF_mean = FF_mean, DD_mean = DD_mean))
+# }
 
 
 
@@ -1336,80 +1510,80 @@ get_mode_or_t0 <- function(x, fallback) {
 }
 
 
-compute_wind_episode <- function(episode, s0, u, wind_df, speed_time,
-                                 nb_cardinal = 8) {
-  timestamps <- as.POSIXct(rownames(episode),
-                            format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# compute_wind_episode <- function(episode, s0, u, wind_df, speed_time,
+#                                  nb_cardinal = 8) {
+#   timestamps <- as.POSIXct(rownames(episode),
+#                             format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
-  # Subset du vent sur toute la durée de l’épisode
-  wind_subset <- wind_df %>%
-    dplyr::filter(datetime %in% timestamps)
+#   # Subset du vent sur toute la durée de l’épisode
+#   wind_subset <- wind_df %>%
+#     dplyr::filter(datetime %in% timestamps)
 
-  # Timestamps des excès
-  t_excesses <- which(episode[, s0] > u)
-  timestamps_excess <- timestamps[t_excesses]
+#   # Timestamps des excès
+#   t_excesses <- which(episode[, s0] > u)
+#   timestamps_excess <- timestamps[t_excesses]
 
-  # Vent pendant les excès
-  wind_subset_excess <- wind_df %>%
-    dplyr::filter(datetime %in% timestamps_excess)
+#   # Vent pendant les excès
+#   wind_subset_excess <- wind_df %>%
+#     dplyr::filter(datetime %in% timestamps_excess)
 
-  # valeur à t0
-  FF <- DD_t0 <- cardDir_t0 <- FF_mean <- DD_mean  <- DD_excess <- NA
-  FF_mean_excess <- cardDir_mode_excess <- NA
+#   # valeur à t0
+#   FF <- DD_t0 <- cardDir_t0 <- FF_mean <- DD_mean  <- DD_excess <- NA
+#   FF_mean_excess <- cardDir_mode_excess <- NA
 
-  if (nrow(wind_subset) > 0) {
-    FF <- wind_subset$FF[speed_time + 1]
-    DD_t0 <- wind_subset$DD[speed_time + 1]
-    cardDir_t0 <- wind_subset$cardDir[speed_time + 1]
+#   if (nrow(wind_subset) > 0) {
+#     FF <- wind_subset$FF[speed_time + 1]
+#     DD_t0 <- wind_subset$DD[speed_time + 1]
+#     cardDir_t0 <- wind_subset$cardDir[speed_time + 1]
 
-    FF_mean <- mean(wind_subset$FF, na.rm = TRUE)
-    DD_mean <- mean(wind_subset$DD, na.rm = TRUE)
-  }
-
-
-
-  if (nrow(wind_subset_excess) > 0) {
-    FF_mean_excess <- mean(wind_subset_excess$FF, na.rm = TRUE)
-    cardDir_mode_excess <- get_mode_or_t0(wind_subset_excess$cardDir, fallback = cardDir_t0)
-    DD_excess <- cardinal_to_degree(cardDir_mode_excess, nb_cardinal = nb_cardinal)
-  }
-
-  return(data.frame(
-    FF = FF,
-    DD_t0 = DD_t0,
-    cardDir_t0 = cardDir_t0,
-    FF_mean = FF_mean,
-    DD_mean = DD_mean,
-    FF_mean_excess = FF_mean_excess,
-    DD_excess = DD_excess,
-    cardDir_mode_excess = cardDir_mode_excess
-  ))
-}
+#     FF_mean <- mean(wind_subset$FF, na.rm = TRUE)
+#     DD_mean <- mean(wind_subset$DD, na.rm = TRUE)
+#   }
 
 
 
-compute_wind_episode <- function(episode, s0, u, wind_df, speed_time,
-                                 nb_cardinal = 8) {
-  timestamps <- as.POSIXct(rownames(episode),
-                            format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+#   if (nrow(wind_subset_excess) > 0) {
+#     FF_mean_excess <- mean(wind_subset_excess$FF, na.rm = TRUE)
+#     cardDir_mode_excess <- get_mode_or_t0(wind_subset_excess$cardDir, fallback = cardDir_t0)
+#     DD_excess <- cardinal_to_degree(cardDir_mode_excess, nb_cardinal = nb_cardinal)
+#   }
 
-  # Subset du vent sur toute la durée de l’épisode
-  wind_subset <- wind_df %>%
-    dplyr::filter(datetime %in% timestamps)
+#   return(data.frame(
+#     FF = FF,
+#     DD_t0 = DD_t0,
+#     cardDir_t0 = cardDir_t0,
+#     FF_mean = FF_mean,
+#     DD_mean = DD_mean,
+#     FF_mean_excess = FF_mean_excess,
+#     DD_excess = DD_excess,
+#     cardDir_mode_excess = cardDir_mode_excess
+#   ))
+# }
 
-  # Timestamps des excès
-  t_excesses <- which(episode[, s0] > u)
-  timestamps_excess <- timestamps[t_excesses]
 
-  # Get pondering mean for wind direction DD with the force FF
-  FF <- DD <- NA
 
-  return(data.frame(
-    FF = FF,
-    DD = DD,
-    cardDir_t0 = cardDir_t0,
-  ))
-}
+# compute_wind_episode <- function(episode, s0, u, wind_df,
+#                                  nb_cardinal = 8) {
+#   timestamps <- as.POSIXct(rownames(episode),
+#                             format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+#   # Subset du vent sur toute la durée de l’épisode
+#   wind_subset <- wind_df %>%
+#     dplyr::filter(datetime %in% timestamps)
+
+#   # Timestamps des excès
+#   t_excesses <- which(episode[, s0] > u)
+#   timestamps_excess <- timestamps[t_excesses]
+
+#   # Get pondering mean for wind direction DD with the force FF
+#   FF <- DD <- NA
+
+#   return(data.frame(
+#     FF = FF,
+#     DD = DD,
+#     cardDir_t0 = cardDir_t0,
+#   ))
+# }
 
 
 
@@ -1560,77 +1734,6 @@ get_results_optim <- function(filename, data_folder = NA) {
 #'
 #' @param i The index of the simulation.
 #' @param m The number of simulations to process.
-#' @param list_episodes A list of simulated data.
-#' @param u The quantile threshold.
-#' @param s0_list A list of conditioning locations.
-#' @param init_params The initial parameters for optimization.
-#' @param sites_coords The coordinates of the sites.
-#' @param hmax The maximum spatial lag value. Default is NA.
-#' @param wind_df A dataframe with wind values. Default is NA.
-#' @param directional A boolean value to indicate if the variogram is
-#'                   directional. Default is FALSE.
-#' @param t0 The starting time. Default is 0.
-#' @param tau_vect The vector of temporal lags. Default is 0:10.
-#' @param fixed_eta1 A boolean value to indicate if eta1 is fixed. Default is
-#'                   FALSE.
-#' @param fixed_eta2 A boolean value to indicate if eta2 is fixed. Default is
-#'                   FALSE.
-#'
-#' @return The optimized parameters.
-#'
-#' @export
-process_simulation_mem <- function(list_episodes, u, s0_list,
-                               init_params, sites_coords, hmax = NA,
-                               wind_df = NA, directional = FALSE,
-                               t0 = 0, tau_vect = 0:10,
-                               fixed_eta1 = FALSE,
-                               fixed_eta2 = FALSE) {
-  # Bounds
-  lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
-  upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
-
-  # If there is wind data, set bounds for eta1 and eta2
-  if (all(!is.na(wind_df))) {
-    lower_bounds[5:6] <- c(1e-8, 1e-8)
-  }
-
-  # Optimize the negative composite log-likelihood function
-  result <- optim(
-    par = init_params,
-    fn = neg_ll_composite_mem,
-    list_episodes = list_episodes,
-    s0_list = s0_list,
-    hmax = hmax,
-    sites_coords = sites_coords,
-    wind_df = wind_df,
-    threshold = TRUE,
-    latlon = FALSE,
-    directional = directional,
-    t0 = t0,
-    tau_vect = tau_vect,
-    fixed_eta1 = fixed_eta1,
-    fixed_eta2 = fixed_eta2,
-    method = "L-BFGS-B",
-    lower = lower_bounds,
-    upper = upper_bounds,
-    control = list(maxit = 10000)
-  )
-
-  # Check for convergence
-  estimates <- if (result$convergence == 0) result$par else rep(NA, length(init_params))
-
-  return(estimates)
-}
-
-
-
-#' process_simulation function
-#'
-#' This function processes the simulation data and optimizes the parameters
-#' using the negative log-likelihood function.
-#'
-#' @param i The index of the simulation.
-#' @param m The number of simulations to process.
 #' @param list_simu The list of simulations.
 #' @param u The quantile threshold.
 #' @param list_lags The list of lags.
@@ -1638,11 +1741,8 @@ process_simulation_mem <- function(list_episodes, u, s0_list,
 #' @param init_params The initial parameters for optimization.
 #' @param hmax The maximum spatial lag value. Default is NA.
 #' @param wind_df The wind dataframe. Default is NA.
-#' @param directional Directional variogram or not. Default is FALSE.
-#' @param fixed_eta1 A boolean value to indicate if eta1 is fixed. Default is
-#'                  FALSE.
-#' @param fixed_eta2 A boolean value to indicate if eta2 is fixed. Default is
-#'                  FALSE.
+#' @param distance The type of spatial norm, "euclidean" or "lalpha". 
+#'                 Default is "euclidean".
 #' @param hessian A boolean value to indicate if the Hessian matrix should be
 #'               computed. Default is FALSE.
 #'
@@ -1652,9 +1752,7 @@ process_simulation_mem <- function(list_episodes, u, s0_list,
 process_simulation <- function(i, m, list_simu, u, list_lags,
                                list_excesses,
                                init_params, hmax = NA, wind_df = NA,
-                               directional = FALSE,
-                               fixed_eta1 = FALSE,
-                               fixed_eta2 = FALSE, hessian = FALSE) {
+                               distance = "euclidean", hessian = FALSE) {
   # Bounds
   lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
   upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
@@ -1678,9 +1776,7 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
     wind_df = wind_df,
     threshold = TRUE,
     latlon = FALSE,
-    directional = directional,
-    fixed_eta1 = fixed_eta1,
-    fixed_eta2 = fixed_eta2,
+    distance = distance,
     method = "L-BFGS-B",
     lower = lower_bounds,
     upper = upper_bounds,
@@ -1720,4 +1816,118 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
   }
 
   return(results_df)
+}
+
+
+#' compute_gamma_grid function
+#'
+#' Computes the theoretical variogram (gamma) grid for given spatial lags, temporal lags,
+#' direction, and variogram/advection parameters.
+#'
+#' @param h_vals Vector of spatial lag values.
+#' @param tau_vals Vector of temporal lag values.
+#' @param direction Unit vector indicating the direction (length 2).
+#' @param theta_hat Vector of variogram parameters: beta1, beta2, alpha1, alpha2.
+#' @param eta1 Advection parameter for x direction (default 1).
+#' @param eta2 Advection parameter exponent (default 1).
+#' @param fictive_v Vector of fictive advection velocities (vx, vy).
+#'
+#' @return Data frame with columns: h, h_norm, h_normV, tau, tau_min, gamma.
+#' @export
+compute_gamma_grid <- function(h_vals, tau_vals, direction,
+              theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
+  df_out <- data.frame()
+  
+  # Advection velocity components
+  vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
+  vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
+  
+  for (tau in tau_vals) {
+  for (h in h_vals) {
+    # Projection of h along the direction
+    hx <- h * direction[1]
+    hy <- h * direction[2]
+    
+    beta1  <- theta_hat[1]
+    beta2  <- theta_hat[2]
+    alpha1 <- theta_hat[3]
+    alpha2 <- theta_hat[4]
+    
+    term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
+         beta1 * abs(hy - vy * tau)^alpha1
+    term2 <- beta2 * tau^alpha2
+    
+    gamma_hat <- term1 + term2
+    
+    df_out <- rbind(df_out, data.frame(
+    h = h,
+    h_norm = sqrt(hx^2 + hy^2),
+    h_normV = sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2),
+    tau = tau,
+    tau_min = tau * 60,
+    gamma = gamma_hat
+    ))
+  }
+  }
+  return(df_out)
+}
+
+
+
+#' compute_gamma_grid function
+#'
+#' Computes the theoretical variogram (gamma) grid for given spatial lags, temporal lags,
+#' direction, and variogram/advection parameters.
+#'
+#' @param h_vals Vector of spatial lag values.
+#' @param tau_vals Vector of temporal lag values.
+#' @param direction Unit vector indicating the direction (length 2).
+#' @param theta_hat Vector of variogram parameters: beta1, beta2, alpha1, alpha2.
+#' @param omega Weighting parameter for combining two advection vectors.
+#' @param eta1 Advection parameter for x direction (default 1).
+#' @param eta2 Advection parameter exponent (default 1).
+#' @param fictive_v Vector of fictive advection velocities (vx, vy).
+#' @param fictive_w Vector of fictive wind velocities (wx, wy).
+#'
+#' @return Data frame with columns: h, h_norm, h_normV, tau, tau_min, gamma.
+#' @export
+compute_gamma_grid_omega <- function(h_vals, tau_vals, direction,
+              theta_hat, omega = 1, eta1 = 1, eta2 = 1, fictive_v = c(1, 1),
+              fictive_w = c(1, 1)) {
+  df_out <- data.frame()
+  
+  # Advection velocity components
+  vx_raw <- omega * fictive_v[1] + (1 - omega) * fictive_w[1]
+  vy_raw <- omega * fictive_v[2] + (1 - omega) * fictive_w[2]
+  vx <- eta1 * abs(vx_raw)^eta2 * sign(vx_raw)
+  vy <- eta1 * abs(vy_raw)^eta2 * sign(vy_raw)
+
+  for (tau in tau_vals) {
+  for (h in h_vals) {
+    # Projection of h along the direction
+    hx <- h * direction[1]
+    hy <- h * direction[2]
+    
+    beta1  <- theta_hat[1]
+    beta2  <- theta_hat[2]
+    alpha1 <- theta_hat[3]
+    alpha2 <- theta_hat[4]
+    
+    term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
+         beta1 * abs(hy - vy * tau)^alpha1
+    term2 <- beta2 * tau^alpha2
+    
+    gamma_hat <- term1 + term2
+    
+    df_out <- rbind(df_out, data.frame(
+    h = h,
+    h_norm = sqrt(hx^2 + hy^2),
+    h_normV = sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2),
+    tau = tau,
+    tau_min = tau * 60,
+    gamma = gamma_hat
+    ))
+  }
+  }
+  return(df_out)
 }

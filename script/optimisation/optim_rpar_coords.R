@@ -62,13 +62,12 @@ t0_str <- format_value(t0)
 
 # Subfolder names
 s0_type <- if (random_s0) "random_s0" else "fixed_s0"
-anisotropy_type <- if (is_anisotropic) "anisotropic" else "isotropic"
 
-eta_type <- if (fixed_eta1 && fixed_eta2) {
+eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "fixed_eta"
-} else if (fixed_eta1) {
+} else if (!is.na(fixed_eta1)) {
   "fixed_eta1"
-} else if (fixed_eta2) {
+} else if (!is.na(fixed_eta2)) {
   "fixed_eta2"
 } else {
   "free_eta"
@@ -84,8 +83,8 @@ if (use_wind_data) {
   wind_df <- data.frame(vx = adv[1], vy = adv[2])
 } else {
   wind_df <- NA
-  fixed_eta1 <- FALSE
-  fixed_eta2 <- FALSE
+  fixed_eta1 <- NA
+  fixed_eta2 <- NA
   eta_type <- ""
 }
 
@@ -96,7 +95,7 @@ foldername <- file.path(
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
   wind_type,
-  anisotropy_type,
+  distance_type,
   eta_type
 )
 
@@ -119,7 +118,7 @@ cl <- makeCluster(num_cores)
 clusterExport(cl, varlist = c(
   "sim_rpareto_coords", "beta1", "beta2", "alpha1", "alpha2",
   "spa", "temp", "adv_real", "t0", "m", "random_s0", "s0",
-  "s0_radius", "is_anisotropic",
+  "s0_radius", "distance_type",
   "foldername", "generate_grid_coords", "save_simu",
   "ngrid", "compute_st_gaussian_process_coords",
   "compute_st_variogram_coords", "convert_simulations_to_list",
@@ -157,7 +156,7 @@ result_list <- parLapply(cl, 1:M, function(i) {
     random_s0 = FALSE,
     s0 = s0,
     s0_radius = s0_radius,
-    anisotropic = is_anisotropic
+    distance = distance_type
   )
   
   list_s0 <- simu$s0_used
@@ -171,8 +170,9 @@ result_list <- parLapply(cl, 1:M, function(i) {
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
-    excesses <- empirical_excesses_rpar(list_rpar[[j]], df_lags = lags,
-                                        thresholds = u, t0 = t0)
+    excesses <- empirical_excesses_rpar(list_rpar[[j]], quantile = u,
+                                        df_lags = lags,
+                                        threshold = TRUE, t0 = t0)
     list(lags = lags, excesses = excesses)
   })
 
@@ -217,18 +217,13 @@ if (init_diff) {
 }
 
 
-# Optimization
-fixed_eta1 <- FALSE
-fixed_eta2 <- FALSE
 result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
                         init_params = true_param,
-                        directional = is_anisotropic,
+                        distance = distance_type,
                         hmax = 7, wind_df = wind_df,
-                        fixed_eta1 = fixed_eta1,
-                        fixed_eta2 = fixed_eta2,
                         mc.cores = num_cores)
 
 
@@ -248,11 +243,11 @@ if(use_wind_data) {
 }
 
 # Eta type (if it has changed in optimization)
-eta_type <- if (fixed_eta1 && fixed_eta2) {
+eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "fixed_eta"
-} else if (fixed_eta1) {
+} else if (!is.na(fixed_eta1)) {
   "fixed_eta1"
-} else if (fixed_eta2) {
+} else if (!is.na(fixed_eta2)) {
   "fixed_eta2"
 } else {
   "free_eta"
@@ -266,7 +261,7 @@ foldername_result <- file.path(
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
   wind_type,
-  anisotropy_type,
+  distance_type,
   eta_type,
   init_type
 )
@@ -359,7 +354,7 @@ foldername_image <- file.path(
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
   wind_type,
-  anisotropy_type,
+  distance_type,
   eta_type,
   init_type
 )
