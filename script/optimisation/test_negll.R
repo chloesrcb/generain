@@ -32,14 +32,27 @@ for (eps in c(-0.1, -0.05, 0.05, 0.1)) {
       neg_ll_composite(par2, list_episodes, list_excesses, list_lags, wind_df), "\n")
 }
 
-
+wind_df = V_episodes
+fixed_eta1 <- 0
 objfun <- function(p) {
   neg_ll_composite_fixed_eta(p, list_episodes, list_excesses, list_lags, wind_df = wind_df,
-  latlon = FALSE, distance = "lalpha", fixed_eta1 = init_params_com[5], fixed_eta2 = init_params_com[6])
+  latlon = FALSE, distance = "lalpha", fixed_eta1 = fixed_eta1, fixed_eta2 = init_params_com[6])
 }
 
+# 12189.63 eta1 =etacom
+#  eta1 =0
+# > grad(objfun, result$par)
+# [1] 0.10359255 0.01939044 0.05390137 0.03406592
+# > grad(objfun, result$par)
+# [1] -0.272812247  0.001803819  0.088287371 -0.027072175
+# > objfun(result$par)
+# [1] 12177.71
+# > objfun(result$par + c(1e-4, 0, 0, 0))
+# [1] 12177.71
+# > objfun(result$par - c(1e-4, 0, 0, 0))
+# [1] 12177.71
 
-
+init_adv0 <- c(0.6788816, 4.6916841, 0.0115919, 0.6726300)
 result <- optim(
   par = init_params_com[1:4],
   fn = neg_ll_composite_fixed_eta,
@@ -50,7 +63,7 @@ result <- optim(
   wind_df = V_episodes,
   latlon = FALSE,
   distance = "lalpha",
-  fixed_eta1 = init_params_com[5],
+  fixed_eta1 = fixed_eta1,
   fixed_eta2 = init_params_com[6],
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08),
@@ -60,93 +73,46 @@ result <- optim(
 
 result
 
-grad(objfun, result$par)
-
-objfun(result$par)
-objfun(result$par + c(1e-4, 0, 0, 0))
-objfun(result$par - c(1e-4, 0, 0, 0))
-
-
-# etas = c(1,1)
+#$par
+# [1] 0.7869492 4.5210071 0.1478401 0.6985827
+# $value
+# [1] 12204.73
 # > grad(objfun, result$par)
-# [1]   25.22033   20.46536 -126.02358  -93.68068
-# > result
-# $par
-# [1] 0.5743809 4.7635971 0.1575893 0.7107742
-# $value
-# [1] 19237.07
-# > objfun(result$par)
-# [1] 19182.59
+# objfun(result$par) == result$value
+# [1]  0.022664280  0.003596251  0.020450349 -0.015970467
+# > objfun(result$par) == result$value
+# [1] TRUE
+# > 
 
-# etas = init_params_com[5:6] = c(0.8, 3.8)
-# > grad(objfun, result$par)
-# [1]  0.040076029  0.003505651  0.036382788 -0.013105235
-# > result
-# $par
-# [1] 0.5950533 4.6880691 0.1853842 0.7144501
-# $value
-# [1] 19180.16
-# objfun(result$par)
-# # [1] 19180.16
-
-
-# eta 1 fixed at 0, init = init_params_com[1:4]
-# $par
-# [1] 0.50886955 4.87047484 0.02650187 0.70188455
-# $value
-# [1] 19168.69 (pas exactement la negll)
-# objfun(result$par)
-# # [1] 19248.59 # negll minimum
-
-# > result
-# $par
-# [1] 0.5696485 4.6626892 0.1437467 0.7249424
-# $value
-# [1] 19172.37
-# > grad(objfun, result$par)
-# [1] -197.34782  -38.86865  -98.66691  183.47429
-# > objfun(result$par)
-# [1] 19186.13
-# > objfun(result$par + c(1e-4, 0, 0, 0))
-# [1] 19186.11
-# > objfun(result$par - c(1e-4, 0, 0, 0))
-# [1] 19186.15
-
-# > result
-# $par
-# [1] 0.5950533 4.6880691 0.1853842 0.7144501
-
-# $value
-# [1] 19180.16
-
-# $counts
-# function gradient 
-#       25       25 
-
-# $convergence
-# [1] 0
-
-# $message
-# [1] "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"
-
-# > grad(objfun, result$par)
-# [1]  0.040076029  0.003505651  0.036382788 -0.013105235
-# > objfun(result$par)
-# [1] 19180.16
-# > objfun(result$par + c(1e-4, 0, 0, 0))
-# [1] 19180.16
-# > objfun(result$par - c(1e-4, 0, 0, 0))
-# [1] 19180.16
-
-res_fix <- optim(
-  par = init_param[1:4],
-  fn = objfun_fixed_eta,
+result <- optim(
+  par = c(init_adv0, 0, 1),
+  fn = neg_ll_composite,
+  list_lags = list_lags,
+  list_episodes = list_episodes,
+  list_excesses = list_excesses,
+  hmax = hmax,
+  wind_df = V_episodes,
+  latlon = FALSE,
+  distance = "lalpha",
   method = "L-BFGS-B",
-  lower = c(1e-8, 1e-8, 1e-8, 1e-8),
+  lower = c(1e-08, 1e-08, 1e-08, 1e-08),
   upper = c(10, 10, 1.999, 1.999),
-  control = list(maxit = 10000)
+  control = list(maxit = 20000, trace = 1)
 )
 
+result
+
+# prendre comme init ce que j'obtiens avec eta1 = 0
+# > grad(objfun, result$par)
+# [1] -0.11902888 -0.03091853  0.17253076  0.17182187
+# > result$par
+# [1] 0.7959731 4.5932411 0.1535142 0.6982904
+
+grad(objfun, result$par)
+
+objfun(result$par) == result$value
+
+help(optim)
 
 
 # verif par episodes

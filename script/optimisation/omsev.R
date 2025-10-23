@@ -42,15 +42,17 @@ date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
 date_3_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 3)[1]]
 date_4_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 4)[1]]
 date_5_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 5)[1]]
+# date_6_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 6)[1]]
+# date_7_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 7)[1]]
 
 
-# cat("Première date avec au moins 2 sites non NA :", date_2_sites, "\n")
-# cat("Première date avec au moins 3 sites non NA :", date_3_sites, "\n")
-# cat("Première date avec au moins 4 sites non NA :", date_4_sites, "\n")
-# cat("Première date avec au moins 5 sites non NA :", date_5_sites, "\n")
+# # cat("Première date avec au moins 2 sites non NA :", date_2_sites, "\n")
+# # cat("Première date avec au moins 3 sites non NA :", date_3_sites, "\n")
+# # cat("Première date avec au moins 4 sites non NA :", date_4_sites, "\n")
+# # cat("Première date avec au moins 5 sites non NA :", date_5_sites, "\n")
 
 
-# begin in 2020-01-01
+# # begin in 2020-01-01
 rain_omsev <- rain_omsev[rain_omsev$dates >= date_5_sites, ]
 head(rain_omsev)
 
@@ -676,12 +678,12 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
   # hnorm is in meters
-  lags$hnorm <- lags$hnorm
+  # lags$hnorm <- lags$hnorm
 
   # excesses <- empirical_excesses_rpar(episode, q, lags, t0 = ind_t0_ep)
   u <- u0_list[i]
-  excesses <- empirical_excesses_rpar(episode, quantile = u, threshold = TRUE,
-                                      df_lags = lags, t0 = ind_t0_ep)
+  excesses <- empirical_excesses_rpar(episode, threshold = u,
+                                  df_lags = lags, t0 = ind_t0_ep)
   # tau is in 5 minutes
   lags$tau <- lags$tau * 5 / 60 # convert to hours
   list(lags = lags, excesses = excesses)

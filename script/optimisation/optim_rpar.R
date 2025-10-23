@@ -58,6 +58,47 @@ nsites <- ngrid^2 # if the grid is squared
 nres <- M * m
 
 # Apply formatting
+format_value <- function(x) {
+  formatted_values <- sapply(x, function(val) {
+    # Check if val is negative
+    is_negative <- val < 0
+    val <- abs(val)  # Work with the absolute value for formatting
+
+    # Check if val is an integer
+    if (val == as.integer(val)) {
+      formatted_value <- sprintf("%d", val)
+    } else {
+      # Count the number of decimals
+      num_decimals <- nchar(sub("^[^.]*\\.", "", as.character(val)))
+
+      if (val >= 1) {
+        # If the number is greater than or equal to 1
+        if (num_decimals == 1) {
+          formatted_value <- sprintf("%02d", round(val * 10))
+        } else {
+          formatted_value <- sprintf("%03d", round(val * 100))
+        }
+      } else {
+        # If the number is less than 1
+        if (num_decimals == 1) {
+          formatted_value <- sprintf("%02d", round(val * 10))
+        } else {
+          formatted_value <- sprintf("%03d", round(val * 100))
+        }
+      }
+    }
+
+    # Add "neg" prefix if the number was negative
+    if (is_negative) {
+      formatted_value <- paste0("neg", formatted_value)
+    }
+
+    return(formatted_value)
+  })
+
+  # Concatenate values
+  return(paste(formatted_values, collapse = "_"))
+}
 param_str <- format_value(true_param)
 # adv_str <- format_value(adv)
 s0_str <- format_value(s0)
@@ -171,9 +212,9 @@ result_list <- parLapply(cl, 1:M, function(i) {
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
-    excesses <- empirical_excesses_rpar(list_rpar[[j]], quantile = u,
+    excesses <- empirical_excesses_rpar(list_rpar[[j]],
                                         df_lags = lags,
-                                       t0 = t0, threshold = TRUE)
+                                        t0 = t0, threshold = u)
     list(lags = lags, excesses = excesses)
   })
 
@@ -223,16 +264,20 @@ result_list <- mclapply(1:M, process_simulation, m = m,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
                         init_params = init_params,
-                        distance = distance_type,
+                        directional = TRUE,
+                        fixed_eta1 = TRUE,
+                        fixed_eta2 = TRUE,
                         hmax = 7, wind_df = wind_df,
                         mc.cores = num_cores)
+
+
 
 print("Optimization done")
 # Combine results int a data frame
 df_result_all <- do.call(rbind, result_list)
 df_result_all <- as.data.frame(df_result_all)
 # Redefine the column names
-if(use_wind_data) {
+if (use_wind_data) {
   colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                              "alpha2", "eta1", "eta2")
   # Add adv1 and adv2 with etas estimated

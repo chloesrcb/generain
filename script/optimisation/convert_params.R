@@ -10,8 +10,8 @@ beta1_hat <- result$par[1]
 beta2_hat <- result$par[2]
 alpha1_hat <- result$par[3]
 alpha2_hat <- result$par[4]
-eta1_hat <- result$par[5]
-eta2_hat <- result$par[6]
+# eta1_hat <- result$par[5]
+# eta2_hat <- result$par[6]
 
 # Conversion factors
 c_x_km <- 1      # for km/h
@@ -22,10 +22,10 @@ c_t_5min <- 12   # 1 hour = 12 * 5min
 # res : [1] 0.51154558 5.59374130 0.09803423 0.80481171 1.00000000 1.00000000
 # with etas fixed at (5, 2)
 # 0.91978615 4.93468493 0.06751808 0.72966117 8.26000000 2.06000000
-beta1_hat <- 0.91978615
-beta2_hat <- 4.93468493
-alpha1_hat <- 0.06751808
-alpha2_hat <- 0.72966117
+beta1_hat <- 0.9
+beta2_hat <- 4.47
+alpha1_hat <- 0.448
+alpha2_hat <- 0.678
 # Parameters in km/h
 # params_kmh <- convert_params(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat, c_x = c_x_km, c_t = c_t_h)
 # Parameters in m/5min

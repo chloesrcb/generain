@@ -152,7 +152,7 @@ df_result_all$beta2 <- round(as.numeric(df_result_all$beta2), 4)
 df_result_all$alpha2 <- round(as.numeric(df_result_all$alpha2), 4)
 
 # choice of one row
-df_result <- df_result_all[df_result_all$q_spa == 0.92 & df_result_all$q_temp == 0.92, ]
+df_result <- df_result_all[df_result_all$q_spa == 0.95 & df_result_all$q_temp == 0.95, ]
 
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
@@ -268,11 +268,11 @@ print(episode_counts)
 
 # # save to csv
 foldername <- paste0(data_folder, "comephore/episodes/")
-write.csv(episode_counts, paste0(foldername, "episodes_selection_summary_zoom3km",
+write.csv(episode_counts, paste0(foldername, "episodes_selection_summary_zoom5km",
                               starting_year, ".csv"), row.names = FALSE)
 
 # get csv
-results_ep <- read.csv(paste0(foldername, "episodes_selection_summary_zoom3km",
+results_ep <- read.csv(paste0(foldername, "episodes_selection_summary_zoom5km",
                               starting_year, ".csv"))
 head(results_ep)
 
@@ -388,7 +388,7 @@ q <- 0.95
 min_spatial_dist <- 5
 delta <- 30
 starting_year <- ""
-filename <- paste0(data_folder, "comephore/episodes/t0_episodes/zoom_3km/t0_episodes_q",
+filename <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes_q",
                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, 
                    starting_year, ".csv")
 datetimes_df <- read.csv(filename, sep = ",")

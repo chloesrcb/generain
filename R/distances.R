@@ -220,15 +220,17 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   tau_len <- length(tau_vect)
 
   # Repeat index values
-  s1 <- rep(ind_s0, times = n * tau_len)
-  s2 <- rep(1:n, each = tau_len)
+  s0_name <- rownames(df_coords)[ind_s0]
+  s1 <- rep(s0_name, times = n * tau_len)
+  s_names <- rownames(df_coords)
+  s2 <- rep(s_names, each = tau_len)
   tau <- rep(tau_vect, times = n)
 
   # Coordinates
-  s1x <- df_coords$Longitude[s1]
-  s1y <- df_coords$Latitude[s1]
-  s2x <- df_coords$Longitude[s2]
-  s2y <- df_coords$Latitude[s2]
+  s1x <- df_coords[s1, "Longitude"]
+  s1y <- df_coords[s1, "Latitude"]
+  s2x <- df_coords[s2, "Longitude"]
+  s2y <- df_coords[s2, "Latitude"]
 
   # Compute spatial lags
   hx <- s2x - s1x

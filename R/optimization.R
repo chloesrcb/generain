@@ -87,32 +87,54 @@ get_spatiotemp_excess <- function(data, quantile = NULL,
 #' @export
 get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
                            episode_size, set_st_excess,
-                           n_max_episodes = 10000, latlon = FALSE){
+                           n_max_episodes = 10000, latlon = FALSE) {
 
+  # Convert in matrix form
   data <- as.matrix(data)
   site_names <- colnames(data)
 
-  list_s <- set_st_excess$list_s
-  list_t <- set_st_excess$list_t
-  list_u <- set_st_excess$list_u
+  if (is.null(site_names)) {
+    stop("ERROR: 'data' must have column names (one per site).")
+  }
 
-  # Compute distance matrix
+  # ---- 1) Vérifier cohérence des sites ----
+  coord_names <- rownames(sites_coords)
+  if (is.null(coord_names)) {
+    stop("ERROR: 'sites_coords' must have row names matching site names.")
+  }
+
+  missing_in_coords <- setdiff(site_names, coord_names)
+  if (length(missing_in_coords) > 0) {
+    stop(paste("ERROR: These sites are in 'data' but not in 'sites_coords':",
+               paste(missing_in_coords, collapse = ", ")))
+  }
+
+  # ---- 2) Réordonner coordonnées selon l'ordre de data ----
+  sites_coords <- sites_coords[site_names, , drop = FALSE]
+
+  # ---- 3) Distance matrix ----
   if (latlon) {
-    # dist_matrix <- as.matrix(distm(sites_coords[site_names, ], fun = distHaversine)) / 1000
     dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
   } else {
     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
     dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
   }
+
+  # Garantir noms cohérents (ne peut plus planter)
   rownames(dist_matrix) <- site_names
   colnames(dist_matrix) <- site_names
 
-  # Initialization
-  selected_points <- data.table(s0 = character(), t0 = integer(), 
+  # ---- 4) Extraction des infos de set_st_excess ----
+  list_s <- set_st_excess$list_s
+  list_t <- set_st_excess$list_t
+  list_u <- set_st_excess$list_u
+
+  # ---- 5) Initialisation table output ----
+  selected_points <- data.table(s0 = character(), t0 = integer(),
                                 t0_date = character(), u_s0 = numeric())
   nb_episode <- 0
 
-  # Sort excesses by time for consistent processing
+  # ---- 6) Mettre les excès dans un data.table trié ----
   excess_dt <- data.table(
     s = unlist(list_s),
     t = unlist(list_t),
@@ -121,13 +143,14 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   )
   setorder(excess_dt, t)
 
+  # ---- 7) Sélection espace-temps ----
   for (i in seq_len(nrow(excess_dt))) {
     s0 <- excess_dt$s[i]
     t0 <- excess_dt$t[i]
     t0_date <- excess_dt$t_dates[i]
     u0 <- excess_dt$u[i]
 
-    # Check if new point is valid in space-time relative to all previously selected points
+    # Check distance with previous selected episodes
     is_valid <- TRUE
     for (j in seq_len(nrow(selected_points))) {
       s_prev <- selected_points$s0[j]
@@ -143,8 +166,10 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
     }
 
     if (is_valid) {
-      selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, 
-                                                t0_date = t0_date, u_s0 = u0))
+      selected_points <- rbind(
+        selected_points,
+        data.table(s0 = s0, t0 = t0, t0_date = t0_date, u_s0 = u0)
+      )
       nb_episode <- nb_episode + 1
       if (nb_episode >= n_max_episodes) break
     }
@@ -153,12 +178,10 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   return(selected_points)
 }
 
-
 # get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 #                            episode_size, set_st_excess,
-#                            n_max_episodes = 10000, latlon = FALSE,
-#                            beta = 0) {
-#   # Convert data to matrix and keep site names
+#                            n_max_episodes = 10000, latlon = FALSE){
+
 #   data <- as.matrix(data)
 #   site_names <- colnames(data)
 
@@ -168,23 +191,26 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 
 #   # Compute distance matrix
 #   if (latlon) {
+#     # dist_matrix <- as.matrix(distm(sites_coords[site_names, ], fun = distHaversine)) / 1000
 #     dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
 #   } else {
 #     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
 #     dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
 #   }
+
+#   cat("\n--- DEBUG DIM ---\n")
+#   cat("nrow(dist_matrix) =", nrow(dist_matrix), "\n")
+#   cat("length(site_names) =", length(site_names), "\n")
+#   print(site_names)
+#   print(rownames(sites_coords))
+#   cat("\n--------------\n")
 #   rownames(dist_matrix) <- site_names
 #   colnames(dist_matrix) <- site_names
 
 #   # Initialization
-#   selected_points <- data.table(
-#     s0 = character(),
-#     t0 = integer(),
-#     t0_date = character(),
-#     u_s0 = numeric()
-#   )
+#   selected_points <- data.table(s0 = character(), t0 = integer(), 
+#                                 t0_date = character(), u_s0 = numeric())
 #   nb_episode <- 0
-#   nb_rejected <- 0
 
 #   # Sort excesses by time for consistent processing
 #   excess_dt <- data.table(
@@ -201,10 +227,8 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 #     t0_date <- excess_dt$t_dates[i]
 #     u0 <- excess_dt$u[i]
 
-#     # Assume valid until proven otherwise
+#     # Check if new point is valid in space-time relative to all previously selected points
 #     is_valid <- TRUE
-
-#     # Check against previously selected points
 #     for (j in seq_len(nrow(selected_points))) {
 #       s_prev <- selected_points$s0[j]
 #       t_prev <- selected_points$t0[j]
@@ -212,33 +236,22 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 #       spatial_dist <- dist_matrix[s0, s_prev]
 #       temporal_dist <- abs(t0 - t_prev)
 
-#       # Reject if too close in space AND time (taking beta into account)
-#       if (spatial_dist < min_spatial_dist && temporal_dist < (episode_size + 2 * beta)) {
+#       if (spatial_dist < min_spatial_dist && temporal_dist < episode_size) {
 #         is_valid <- FALSE
-#         nb_rejected <- nb_rejected + 1
 #         break
 #       }
 #     }
 
-#     # Add valid episode center
 #     if (is_valid) {
-#       selected_points <- rbind(selected_points, data.table(
-#         s0 = s0, t0 = t0, t0_date = t0_date, u_s0 = u0
-#       ))
+#       selected_points <- rbind(selected_points, data.table(s0 = s0, t0 = t0, 
+#                                                 t0_date = t0_date, u_s0 = u0))
 #       nb_episode <- nb_episode + 1
 #       if (nb_episode >= n_max_episodes) break
 #     }
 #   }
 
-#   # Log summary
-#   message("Selected ", nb_episode, " independent episodes (β = ", beta, ").")
-#   if (nb_rejected > 0) {
-#     message("Rejected ", nb_rejected, " points for being too close in space-time.")
-#   }
-
 #   return(selected_points)
 # }
-
 
 #' select_extreme_episodes function (Optimized)
 #'
@@ -629,6 +642,7 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 }
 
 
+
 #' empirical_excesses_rpar function (clean version)
 #'
 #' Computes empirical excesses for r-Pareto process based on thresholds or quantiles.
@@ -641,132 +655,47 @@ get_marginal_excess <- function(data_rain, quantile, threshold = FALSE,
 #'
 #' @return A data.table with lag values, number of excesses (kij), and number of observed times (Tobs).
 #' @export
-empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
-                                    threshold = FALSE, t0 = 0) {
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")]) # copy the dataframe
-  excesses[, Tobs := 0L]
-  excesses$Tobs <- 1
+empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
+  # df_lags must contain columns: s1, s2, tau
+  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
   excesses[, kij := 0L]
-  # excesses$kij <- NA
-  unique_tau <- unique(df_lags$tau) # unique temporal lags
-  ind_s1 <- df_lags$s1[1] # s0
+  excesses[, Tobs := 0L]
 
-  for (tau in unique_tau) { # loop over temporal lags
-    df_h_t <- df_lags[df_lags$tau == tau, ] # get the dataframe for each tau lag
+  s1_name <- df_lags$s1[1]
+  ind_s1 <- which(colnames(data_rain) == s1_name)
 
-    for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
-      # get the indices of the sites
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-      # get the data for the second site
-      X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-      if(all(is.na(X_s2))) {
-        next # skip if all values are NA
-      }
+  X_s1 <- data_rain[, ind_s1]
 
-      X_s2 <- as.vector(na.omit(X_s2[, 1]))
+  for (i in seq_len(nrow(excesses))) {
+    s2_name <- excesses$s2[i]
+    tau     <- excesses$tau[i]
 
-      # if (!threshold) {
-      #   X_s2 <- rank(X_s2) / (length(X_s2) + 1) # uniformize the data
-      # }
-      # shifted data
-      X_s_t <- X_s2[t0 + 1 + tau] # X_{s,t0 + tau}
-      if (is.list(X_s_t)) {
-        X_s_t <- X_s_t[[1]] # extract the value if it's a list
-      }
-      nmargin <- sum(X_s_t > quantile) # 0 or 1
-      excesses$kij[excesses$s1 == ind_s1
-                    & excesses$s2 == ind_s2
-                    & excesses$tau == tau] <- nmargin
+    ind_s2 <- which(colnames(data_rain) == s2_name)
+    X_s2   <- data_rain[, ind_s2]
+
+    t_shift <- t0 + 1 + tau
+    if (t_shift > nrow(data_rain) || t_shift < 1) {
+      excesses$kij[i] <- 0L
+      excesses$Tobs[i] <- 0L
+      next
     }
+
+    # Missing rainfall: ignore
+    if (is.na(X_s2[t_shift])) {
+      excesses$kij[i] <- 0L
+      excesses$Tobs[i] <- 0L
+      next
+    }
+
+    # Valid value: evaluate exceedance
+    is_excess <- (X_s2[t_shift] > threshold)
+    excesses$kij[i] <- as.integer(is_excess)
+    excesses$Tobs[i] <- 1L
   }
+
   return(excesses)
 }
 
-# empirical_excesses_rpar <- function(data_rain, df_lags,
-#                                     thresholds = NULL, quantile = 0.9,
-#                                     t0 = 0) {
-#   # Init output
-#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-#   excesses$kij <- 0L
-#   excesses$Tobs <- 1L
-
-#   unique_tau <- unique(df_lags$tau)
-#   ind_s1 <- df_lags$s1[1]  # site of interest
-
-#   for (tau in unique_tau) {
-#     df_tau <- df_lags[df_lags$tau == tau, ]
-
-#     for (i in seq_len(nrow(df_tau))) {
-#       ind_s2 <- as.numeric(df_tau$s2[i])
-#       X_s2 <- data_rain[, ind_s2, drop = FALSE]
-
-#       if (all(is.na(X_s2))) next
-#       X_s2 <- as.vector(na.omit(X_s2[, 1]))
-
-#       t_index <- t0 + 1 + tau
-#       if (t_index > length(X_s2)) next
-
-#       X_s_t <- X_s2[t_index]
-#       if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
-
-#       # Determine the threshold to use
-#       if (!is.null(thresholds)) {
-#         if (length(thresholds) == 1) {
-#           threshold_val <- thresholds
-#         } else {
-#           threshold_val <- thresholds[ind_s2]
-#           if (is.na(threshold_val)) next
-#         }
-#         exceed <- X_s_t > threshold_val
-#       } else {
-#         # Use uniform quantile
-#         rank_val <- rank(X_s2) / (length(X_s2) + 1)
-#         exceed <- rank_val[t_index] > quantile
-#       }
-#       excesses$kij[excesses$s1 == ind_s1 & excesses$s2 == ind_s2 & 
-#                    excesses$tau == tau] <- as.integer(exceed)
-#     }
-#   }
-
-#   return(excesses)
-# }
-
-# empirical_excesses_rpar <- function(data_rain, thresholds = NULL, df_lags, t0 = 0) {
-#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-#   excesses[, Tobs := 1L]
-#   excesses[, kij := 0L]
-#   unique_tau <- unique(df_lags$tau)
-#   ind_s1 <- df_lags$s1[1]
-
-#   for (tau in unique_tau) {
-#     df_h_t <- df_lags[df_lags$tau == tau, ]
-
-#     for (i in seq_len(nrow(df_h_t))) {
-#       ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
-#       X_s2 <- data_rain[, c(ind_s2), drop = FALSE]
-#       if (all(is.na(X_s2))) next
-
-#       X_s2 <- as.vector(na.omit(X_s2[, 1]))
-#       if ((t0 + 1 + tau) > length(X_s2)) next
-#       X_s_t <- X_s2[t0 + 1 + tau]
-#       if (is.list(X_s_t)) X_s_t <- X_s_t[[1]]
-
-#       if (!is.null(thresholds)) {
-#         q_s2 <- thresholds[ind_s2]
-#         if (is.na(q_s2)) next
-#         nmargin <- as.integer(X_s_t > q_s2)
-#       } else {
-#         # fallback: uniformization or binary indicator
-#         nmargin <- as.integer(X_s_t > 0)  # ou autre logique si tu veux
-#       }
-
-#       excesses$kij[excesses$s1 == ind_s1 &
-#                    excesses$s2 == ind_s2 &
-#                    excesses$tau == tau] <- nmargin
-#     }
-#   }
-#   return(excesses)
-# }
 
 # #' empirical_excesses function
 # #'
@@ -864,7 +793,7 @@ empirical_excesses_rpar <- function(data_rain, quantile, df_lags,
 #' @return The theoretical chi
 #'
 #' @export
-theoretical_chi_old <- function(params, df_lags, latlon = FALSE,
+theoretical_chi <- function(params, df_lags, latlon = FALSE,
                             distance = "euclidean") {
   beta1 <- params[1]
   beta2 <- params[2]
@@ -936,9 +865,9 @@ theoretical_chi_old <- function(params, df_lags, latlon = FALSE,
 #'   - hnormV: advection-adjusted spatial distance
 #'   - vario: theoretical variogram value
 #'   - chi: stabilized chi value in [1e-8, 1 - 1e-8]
-#'
-#' @export
-theoretical_chi <- function(params, df_lags, latlon = FALSE,
+# #'
+# #' @export
+theoretical_chi_new <- function(params, df_lags, latlon = FALSE,
                                  distance = "euclidean") {
   beta1  <- params[1]
   beta2  <- params[2]
@@ -1130,10 +1059,8 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     params <- c(params, 0, 0)
   }
 
-  if (rpar) {
-    data <- NA
-    quantile <- NA
-  }
+  data <- NA
+  quantile <- NA
 
   if (!(distance %in% c("lalpha", "euclidean"))) {
     stop("Parameter 'distance' should be 'lalpha' or 'euclidean'")
@@ -1145,15 +1072,6 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   } else {
     eta1 <- params[5]
     eta2 <- params[6]
-
-    # v0 <- median(sqrt(wind_df$vx^2 + wind_df$vy^2), na.rm = TRUE)
-    # if (!is.finite(v0) || v0 <= 0) v0 <- 10
-
-    # vx_scaled <- abs(wind_df$vx) / v0
-    # vy_scaled <- abs(wind_df$vy) / v0
-
-    # adv_x <- eta1 * sign(wind_df$vx) * (pmax(vx_scaled, 1e-8))^eta2
-    # adv_y <- eta1 * sign(wind_df$vy) * (pmax(vy_scaled, 1e-8))^eta2
     adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
     adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
     adv_df <- cbind(adv_x, adv_y)
@@ -1233,9 +1151,21 @@ neg_ll_composite_fixed_eta <- function(params, list_episodes, list_excesses,
                                        hmax = NA, latlon = TRUE,
                                        distance = "euclidean", threshold = FALSE,
                                        rpar = TRUE,
-                                       fixed_eta1, fixed_eta2) {
+                                       fixed_eta1 = NA, fixed_eta2 = NA) {
 
-  full_params <- c(params, fixed_eta1, fixed_eta2)
+  if (!is.na(fixed_eta1) && is.na(fixed_eta2)) {
+    # eta1 fixed, eta2 free
+    full_params <- c(params[1:4], fixed_eta1, params[5])
+  } else if (is.na(fixed_eta1) && !is.na(fixed_eta2)) {
+    # eta2 fixed, eta1 free
+    full_params <- c(params[1:4], params[5], fixed_eta2)
+  } else if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
+    # both fixed
+    full_params <- c(params[1:4], fixed_eta1, fixed_eta2)
+  } else {
+    # none fixed
+    full_params <- params
+  }
 
   neg_ll_composite(
     params = full_params,
@@ -1250,6 +1180,7 @@ neg_ll_composite_fixed_eta <- function(params, list_episodes, list_excesses,
     rpar = rpar
   )
 }
+
 
 
 #' neg_ll_composite_new function
@@ -1753,6 +1684,14 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
                                list_excesses,
                                init_params, hmax = NA, wind_df = NA,
                                distance = "euclidean", hessian = FALSE) {
+  
+  # Output names: always the same
+  if (all(!is.na(wind_df))) {
+    out_names <- c("beta1","beta2","alpha1","alpha2","eta1","eta2")
+  } else {
+    out_names <- c("beta1","beta2","alpha1","alpha2","adv1","adv2")
+  }
+  
   # Bounds
   lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
   upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
@@ -1760,64 +1699,118 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
     lower_bounds[5:6] <- c(1e-8, 1e-8)
   }
 
-  # Get the m corresponding episodes for the simulations i
+  # Extract episodes
   list_episodes <- list_simu[((i - 1) * m + 1):(i * m)]
   lags_episodes <- list_lags[((i - 1) * m + 1):(i * m)]
   excesses_episodes <- list_excesses[((i - 1) * m + 1):(i * m)]
 
-  # Optimize
-  result <- optim(
-    par = init_params,
-    fn = neg_ll_composite,
-    list_episodes = list_episodes,
-    list_lags = lags_episodes,
-    list_excesses = excesses_episodes,
-    hmax = hmax,
-    wind_df = wind_df,
-    threshold = TRUE,
-    latlon = FALSE,
-    distance = distance,
-    method = "L-BFGS-B",
-    lower = lower_bounds,
-    upper = upper_bounds,
-    control = list(maxit = 10000)
-  )
+  # Run optim with tryCatch to avoid breaks
+  opt_res <- tryCatch({
+    optim(
+      par = init_params,
+      fn = neg_ll_composite,
+      list_episodes = list_episodes,
+      list_lags = lags_episodes,
+      list_excesses = excesses_episodes,
+      hmax = hmax,
+      wind_df = wind_df,
+      threshold = TRUE,
+      latlon = FALSE,
+      distance = distance,
+      method = "L-BFGS-B",
+      lower = lower_bounds,
+      upper = upper_bounds,
+      control = list(maxit = 10000)
+    )
+  }, error = function(e) return(NULL))
 
-  estimates <- result$par
-  conv <- (result$convergence == 0)
-  if (!conv) {
-    # no convergence: put only NA
-    estimates <- rep(NA, length(init_params))
-    results_df <- data.frame(
-      beta1 = estimates[1],
-      beta2 = estimates[2],
-      alpha1 = estimates[3],
-      alpha2 = estimates[4],
-      adv1 = estimates[5],
-      adv2 = estimates[6]
-    )
-  } else {
-    results_df <- data.frame(
-      beta1 = estimates[1],
-      beta2 = estimates[2],
-      alpha1 = estimates[3],
-      alpha2 = estimates[4],
-      adv1 = estimates[5],
-      adv2 = estimates[6]
-    )
+  # If failed or no convergence -> return NA row
+  if (is.null(opt_res) || opt_res$convergence != 0) {
+    return(as.data.frame(as.list(setNames(rep(NA,6), out_names))))
   }
 
+  # Extract estimates
+  estimates <- opt_res$par
+  
+  # Rename adv->eta if needed
   if (all(!is.na(wind_df))) {
-    # Rename adv1/adv2 in eta1/eta2
-    results_df$eta1 <- results_df$adv1
-    results_df$eta2 <- results_df$adv2
-    # Remove adv1/adv2 columns
-    results_df <- results_df[, setdiff(names(results_df), c("adv1","adv2"))]
+    estimates <- c(estimates[1:4], estimates[5], estimates[6])
+    names(estimates) <- out_names
+  } else {
+    names(estimates) <- out_names
   }
 
-  return(results_df)
+  return(as.data.frame(as.list(estimates)))
 }
 
+# process_simulation <- function(i, m, list_simu, u, list_lags,
+#                                list_excesses,
+#                                init_params, hmax = NA, wind_df = NA,
+#                                distance = "euclidean", hessian = FALSE) {
+#   # Bounds
+#   lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
+#   upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
+#   if (all(!is.na(wind_df))) {
+#     lower_bounds[5:6] <- c(1e-8, 1e-8)
+#   }
+
+#   # Get the m corresponding episodes for the simulations i
+#   list_episodes <- list_simu[((i - 1) * m + 1):(i * m)]
+#   lags_episodes <- list_lags[((i - 1) * m + 1):(i * m)]
+#   excesses_episodes <- list_excesses[((i - 1) * m + 1):(i * m)]
+
+#   # Optimize
+#   result <- optim(
+#     par = init_params,
+#     fn = neg_ll_composite,
+#     list_episodes = list_episodes,
+#     list_lags = lags_episodes,
+#     list_excesses = excesses_episodes,
+#     hmax = hmax,
+#     wind_df = wind_df,
+#     threshold = TRUE,
+#     latlon = FALSE,
+#     distance = distance,
+#     method = "L-BFGS-B",
+#     lower = lower_bounds,
+#     upper = upper_bounds,
+#     control = list(maxit = 10000)
+#   )
+
+#   estimates <- result$par
+#   conv <- (result$convergence == 0)
+#   if (!conv) {
+#     # no convergence: put only NA
+#     estimates <- rep(NA, length(init_params))
+#     results_df <- data.frame(
+#       beta1 = estimates[1],
+#       beta2 = estimates[2],
+#       alpha1 = estimates[3],
+#       alpha2 = estimates[4],
+#       adv1 = estimates[5],
+#       adv2 = estimates[6]
+#     )
+#   } else {
+#     results_df <- data.frame(
+#       beta1 = estimates[1],
+#       beta2 = estimates[2],
+#       alpha1 = estimates[3],
+#       alpha2 = estimates[4],
+#       adv1 = estimates[5],
+#       adv2 = estimates[6]
+#     )
+#   }
+
+#   if (all(!is.na(wind_df))) {
+#     # Rename adv1/adv2 in eta1/eta2
+#     results_df$eta1 <- results_df$adv1
+#     results_df$eta2 <- results_df$adv2
+#     # Remove adv1/adv2 columns
+#     results_df <- results_df[, setdiff(names(results_df), c("adv1","adv2"))]
+#   }
+
+#   return(results_df)
+# }
 
 #' compute_gamma_grid function
 #'

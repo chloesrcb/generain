@@ -49,17 +49,17 @@ filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_c
 rain_omsev <- read.csv(filename_rain)
 
 
-rain_test <- rain_omsev
-rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
-date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
-date_3_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 3)[1]]
-date_4_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 4)[1]]
-date_5_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 5)[1]]
+# rain_test <- rain_omsev
+# rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
+# date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
+# rain_test <- rain_omsev
+# rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
+# date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
+# # # begin in 2020-01-01
+# rain_omsev <- rain_omsev[rain_omsev$dates >= date_2_sites, ]
 
-# begin in 2020-01-01
-rain_omsev <- rain_omsev[rain_omsev$dates >= date_5_sites, ]
+
 head(rain_omsev)
-
 # put dates as rownames
 rownames(rain_omsev) <- rain_omsev$dates
 rain <- rain_omsev[-1] # remove dates column
@@ -148,7 +148,7 @@ s0t0_set <- get_s0t0_pairs(grid_coords_km, rain,
                             latlon = FALSE)
 
 selected_points <- s0t0_set
-
+length(selected_points$s0)
 selected_points <- selected_points %>%
   mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
@@ -183,11 +183,48 @@ selected_points$t0_date <- as.POSIXct(selected_points$t0_date, format = "%Y-%m-%
 # Round to the next hour
 selected_points$t0_date_rounded <- ceiling_date(selected_points$t0_date, "hour")
 
-adv_filename <- paste(data_folder, "/omsev/adv_estim/bary_omsev/episode_advection_q",
+
+
+# Round to the next hour
+selected_points$t0_date_rounded <- ceiling_date(selected_points$t0_date, "hour")
+
+datetimes <- unique(selected_points$t0_date)
+
+
+datetimes_hour <- unique(selected_points$t0_date_rounded)
+
+
+# save datetime list to csv
+datetime_filename <- paste(data_folder, "/omsev/t0_episodes_q", q * 100,
+                           "_delta", delta, "_dmin", min_spatial_dist,
+                           ".csv", sep = "")
+write.csv(data.frame(t0_date = datetimes_hour), datetime_filename, row.names = FALSE)
+
+
+# save datetime list to csv
+datetime_filename <- paste(data_folder, "/omsev/t0_5min_episodes_q", q * 100,
+                           "_delta", delta, "_dmin", min_spatial_dist,
+                           ".csv", sep = "")
+write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
+
+
+adv_filename <- paste(data_folder, "/omsev/adv_estim/combined_comephore_omsev/episode_advection_q",
                           q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                           ".csv", sep = "")
 adv_df <- read.csv(adv_filename, sep = ",")
+
 head(adv_df)
+
+# plot with ggplot mean_dx_kmh_omsev vs mean_dx_kmh_comephore
+# add y=x line
+# ggplot(adv_df, aes(x = vx_final, y = vy_final)) +
+#   geom_point() +
+#   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+#   xlab("Advection vx (km/h) - comephore") +
+#   ylab("Advection vy (km/h) - comephore") +
+#   ggtitle(paste("Advection estimates for omsev episodes (q =", q,
+#                 ", delta =", delta, ", dmin =", min_spatial_dist, ")")) +
+#   theme_minimal()
 
 # # count 0 adv
 # n_zero_adv <- sum(adv_df$dx_comb_kmh == 0 & adv_df$dy_comb_kmh == 0)
@@ -211,6 +248,7 @@ matching_indices <- sapply(selected_points$t0_date, function(t) {
 matching_indices <- matching_indices[!is.na(matching_indices)]
 # get only matching rows
 adv_df <- adv_df[matching_indices, ]
+tail(adv_df)
 rownames(adv_df) <- NULL  # reset row names
 
 selected_episodes <- selected_points
@@ -224,14 +262,15 @@ setDT(selected_points)
 setDT(adv_df)
 setkey(adv_df, t0_omsev)
 selected_episodes <- adv_df[selected_points, roll = 5*60, on = .(t0_omsev = t0_date)]
-colnames(selected_episodes)[which(names(selected_episodes) == "mean_dx_kmh_omsev")] <- "adv_x"
-colnames(selected_episodes)[which(names(selected_episodes) == "mean_dy_kmh_omsev")] <- "adv_y"
+colnames(selected_episodes)[which(names(selected_episodes) == "vx_final")] <- "adv_x"
+colnames(selected_episodes)[which(names(selected_episodes) == "vy_final")] <- "adv_y"
 V_episodes <- data.frame(
   v_x = selected_episodes$adv_x,
   v_y = selected_episodes$adv_y
 )
 
 colnames(V_episodes) <- c("vx", "vy")
+
 
 # remove NA
 V_episodes <- V_episodes[!is.na(V_episodes$vx) & !is.na(V_episodes$vy), ]
@@ -262,8 +301,8 @@ df_coords <- as.data.frame(grid_coords_km)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
-  col_s0 <- which(colnames(rain) == s0)
-  s0_coords <- df_coords[col_s0, ]
+  row_s0 <- which(rownames(df_coords) == s0)
+  s0_coords <- df_coords[row_s0, ]
   episode <- list_episodes[[i]]
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
@@ -278,13 +317,13 @@ list_results <- mclapply(1:length(s0_list), function(i) {
 
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
-df_lags <- list_lags[[1]]
-df_excesses <- list_excesses[[1]]
+df_lags <- list_lags[[10]]
+df_excesses <- list_excesses[[20]]
 sum(df_excesses$kij)
 
 
 # get comephore estimates
-filename_com_res <- paste(data_folder, 
+filename_com_res <- paste(data_folder,
         "/comephore/optim_results/lalpha/free_eta/combined_optim_results.csv",
         sep = "")
 com_results <- read.csv(filename_com_res)
@@ -297,8 +336,7 @@ init_params_com <- c(params_com$beta1, params_com$beta2,
                      params_com$alpha1, params_com$alpha2,
                      params_com$eta1, params_com$eta2)
 # check for na in adv and wind
-V_episodes <- V_episodes[!is.na(V_episodes$vx) & !is.na(V_episodes$vy), ]
-hmax <- max(dist_mat) / 1000 # convert to km
+hmax <- max(dist_mat) / 1000
 
 
 # OPTIMISATION ---------------------------------------------------------------
@@ -308,14 +346,14 @@ init_params_com <- c(params_com$beta1, params_com$beta2,
                      params_com$alpha1, params_com$alpha2,
                      params_com$eta1, params_com$eta2)
 
-# try with 0 adv
-V_episodes_noadv <- V_episodes
-V_episodes_noadv$vx <- rep(0, nrow(V_episodes_noadv))
-V_episodes_noadv$vy <- rep(0, nrow(V_episodes_noadv))
+# # try with 0 adv
+# V_episodes_noadv <- V_episodes
+# V_episodes_noadv$vx <- rep(0, nrow(V_episodes_noadv))
+# V_episodes_noadv$vy <- rep(0, nrow(V_episodes_noadv))
 
-V_episodes_meanadv <- V_episodes
-V_episodes_meanadv$vx <- rep(mean(V_episodes$vx, na.rm = TRUE), nrow(V_episodes_meanadv))
-V_episodes_meanadv$vy <- rep(mean(V_episodes$vy, na.rm = TRUE), nrow(V_episodes_meanadv))
+# V_episodes_meanadv <- V_episodes
+# V_episodes_meanadv$vx <- rep(mean(V_episodes$vx, na.rm = TRUE), nrow(V_episodes_meanadv))
+# V_episodes_meanadv$vy <- rep(mean(V_episodes$vy, na.rm = TRUE), nrow(V_episodes_meanadv))
 
 
 result <- optim(
@@ -327,7 +365,7 @@ result <- optim(
   hmax = hmax,
   wind_df = V_episodes,
   latlon = FALSE,
-  distance = "lalpha",
+  distance = "euclidean",
   fixed_eta1 = init_params_com[5],
   fixed_eta2 = init_params_com[6],
   method = "L-BFGS-B",
@@ -338,11 +376,88 @@ result <- optim(
 
 result
 
+# compute gradient at the optimum
+objfun <- function(p) {
+  neg_ll_composite_fixed_eta(p, list_episodes, list_excesses, list_lags, wind_df = V_episodes,
+  latlon = FALSE, distance = "euclidean", fixed_eta1 = init_params_com[5], fixed_eta2 = init_params_com[6],
+  hmax = hmax)
+}
+
+library(numDeriv)
+objfun(result$par)
 grad(objfun, result$par)
 
-objfun(result$par)
-objfun(result$par + c(1e-4, 0, 0, 0))
-objfun(result$par - c(1e-4, 0, 0, 0))
+
+result0 <- optim(
+  par = init_params_com[1:4],
+  fn = neg_ll_composite_fixed_eta,
+  list_lags = list_lags,
+  list_episodes = list_episodes,
+  list_excesses = list_excesses,
+  hmax = hmax,
+  wind_df = V_episodes,
+  latlon = FALSE,
+  distance = "euclidean",
+  fixed_eta1 = 0.9,
+  fixed_eta2 = init_params_com[6],
+  method = "L-BFGS-B",
+  lower = c(1e-08, 1e-08, 1e-08, 1e-08),
+  upper = c(10, 10, 1.999, 1.999),
+  control = list(maxit = 20000, trace = 1)
+)
+
+result0
+
+objfun0 <- function(p) {
+  neg_ll_composite_fixed_eta(p, list_episodes, list_excesses, list_lags, wind_df = V_episodes,
+  latlon = FALSE, distance = "euclidean", fixed_eta1 = 0.9, fixed_eta2 = init_params_com[6],
+  hmax = hmax)
+}
+
+library(numDeriv)
+objfun0(result0$par)
+grad(objfun0, result0$par)
+
+result
+result0
+
+result_full <- optim(
+  par = init_params_com,
+  fn = neg_ll_composite,
+  list_lags = list_lags,
+  list_episodes = list_episodes,
+  list_excesses = list_excesses,
+  hmax = hmax,
+  wind_df = V_episodes,
+  latlon = FALSE,
+  distance = "lalpha",
+  method = "L-BFGS-B",
+  lower = c(1e-08, 1e-08, 1e-08, 1e-08, -1, -1),
+  upper = c(10, 10, 1.999, 1.999, 10, 10),
+  control = list(maxit = 20000, trace = 1)
+)
+
+
+result_full
+
+objfun_full <- function(p) {
+  neg_ll_composite(p, list_episodes, list_excesses, list_lags, wind_df = V_episodes,
+  latlon = FALSE, distance = "lalpha", hmax = hmax)
+}
+
+library(numDeriv)
+objfun_full(result_full$par)
+grad(objfun_full, result_full$par)
+
+
+
+
+
+
+
+
+
+
 
 
 if (result$convergence != 0) {
@@ -362,9 +477,11 @@ foldername_res <- file.path(
   eta_type
 )
 
+if (!dir.exists(foldername_res)) {
+  dir.create(foldername_res, recursive = TRUE)
+}
 filename <- paste0(foldername_res, "/results_q",
-           q * 100, "_delta", delta, "_dmin", min_spatial_dist, 
-           starting_year, ".csv")
+           q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(result_df, filename, row.names = FALSE)
 
 # Jackknife CI ---------------------------------------------------------------
@@ -398,9 +515,9 @@ n_season_years <- length(unique_season_years)
 jack_estimates_list <- parallel::mclapply(unique_season_years, function(season_year) {
   cat("Excluding season-year:", season_year, "\n")
   exclude_idx <- which(season_year_vec == season_year)
-  jack_episodes <- episodes_opt[-exclude_idx]
-  jack_lags <- lags_opt[-exclude_idx]
-  jack_excesses <- excesses_opt[-exclude_idx]
+  jack_episodes <- list_episodes[-exclude_idx]
+  jack_lags <- list_lags[-exclude_idx]
+  jack_excesses <- list_excesses[-exclude_idx]
   jack_wind <- V_episodes[-exclude_idx, , drop = FALSE]
   res <- tryCatch({
     optim(par = init_param_jk[1:4], fn = neg_ll_composite_fixed_eta,
@@ -409,8 +526,8 @@ jack_estimates_list <- parallel::mclapply(unique_season_years, function(season_y
       wind_df = jack_wind,
       latlon = FALSE,
       distance = "lalpha",
-      fixed_eta1 = params_com$eta1,
-      fixed_eta2 = params_com$eta2,
+      fixed_eta1 = init_params_com[5],
+      fixed_eta2 = init_params_com[6],
       method = "L-BFGS-B",
       lower = c(1e-08, 1e-08, 1e-08, 1e-08),
       upper = c(10, 10, 1.999, 1.999),
@@ -428,7 +545,11 @@ jack_estimates <- do.call(rbind, jack_estimates_list)
 jack_estimates <- na.omit(jack_estimates)
 n_eff <- nrow(jack_estimates)
 
-filename <- paste0(data_folder, "omsev/optim_results/jackknife_estimates/all_results_jk_by_seasonyear_n", 
+foldername_jk <- paste0(data_folder, "omsev/optim_results/jackknife_estimates/")
+if (!dir.exists(foldername_jk)) {
+  dir.create(foldername_jk, recursive = TRUE)
+}
+filename <- paste0(foldername_jk, "all_results_jk_by_seasonyear_n", 
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jack_estimates, filename, row.names = FALSE)
 
@@ -446,7 +567,7 @@ lower_ci <- jack_mean_pseudo - z * jack_se
 upper_ci <- jack_mean_pseudo + z * jack_se
 
 jackknife_seasonyear_results <- data.frame(
-  Parameter = c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2"),
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
   Estimate_full = result$par,
   Estimate_jk   = jack_mean_pseudo,
   StdError = jack_se,
@@ -454,7 +575,216 @@ jackknife_seasonyear_results <- data.frame(
   CI_upper = upper_ci
 )
 
-
-filename <- paste0(data_folder, "omsev/optim_results/jackknife_estimates/results_jk_by_seasonyear_n", 
+filename <- paste0(foldername_jk, "results_jk_by_seasonyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jackknife_seasonyear_results, filename, row.names = FALSE)
+
+convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
+  beta1_new <- beta1 / (c_x^alpha1)
+  beta2_new <- beta2 / (c_t^alpha2)
+  list(beta1 = beta1_new, beta2 = beta2_new)
+}
+
+# convert params from km/h to m/5min
+c_x_m <- 1000    # for m
+c_t_5min <- 12   # 1 hour = 12 * 5min
+
+# convert params and ci to m/5min
+params_m5min <- convert_params(result$par[1], result$par[2],
+                               result$par[3], result$par[4],
+                               c_x = c_x_m, c_t = c_t_5min)
+
+# Après avoir obtenu jack_estimates (colonnes: beta1, beta2, alpha1, alpha2)
+beta1_m5min_i <- jack_estimates[,1] / (1000 ^ jack_estimates[,3])
+beta2_m5min_i <- jack_estimates[,2] / (12   ^ jack_estimates[,4])
+
+# Pseudo-valeurs sur l’échelle m/5min
+n_eff <- nrow(jack_estimates)
+b1_full_m5 <- result$par[1] / (1000 ^ result$par[3])
+b2_full_m5 <- result$par[2] / (12   ^ result$par[4])
+
+pv_b1 <- n_eff * b1_full_m5 - (n_eff - 1) * beta1_m5min_i
+pv_b2 <- n_eff * b2_full_m5 - (n_eff - 1) * beta2_m5min_i
+
+# Moyennes, SE, IC
+b1_hat <- mean(pv_b1); b2_hat <- mean(pv_b2)
+se_b1  <- sd(pv_b1)/sqrt(n_eff); se_b2 <- sd(pv_b2)/sqrt(n_eff)
+z <- qnorm(0.975)
+b1_CI <- c(b1_hat - z*se_b1, b1_hat + z*se_b1)
+b2_CI <- c(b2_hat - z*se_b2, b2_hat + z*se_b2)
+
+# Table of results
+param_table_m5min <- data.frame(
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
+  Estimate_full_kmh = result$par,
+  Estimate_jk_kmh = jack_mean_pseudo,
+  CI_lower_kmh = jackknife_seasonyear_results$CI_lower,
+  CI_upper_kmh = jackknife_seasonyear_results$CI_upper,
+  Estimate_full_m5min = c(params_m5min$beta1, params_m5min$beta2,
+                          result$par[3], result$par[4]),
+  Estimate_jk_m5min = c(b1_hat, b2_hat,
+                          jack_mean_pseudo[3], jack_mean_pseudo[4]),
+  CI_lower_m5min = c(b1_CI[1], b2_CI[1],
+                     jackknife_seasonyear_results$CI_lower[3],
+                     jackknife_seasonyear_results$CI_lower[4]),
+  CI_upper_m5min = c(b1_CI[2], b2_CI[2],
+                     jackknife_seasonyear_results$CI_upper[3],
+                     jackknife_seasonyear_results$CI_upper[4])
+)
+print(param_table_m5min)
+
+
+#### MONTH-YEAR JACKKNIFE ------------------------------------------------------
+
+selected_episodes$t0_date <- as.POSIXct(selected_episodes$t0_date,
+                                        format="%Y-%m-%d %H:%M:%S", tz="UTC")
+
+month_vec <- format(selected_episodes$t0_date, "%m")
+year_vec  <- format(selected_episodes$t0_date, "%Y")
+month_year_vec <- paste(year_vec, month_vec, sep = "-")
+
+unique_month_years <- sort(unique(month_year_vec))
+n_month_years <- length(unique_month_years)
+
+jack_estimates_list <- parallel::mclapply(unique_month_years, function(month_year) {
+  cat("Excluding month-year:", month_year, "\n")
+  exclude_idx <- which(month_year_vec == month_year)
+  
+  jack_episodes <- list_episodes[-exclude_idx]
+  jack_lags <- list_lags[-exclude_idx]
+  jack_excesses <- list_excesses[-exclude_idx]
+  jack_wind <- V_episodes[-exclude_idx, , drop = FALSE]
+  
+  res <- tryCatch({
+    optim(par = init_param_jk[1:4], fn = neg_ll_composite_fixed_eta,
+      list_lags = jack_lags, list_episodes = jack_episodes,
+      list_excesses = jack_excesses, hmax = hmax,
+      wind_df = jack_wind,
+      latlon = FALSE,
+      distance = "lalpha",
+      fixed_eta1 = init_params_com[5],
+      fixed_eta2 = init_params_com[6],
+      method = "L-BFGS-B",
+      lower = c(1e-08, 1e-08, 1e-08, 1e-08),
+      upper = c(10, 10, 1.999, 1.999),
+      control = list(maxit = 10000),
+      hessian = FALSE)
+  }, error = function(e) NULL)
+  
+  if (!is.null(res)) {
+    return(res$par)
+  } else {
+    return(rep(NA, length(init_param_jk)))
+  }
+}, mc.cores = ncores)
+
+
+jack_estimates <- do.call(rbind, jack_estimates_list)
+jack_estimates <- na.omit(jack_estimates)
+n_eff <- nrow(jack_estimates)
+
+foldername_jk <- paste0(data_folder, "omsev/optim_results/jackknife_estimates/")
+if (!dir.exists(foldername_jk)) {
+  dir.create(foldername_jk, recursive = TRUE)
+}
+filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n", 
+           n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+write.csv(jack_estimates, filename, row.names = FALSE)
+
+jack_mean <- colMeans(jack_estimates)
+pseudo_values <- matrix(NA, nrow = n_eff, ncol = length(init_param_jk))
+for (i in 1:n_eff) {
+  pseudo_values[i, ] <- n_eff * result$par - (n_eff - 1) * jack_estimates[i, ]
+}
+
+jack_mean_pseudo <- colMeans(pseudo_values)
+jack_se <- apply(pseudo_values, 2, sd) / sqrt(n_eff)
+
+z <- qnorm(0.975)
+lower_ci <- jack_mean_pseudo - z * jack_se
+upper_ci <- jack_mean_pseudo + z * jack_se
+
+jackknife_monthyear_results <- data.frame(
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
+  Estimate_full = result$par,
+  Estimate_jk   = jack_mean_pseudo,
+  StdError = jack_se,
+  CI_lower = lower_ci,
+  CI_upper = upper_ci
+)
+
+filename <- paste0(foldername_jk, "results_jk_by_monthyear_n",
+           n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+write.csv(jackknife_monthyear_results, filename, row.names = FALSE)
+
+convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
+  beta1_new <- beta1 / (c_x^alpha1)
+  beta2_new <- beta2 / (c_t^alpha2)
+  list(beta1 = beta1_new, beta2 = beta2_new)
+}
+
+# convert params from km/h to m/5min
+c_x_m <- 1000    # for m
+c_t_5min <- 12   # 1 hour = 12 * 5min
+
+# convert params and ci to m/5min
+params_m5min <- convert_params(result$par[1], result$par[2],
+                               result$par[3], result$par[4],
+                               c_x = c_x_m, c_t = c_t_5min)
+
+# Après avoir obtenu jack_estimates (colonnes: beta1, beta2, alpha1, alpha2)
+beta1_m5min_i <- jack_estimates[,1] / (1000 ^ jack_estimates[,3])
+beta2_m5min_i <- jack_estimates[,2] / (12   ^ jack_estimates[,4])
+
+# bornes croisées correctes
+b1L <- jackknife_monthyear_results$CI_lower[1]
+b1U <- jackknife_monthyear_results$CI_upper[1]
+a1L <- jackknife_monthyear_results$CI_lower[3]
+a1U <- jackknife_monthyear_results$CI_upper[3]
+
+b2L <- jackknife_monthyear_results$CI_lower[2]
+b2U <- jackknife_monthyear_results$CI_upper[2]
+a2L <- jackknife_monthyear_results$CI_lower[4]
+a2U <- jackknife_monthyear_results$CI_upper[4]
+
+# conversion correcte
+beta1_m5_low  <- b1L / (1000 ^ a1U)
+beta1_m5_high <- b1U / (1000 ^ a1L)
+beta2_m5_low  <- b2L / (12   ^ a2U)
+beta2_m5_high <- b2U / (12   ^ a2L)
+
+
+# Pseudo-valeurs sur l’échelle m/5min
+n_eff <- nrow(jack_estimates)
+b1_full_m5 <- result$par[1] / (1000 ^ result$par[3])
+b2_full_m5 <- result$par[2] / (12   ^ result$par[4])
+
+pv_b1 <- n_eff * b1_full_m5 - (n_eff - 1) * beta1_m5min_i
+pv_b2 <- n_eff * b2_full_m5 - (n_eff - 1) * beta2_m5min_i
+
+# Moyennes, SE, IC
+b1_hat <- mean(pv_b1); b2_hat <- mean(pv_b2)
+se_b1  <- sd(pv_b1)/sqrt(n_eff); se_b2 <- sd(pv_b2)/sqrt(n_eff)
+z <- qnorm(0.975)
+b1_CI <- c(b1_hat - z*se_b1, b1_hat + z*se_b1)
+b2_CI <- c(b2_hat - z*se_b2, b2_hat + z*se_b2)
+
+# Table of results
+param_table_m5min <- data.frame(
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
+  Estimate_full_kmh = result$par,
+  Estimate_jk_kmh = jack_mean_pseudo,
+  CI_lower_kmh = jackknife_monthyear_results$CI_lower,
+  CI_upper_kmh = jackknife_monthyear_results$CI_upper,
+  Estimate_full_m5min = c(params_m5min$beta1, params_m5min$beta2,
+                          result$par[3], result$par[4]),
+  Estimate_jk_m5min = c(b1_hat, b2_hat,
+                          jack_mean_pseudo[3], jack_mean_pseudo[4]),
+  CI_lower_m5min = c(b1_CI[1], b2_CI[1],
+                     jackknife_monthyear_results$CI_lower[3],
+                     jackknife_monthyear_results$CI_lower[4]),
+  CI_upper_m5min = c(b1_CI[2], b2_CI[2],
+                     jackknife_monthyear_results$CI_upper[3],
+                     jackknife_monthyear_results$CI_upper[4])
+)
+print(param_table_m5min)

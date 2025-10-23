@@ -1,4 +1,4 @@
-adv <- c(0.5, 2) # advection
+adv <- c(0.5, 0.2) # advection
 params <- c(0.4, 0.2, 1.5, 1)
 ngrid <- 5
 temp <- 0:29

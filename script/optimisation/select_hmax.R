@@ -73,8 +73,7 @@ iterative_hmax_eta <- function(df_lags, wind_df, params_init4,
       neg_ll_composite(params = par, list_episodes = list_episodes,
                        list_excesses = list_excesses, list_lags = list_lags,
                        wind_df = wind_df, hmax = hmax_prop, latlon = TRUE,
-                       distance = "euclidean", threshold = FALSE, rpar = TRUE,
-                       fixed_eta1 = NA, fixed_eta2 = NA)
+                       distance = "euclidean", threshold = FALSE, rpar = TRUE)
     }
     # bounds and transforms recommended (not shown). Use optim as example:
     res_opt <- optim(par = params_start, fn = opt_fun, method = "L-BFGS-B",
