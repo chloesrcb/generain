@@ -659,8 +659,7 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
   # df_lags must contain columns: s1, s2, tau
   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
   excesses[, kij := 0L]
-  excesses[, Tobs := 0L]
-
+  excesses[, Tobs := 1L]
   s1_name <- df_lags$s1[1]
   ind_s1 <- which(colnames(data_rain) == s1_name)
 
@@ -669,28 +668,25 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
   for (i in seq_len(nrow(excesses))) {
     s2_name <- excesses$s2[i]
     tau     <- excesses$tau[i]
-
+    s2_name <- df_lags$s2[i]
     ind_s2 <- which(colnames(data_rain) == s2_name)
     X_s2   <- data_rain[, ind_s2]
 
     t_shift <- t0 + 1 + tau
-    if (t_shift > nrow(data_rain) || t_shift < 1) {
-      excesses$kij[i] <- 0L
-      excesses$Tobs[i] <- 0L
-      next
-    }
+    # if (t_shift > nrow(data_rain) || t_shift < 1) {
+    #   excesses$kij[i] <- 0
+    #   next
+    # }
 
     # Missing rainfall: ignore
     if (is.na(X_s2[t_shift])) {
-      excesses$kij[i] <- 0L
-      excesses$Tobs[i] <- 0L
+      excesses$kij[i] <- 0
       next
     }
 
     # Valid value: evaluate exceedance
     is_excess <- (X_s2[t_shift] > threshold)
-    excesses$kij[i] <- as.integer(is_excess)
-    excesses$Tobs[i] <- 1L
+    excesses$kij[i] <- sum(is_excess)
   }
 
   return(excesses)
@@ -1078,6 +1074,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     if (nrow(adv_df) == 1) adv <- as.vector(adv_df)
   }
 
+  print(params)
 
   m <- length(list_episodes)
   nll_composite <- 0
@@ -1120,7 +1117,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   return(nll_composite)
 }
 
-
+# ] 0.43012048 0.21710099 1.48533177 0.98955482 0.00000001 0.00000001
 #' neg_ll_composite_fixed_eta function
 #'  
 #' Calculate the negative log-likelihood for a list of r-Pareto processes

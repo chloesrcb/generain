@@ -203,7 +203,7 @@ result_list <- parLapply(cl, 1:M, function(i) {
     distance = distance_type
   )
 
-  list_rpar <- convert_simulations_to_list(simu$Z, ngrid)
+  list_rpar <- convert_simulations_to_list(simu$Z, sites_coords)
 
   list_lags_excesses <- lapply(1:m, function(j) {
     s0_x <- simu$s0_used[[j]][[1]]$x
@@ -258,15 +258,13 @@ if (init_diff) {
 }
 
 # Optimization
-init_params <- c(params[1:4], 1, 1)
+init_params <- c(params[1:4], 0, 0)
 result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
                         init_params = init_params,
-                        directional = TRUE,
-                        fixed_eta1 = TRUE,
-                        fixed_eta2 = TRUE,
+                        distance = distance_type,
                         hmax = 7, wind_df = wind_df,
                         mc.cores = num_cores)
 

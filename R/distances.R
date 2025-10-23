@@ -261,6 +261,8 @@ get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
   return(lags_dt)
 }
 
+
+
 # get_conditional_lag_vectors <- function(df_coords, s0 = c(1, 1),
 #                                     t0 = 0, tau_vect = 0:10, latlon = FALSE) {
 #   # Conditional point index in df_coords
