@@ -1357,3 +1357,166 @@ convert_single_simulation_to_df <- function(simu_i, ngrid) {
   return(as.data.frame(df))
 }
 
+
+
+
+
+
+sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0) {
+  sim <- sim_rpareto(
+    beta1 = params_vario$beta1,
+    beta2 = params_vario$beta2,
+    alpha1 = params_vario$alpha1,
+    alpha2 = params_vario$alpha2,
+    adv = adv,
+    x = coords$x, y = coords$y, t = times,
+    t0 = t0, s0 = s0
+  )
+  Z <- sim$Z[,,,1]
+  U <- 1 - 1/Z
+  X <- array(NA, dim = dim(Z))
+  for (i in 1:length(coords$x)) {
+    X[i,,] <- qegpd(U[i,,], xi = params_margins$xi[i], 
+              sigma = params_margins$sigma[i], kappa = params_margins$kappa[i])
+  }
+  return(X)
+}
+
+
+
+
+sim_occurrence_probit <- function(coords, times, adv,
+                                  beta_occ = 0.1, alpha_occ = 1.2,
+                                  p_wet, t0 = NULL, s0 = NULL) {
+  # coords: data.frame avec colonnes x, y (grille régulière)
+  # times: vecteur d'indices t (entiers ou num)
+  # adv: c(vx, vy)
+  # p_wet: soit scalaire, soit vecteur/array de même taille que le champ
+  # beta_occ, alpha_occ: paramètres du RMfbm pour l'occurrence
+
+  lx <- length(unique(coords$x))
+  ly <- length(unique(coords$y))
+  lt <- length(times)
+
+  # Variogramme fract. Brownien pour occurrence
+  modelOcc <- RandomFields::RMfbm(alpha = alpha_occ, var = 2 * beta_occ)
+
+  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = times)
+  grid$shifted_x <- grid$x - grid$t * adv[1]
+  grid$shifted_y <- grid$y - grid$t * adv[2]
+
+  # Simule un seul champ gaussien sur les coords décalées
+  V <- RandomFields::RFsimulate(modelOcc,
+                                x = grid$shifted_x,
+                                y = grid$shifted_y,
+                                grid = FALSE)
+
+  # Prob wet -> seuil probit
+  # p_wet peut être scalaire, vecteur de longueur lx*ly*lt, ou matrice/array
+  if (length(p_wet) == 1L) p_wet <- rep(p_wet, lx * ly * lt)
+  q <- stats::qnorm(1 - p_wet)
+
+  O_vec <- as.numeric(V > q)
+  O <- array(O_vec, dim = c(lx, ly, lt))
+
+  # Force l'occurrence au point conditionnant si fourni
+  if (!is.null(s0) && !is.null(t0)) {
+    O[s0[1], s0[2], which.min(abs(times - t0))] <- 1L
+  }
+  return(O)
+}
+
+
+sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0,
+                        # --- nouveaux args occurrence ---
+                        p_wet = 0.05,
+                        beta_occ = 0.1, alpha_occ = 1.2) {
+
+  # 1) Simulation r-Pareto (dépendance extrême)
+  sim <- sim_rpareto(
+    beta1 = params_vario$beta1,
+    beta2 = params_vario$beta2,
+    alpha1 = params_vario$alpha1,
+    alpha2 = params_vario$alpha2,
+    adv = adv, x = coords$x, y = coords$y, t = times,
+    t0 = t0, s0 = s0
+  )
+  Z <- sim$Z[,,,1]
+
+  # 2) Pseudo-uniformes
+  U <- 1 - 1/Z
+  U <- pmin(pmax(U, 1e-10), 1 - 1e-10)  # garde-fous numériques
+
+  # 3) Intensités positives via EGPD
+  Xpos <- array(NA, dim = dim(Z))
+  n_sites <- nrow(coords)  # si coords = grille complète par site
+  for (s in seq_len(n_sites)) {
+    Xpos[s,,] <- qegpd(U[s,,],
+                       xi    = params_margins$xi[s],
+                       sigma = params_margins$sigma[s],
+                       kappa = params_margins$kappa[s])
+  }
+
+  # 4) Occurrence binaire (probit-GRF) + advection
+  O <- sim_occurrence_probit(coords, times, adv,
+                             beta_occ = beta_occ, alpha_occ = alpha_occ,
+                             p_wet = p_wet, t0 = t0, s0 = s0)
+
+  # 5) Champ final avec zéros
+  X <- O * Xpos
+
+  # Option: petite censure pour éviter le "drizzle"
+  # X[X < 0.05] <- 0
+
+  return(list(X = X, O = O, U = U, Z = Z, s0 = s0, t0 = t0))
+}
+
+get_prob_occurence <- function(data_rain) {
+  # data_rain: data.frame with sites in columns, time in rows
+  n_sites <- ncol(data_rain)
+  P_wet <- numeric(n_sites)
+  for (s in seq_len(n_sites)) {
+    P_wet[s] <- mean(data_rain[[s]] > 0, na.rm = TRUE)
+  }
+  return(P_wet)
+}
+
+sim_occurence <- function(coords, times, adv,
+                          p_wet_sites,
+                          beta_occ = 0.1, alpha_occ = 1.2) {
+  # coords: data.frame avec colonnes x, y (grille régulière)
+  # times: vecteur d'indices t (entiers ou num)
+  # adv: c(vx, vy)
+  # p_wet_sites: vecteur de probabilité d'occurrence par site
+  # beta_occ, alpha_occ: paramètres du RMfbm pour l'occurrence
+
+  lx <- length(unique(coords$x))
+  ly <- length(unique(coords$y))
+  lt <- length(times)
+
+  # Variogramme fract. Brownien pour occurrence
+  modelOcc <- RandomFields::RMfbm(alpha = alpha_occ, var = 2 * beta_occ)
+
+  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = times)
+  grid$shifted_x <- grid$x - grid$t * adv[1]
+  grid$shifted_y <- grid$y - grid$t * adv[2]
+
+  # Simule un seul champ gaussien sur les coords décalées
+  V <- RandomFields::RFsimulate(modelOcc,
+                                x = grid$shifted_x,
+                                y = grid$shifted_y,
+                                grid = FALSE)
+
+  # Prob wet -> seuil probit
+  # p_wet_sites doit être de longueur lx*ly
+  if (length(p_wet_sites) != lx * ly) {
+    stop("p_wet_sites must have length equal to number of spatial sites.")
+  }
+  p_wet_rep <- rep(p_wet_sites, times = lt)
+  q <- stats::qnorm(1 - p_wet_rep)
+
+  O_vec <- as.numeric(V > q)
+  O <- array(O_vec, dim = c(lx, ly, lt))
+
+  return(O)
+}
