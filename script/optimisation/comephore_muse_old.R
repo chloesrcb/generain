@@ -92,10 +92,10 @@ q_no0_spa <- 0.97
 chispa_df <- spatial_chi_alldist(df_dist_km, data_rain = comephore,
                           quantile = q_no0_spa, hmax = hmax, zeros = FALSE)
 
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
-                           lagspa = log(chispa_df$lagspa))
+# etachispa_df <- data.frame(chi = eta(chispa_df$chi),
+#                            lagspa = log(chispa_df$lagspa))
 
-
+chispa_df$lagspa <- chispa_df$lagspa * 1000
 # WLSE
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
 
@@ -125,13 +125,11 @@ chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = q_no0_temp,
                                mean = TRUE, zeros = FALSE)
 df_chi <- data.frame(lag = c(0:tmax), chi = chimat_dt_mean)
 
-df_chi_not0 <- df_chi[df_chi$lag > 0, ]
-wlse_temp <- get_estimate_variotemp(df_chi_not0, weights = "exp", summary = TRUE)
+# df_chi_not0 <- df_chi[df_chi$lag > 0, ]
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
 c2 <- as.numeric(wlse_temp[[1]])
 beta2 <- as.numeric(wlse_temp[[2]])
 alpha2 <- as.numeric(wlse_temp[[3]])
-
-dftemp <- data.frame(lag = log(df_chi_not0$lag), chi = eta(df_chi_not0$chi))
 
 # Result WLSE
 df_result <- data.frame(beta1 =  beta1,
@@ -212,8 +210,8 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
-  excesses <- empirical_excesses_rpar(episode, quantile = u,
-                                  threshold = TRUE, # !!!!!!!
+  excesses <- empirical_excesses_rpar(episode,
+                                  threshold = u, # !!!!!!!
                                   df_lags = lags, t0 = ind_t0_ep)
   lags$tau <- lags$tau # convert tau from hours to seconds
   list(lags = lags, excesses = excesses)
@@ -223,7 +221,7 @@ list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
 # ADD ADVECTION ESTIMATES ######################################################
-adv_filename <- paste0(data_folder, "comephore/adv_estim/advection_results_q",
+adv_filename <- paste0(data_folder, "comephore/adv_estim/oldies/advection_results_q",
                        q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                        ".csv")
 adv_df <- read.csv(adv_filename, sep = ",")
@@ -277,7 +275,7 @@ ind_NA <- ind_NA_adv
 wind_opt <- wind_df
 if (any(ind_NA > 0)) {
   # remove these episodes
-  # wind_opt <- wind_df[-ind_NA, ]
+  wind_opt <- wind_df[-ind_NA, ]
   episodes_opt <- list_episodes[-ind_NA]
   lags_opt <- list_lags[-ind_NA]
   excesses_opt <- list_excesses[-ind_NA]
@@ -288,6 +286,11 @@ if (any(ind_NA > 0)) {
   excesses_opt <- list_excesses
 }
 
+# essayer de mettre en metres maybe
+# changer init à 0.5
+
+# fixer les etas à 1
+
 
 init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 result <- optim(par = init_param, fn = neg_ll_composite,
@@ -295,15 +298,13 @@ result <- optim(par = init_param, fn = neg_ll_composite,
         list_excesses = excesses_opt, hmax = 7,
         wind_df = wind_opt,
         latlon = FALSE,
-        directional = TRUE,
-        fixed_eta1 = FALSE,
-        fixed_eta2 = FALSE,
+        distance = "euclidean",
         method = "L-BFGS-B",
         lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-        upper = c(10, 10, 1.999, 1.999, 10, 10),
+        upper = c(10, 10, 1.999, 1.999, 2, 2),
         control = list(maxit = 10000,
                       trace = 1),
-        hessian = T)
+        hessian = FALSE)
 
 # CIs using Jackknife blocks
 n_total <- length(episodes_opt)

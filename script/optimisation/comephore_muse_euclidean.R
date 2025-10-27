@@ -45,7 +45,7 @@ eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "free_eta"
 }
 
-
+distance_type <- "euclidean"
 
 # Folder name to save the data
 foldername_res <- file.path(

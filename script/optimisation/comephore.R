@@ -497,8 +497,8 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
-  excesses <- empirical_excesses_rpar(episode, quantile = u,
-                                  threshold = TRUE, # !!!!!!!
+  excesses <- empirical_excesses_rpar(episode,
+                                  threshold = u, # !!!!!!!
                                   df_lags = lags, t0 = ind_t0_ep)
 
   # excesses <- empirical_excesses_rpar(episode, thresholds = thresholds_by_site,
@@ -673,7 +673,7 @@ ind_NA <- ind_NA_adv
 wind_opt <- wind_df
 if (any(ind_NA > 0)) {
   # remove these episodes
-  # wind_opt <- wind_df[-ind_NA, ]
+  wind_opt <- wind_df[-ind_NA, ]
   episodes_opt <- list_episodes[-ind_NA]
   lags_opt <- list_lags[-ind_NA]
   excesses_opt <- list_excesses[-ind_NA]

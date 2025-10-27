@@ -152,7 +152,7 @@ tau_vect <- 0:10
 u <- 1
 sites_coords <- generate_grid_coords(ngrid)
 sites_coords <- as.data.frame(sites_coords)
-
+distance_type <- "euclidean"
 # Parallel configuration
 print("Starting simulations...")
 
@@ -212,6 +212,10 @@ result_list <- parLapply(cl, 1:M, function(i) {
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
+    c_h   <- median(lags$hnorm[lags$hnorm > 0])     # spatial scale
+    c_tau <- median(abs(lags$tau)[lags$tau != 0])   # temporal scale
+    lags$h_scaled <- lags$hnorm / c_h
+    lags$t_scaled <- abs(lags$tau) / c_tau
     excesses <- empirical_excesses_rpar(list_rpar[[j]],
                                         df_lags = lags,
                                         t0 = t0, threshold = u)
@@ -257,18 +261,64 @@ if (init_diff) {
   init_type <- ""
 }
 
-# Optimization
-init_params <- c(params[1:4], 0, 0)
+# # ca doit pas etre bon ca (revoir)
+# compute_empirical_chi <- function(Z, s0_list, lags, u, t0) {
+#   m <- dim(Z)[4]
+  
+#   chi_emp <- lags[, .(
+#     chi_emp = mean(sapply(1:m, function(j) {
+#       s0 <- s0_list[[j]][[1]]
+#       x0 <- s0$x
+#       y0 <- s0$y
+#       tau <- tau
+#       t_lag <- t0 + tau
+#       if (t_lag < 1 || t_lag > dim(Z)[3]) return(NA)
+#       Z[x0, y0, t0+1, j, 1] > u && Z[s2x, s2y, t_lag+1, j, 1] > u
+#     }), na.rm = TRUE)
+#   ), by = .(s1, s2, tau)]
+  
+#   return(chi_emp)
+# }
+
+# Z <- simu$Z
+# s0_list <- simu$s0_used
+# lags <- list_lags[[1]]
+# chi_th <- theoretical_chi(params = true_param,
+#                           df_lags = lags,
+#                           latlon = FALSE,
+#                           distance = "lalpha")
+# chi_emp <- compute_empirical_chi(Z, s0_list, lags, u, t0)
+
+# plot(chi_th, chi_emp$chi_emp,
+#      xlab="chi théorique", ylab="chi empirique", pch=19)
+# abline(0,1,col="red",lwd=2)
+
+# lags$hnorm <- 1.2*sqrt((lags$s2x - lags$s1x)^2 + (lags$s2y - lags$s1y)^2)
+
+# # Optimization
+# init_params <- c(params[1:4], 0, 0)
+
 result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
                         list_lags = list_lags,
                         list_excesses = list_excesses,
                         init_params = init_params,
                         distance = distance_type,
-                        hmax = 7, wind_df = wind_df,
+                        hmax = 7, wind_df = NA,
+                        normalize = TRUE,
                         mc.cores = num_cores)
 
+objfun <- function(params) {
+  neg_ll_composite(params, list_episodes = list_rpar,
+                   list_lags = list_lags,
+                   list_excesses = list_excesses,
+                   distance = distance_type,
+                   hmax = 7, wind_df = NA,
+                   normalize = TRUE)
+}
 
+vector_result <- as.vector(unlist(result_list[1]))
+grad(objfun, vector_result)
 
 print("Optimization done")
 # Combine results int a data frame

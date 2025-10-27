@@ -574,8 +574,6 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
   # Store valid episodes and valid indices
   episodes <- list()
   valid_indices <- c()
-   print(beta)
-  print(str(beta))
   for (i in 1:nrow(selected_points)) {
     t0 <- selected_points$t0[i]
     # t_inf <- t0 - (delta) - beta
@@ -785,130 +783,75 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
 #'             and longitude. Default is FALSE.
 #' @param distance The type of spatial norm, "euclidean" or "lalpha".
 #'                Default is "euclidean".
+#' @param normalize A boolean value to indicate if we want to normalize the
+#'                 spatial and temporal lags. Default is FALSE.
 #'
 #' @return The theoretical chi
 #'
 #' @export
 theoretical_chi <- function(params, df_lags, latlon = FALSE,
-                            distance = "euclidean") {
+                            distance = "euclidean", normalize = FALSE) {
   beta1 <- params[1]
   beta2 <- params[2]
   alpha1 <- params[3]
   alpha2 <- params[4]
   adv <- params[5:6]
-  chi_df <- df_lags[, c("s1", "s2", "tau", "s1x", "s1y", "s2x", "s2y", "hnorm")]
-  if (latlon) {
-    # Compute spatial distance in km (already in km in df_lags)
-    haversine_df <- haversine_distance_with_advection(chi_df$s1y, chi_df$s1x,
-                                      chi_df$s2y, chi_df$s2x, adv,
-                                      (chi_df$tau)) # seconds
-    chi_df$hnormV <- haversine_df$distance # km
-    vector_dist <- vector_distance_with_advection(chi_df$s1y, chi_df$s1x,
-                                      chi_df$s2y, chi_df$s2x, adv,
-                                      (chi_df$tau)) # seconds
-    chi_df$hx <- vector_dist$hx
-    chi_df$hy <- vector_dist$hy
+  
+  chi_df <- df_lags[, c("s1", "s2", "tau", 
+                    "s1x", "s1y", "s2x", "s2y", "hnorm")]
+
+  # advected coordinates
+  chi_df$s1xv <- chi_df$s1x
+  chi_df$s1yv <- chi_df$s1y
+  # - adv because tau = t - t0 and 
+  # s_shifted = s - adv * t, s0_shifted = s0 - adv * t0, h = s - s0
+  chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau
+  chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
+  chi_df$hx <- chi_df$s2xv - chi_df$s1xv
+  chi_df$hy <- chi_df$s2yv - chi_df$s1yv
+  chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
+
+  if (!normalize) {
+    chi_df$h_scaled <- chi_df$hnormV
+    chi_df$t_scaled <- abs(chi_df$tau)
+    chi_df$hx_scaled <- chi_df$hx
+    chi_df$hy_scaled <- chi_df$hy
+    # effective parameters
+    beta1_eff <- beta1
+    beta2_eff <- beta2
   } else {
-   # Cartesian coordinates case
-   chi_df$s1xv <- chi_df$s1x
-   chi_df$s1yv <- chi_df$s1y
-   # - adv because tau = t - t0 and 
-   # s_shifted = s - adv * t, s0_shifted = s0 - adv * t0, h = s - s0
-   chi_df$s2xv <- chi_df$s2x - adv[1] * chi_df$tau # m/s * s = m
-   chi_df$s2yv <- chi_df$s2y - adv[2] * chi_df$tau
-   
-   chi_df$hx <- chi_df$s2xv - chi_df$s1xv # m
-   chi_df$hy <- chi_df$s2yv - chi_df$s1yv # m
-   # Recompute distance and angle regardless of advection
-   chi_df$hnormV <- sqrt((chi_df$s2xv - chi_df$s1xv)^2 +
-                        (chi_df$s2yv - chi_df$s1yv)^2) # m
+    # normalization constants
+    eps <- 1e-12
+    c_h <- median(chi_df$hnormV[chi_df$hnormV > 0], na.rm = TRUE)
+    c_tau <- median(abs(chi_df$tau)[chi_df$tau != 0], na.rm = TRUE)
+    
+    chi_df$h_scaled <- chi_df$hnormV / (c_h + eps)
+    chi_df$t_scaled <- abs(chi_df$tau) / (c_tau + eps)
+
+    chi_df$hx_scaled <- chi_df$hx / (c_h + eps)
+    chi_df$hy_scaled <- chi_df$hy / (c_h + eps)
+
+    beta1_eff <- beta1 * (c_h^alpha1)
+    beta2_eff <- beta2 * (c_tau^alpha2)
   }
 
   if (distance == "lalpha") {
     # Apply lalpha norm adjustment
-    chi_df$vario <- (2 * beta1) * abs(chi_df$hx)^alpha1 +
-                    (2 * beta1) * abs(chi_df$hy)^alpha1 +
-                    (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
+    chi_df$vario <- (2 * beta1_eff) * abs(chi_df$hx_scaled)^alpha1 +
+                    (2 * beta1_eff) * abs(chi_df$hy_scaled)^alpha1 +
+                    (2 * beta2_eff) * abs(chi_df$t_scaled)^alpha2 # same units as V
   } else {
     # Only euclidean distance lag
-    chi_df$hlag <-  chi_df$hnormV
-    chi_df$vario <- (2 * beta1) * abs(chi_df$hlag)^alpha1 +
-                    (2 * beta2) * abs(chi_df$tau)^alpha2 # same units as V
+    chi_df$hlag <-  chi_df$h_scaled
+    chi_df$vario <- (2 * beta1_eff) * abs(chi_df$hlag)^alpha1 +
+                    (2 * beta2_eff) * abs(chi_df$t_scaled)^alpha2 # same units as V
   }
-
-  # Compute chi from variogram
+  # Chi
   chi_df$chi <- 2 * (1 - pnorm(sqrt(0.5 * chi_df$vario)))
+  chi_df$chi <- pmin(pmax(chi_df$chi, 1e-12), 1 - 1e-12) # numerical stability
+
   return(chi_df)
 }
-
-
-#' Compute the theoretical chi dataframe (stabilized version)
-#'
-#' This function calculates the theoretical chi dataframe, based on the given
-#' variogram parameters, including advection effects. It includes numerical
-#' safeguards for stability during optimization.
-#'
-#' @param params A vector of variogram parameters:
-#'   (beta1, beta2, alpha1, alpha2, adv_x, adv_y).
-#' @param df_lags A dataframe with spatial and temporal lag values.
-#' @param latlon A boolean value to indicate if the locations are in latitude
-#'   and longitude. Default is FALSE.
-#' @param distance The type of spatial norm, "euclidean" or "lalpha".
-#'   Default is "euclidean".
-#'
-#' @return A dataframe identical to df_lags, augmented with:
-#'   - hx, hy: advection-adjusted components of spatial lag
-#'   - hnormV: advection-adjusted spatial distance
-#'   - vario: theoretical variogram value
-#'   - chi: stabilized chi value in [1e-8, 1 - 1e-8]
-# #'
-# #' @export
-theoretical_chi_new <- function(params, df_lags, latlon = FALSE,
-                                 distance = "euclidean") {
-  beta1  <- params[1]
-  beta2  <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  adv    <- params[5:6]
-
-  chi_df <- df_lags[, c("s1","s2","tau","s1x","s1y","s2x","s2y","hnorm")]
-
-  if (latlon) {
-    haversine_df <- haversine_distance_with_advection(
-      chi_df$s1y, chi_df$s1x, chi_df$s2y, chi_df$s2x, adv, chi_df$tau
-    )
-    chi_df$hnormV <- haversine_df$distance
-    vector_dist <- vector_distance_with_advection(
-      chi_df$s1y, chi_df$s1x, chi_df$s2y, chi_df$s2x, adv, chi_df$tau
-    )
-    chi_df$hx <- vector_dist$hx; chi_df$hy <- vector_dist$hy
-  } else {
-    chi_df$s1xv <- chi_df$s1x; chi_df$s1yv <- chi_df$s1y
-    chi_df$s2xv <- chi_df$s2x - adv[1]*chi_df$tau
-    chi_df$s2yv <- chi_df$s2y - adv[2]*chi_df$tau
-    chi_df$hx <- chi_df$s2xv - chi_df$s1xv
-    chi_df$hy <- chi_df$s2yv - chi_df$s1yv
-    chi_df$hnormV <- sqrt(chi_df$hx^2 + chi_df$hy^2)
-  }
-
-  if (distance == "lalpha") {
-    chi_df$vario <- (2*beta1)*abs(chi_df$hx)^alpha1 +
-                    (2*beta1)*abs(chi_df$hy)^alpha1 +
-                    (2*beta2)*abs(chi_df$tau)^alpha2
-  } else {
-    chi_df$hlag <- chi_df$hnormV
-    chi_df$vario <- (2*beta1)*abs(chi_df$hlag)^alpha1 +
-                    (2*beta2)*abs(chi_df$tau)^alpha2
-  }
-
-  # garde-fous seulement (pas de changement d’échelle)
-  chi_df$vario <- pmax(pmin(abs(chi_df$vario), 1e6), 1e-10)
-  chi_df$chi <- 2*(1 - pnorm(sqrt(0.5*chi_df$vario)))
-  chi_df$chi <- pmin(pmax(chi_df$chi, 1e-8), 1 - 1e-8)
-  chi_df
-}
-
-
 
 #' get_chi_vect function
 #'
@@ -970,6 +913,8 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 #' @param data The data dataframe (brown-resnick case). Default is NA.
 #' @param distance The type of spatial norm, "euclidean" or "lalpha".
 #'                Default is "euclidean".
+#' @param normalize A boolean value to indicate if the lags should be
+#'             normalized. Default is FALSE.
 #'
 #' @return The negative log-likelihood value.
 #'
@@ -977,38 +922,36 @@ get_chi_vect <- function(chi_mat, h_vect, tau, df_dist) {
 neg_ll <- function(params, df_lags, excesses,
                    hmax = NA,  rpar = TRUE, threshold = FALSE,
                    latlon = FALSE, quantile = NA, data = NA,
-                   distance = "euclidean") {
-  if (rpar) { # if we have a conditioning location
-    p <- 1 # sure excess for r-Pareto process in (s0,t0)
+                   distance = "euclidean", normalize = FALSE) {
+  
+  if (rpar) {
+    p <- 1
   } else {
-    if (is.na(data)) {
-      stop("The data must be provided for the max-stable composite likelihood.")
-    } else if (is.na(quantile)) {
-      stop("The quantile or threshold must be provided for the
-            max-stable composite likelihood.")
-    }
-    Tmax <- nrow(data) # number of total observations
-    # number of marginal excesses
+    if (is.na(data)) stop("Data must be provided for max-stable composite likelihood.")
+    if (is.na(quantile)) stop("Quantile or threshold must be provided.")
+    Tmax <- nrow(data)
     nmarg <- get_marginal_excess(data, quantile, threshold)
-    p <- nmarg / Tmax # probability of marginal excesses
+    p <- nmarg / Tmax
   }
   
-  # compute theoretical chi values
-  if (!is.na(hmax)) {
+  if (!is.na(hmax)) { # filter by hmax
     excesses <- excesses[df_lags$hnorm <= hmax, ]
     df_lags <- df_lags[df_lags$hnorm <= hmax, ]
   }
-  chi <- theoretical_chi(params, df_lags, latlon, distance)
-  ll_df <- df_lags # copy the dataframe
-  ll_df$kij <- excesses$kij # number of excesses
+
+  # Get chi values
+  chi <- theoretical_chi(params, df_lags, latlon, distance, normalize)
+  ll_df <- df_lags
+  ll_df$kij <- excesses$kij
   ll_df$Tobs <- excesses$Tobs
 
+  # Chi already clipped inside theoretical_chi()
   ll_df$chi <- chi$chi
-  ll_df$chi <- ll_df$chi + 1e-10 * (ll_df$chi <= 0)
-  ll_df$pchi <- 1 - p * ll_df$chi
-  ll_df$pchi <- ifelse(ll_df$pchi <= 0, 1e-10, ll_df$pchi)
+  
+  # Clip p*chi to avoid log(0)
+  eps <- 1e-12
+  ll_df$pchi <- pmax(pmin(1 - p * ll_df$chi, 1 - eps), eps)
 
-  # number of non-excesses
   ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
   ll_df$ll <- ll_df$kij * log(ll_df$chi) +
               ll_df$non_excesses * log(ll_df$pchi)
@@ -1016,7 +959,6 @@ neg_ll <- function(params, df_lags, excesses,
   nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
 }
-
 
 
 #' neg_ll_composite function
@@ -1049,7 +991,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                              list_lags, wind_df = NA,
                              hmax = NA, latlon = TRUE,
                              distance = "euclidean", threshold = FALSE,
-                             rpar = TRUE) {
+                             rpar = TRUE, normalize = FALSE) {
 
   if (length(params) == 4) {
     params <- c(params, 0, 0)
@@ -1104,7 +1046,8 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
       threshold = threshold,
       rpar = rpar,
       data = data,
-      quantile = quantile
+      quantile = quantile,
+      normalize = normalize
     )
 
     nll_composite <- nll_composite + nll_i
@@ -1117,7 +1060,6 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   return(nll_composite)
 }
 
-# ] 0.43012048 0.21710099 1.48533177 0.98955482 0.00000001 0.00000001
 #' neg_ll_composite_fixed_eta function
 #'  
 #' Calculate the negative log-likelihood for a list of r-Pareto processes
@@ -1680,7 +1622,8 @@ get_results_optim <- function(filename, data_folder = NA) {
 process_simulation <- function(i, m, list_simu, u, list_lags,
                                list_excesses,
                                init_params, hmax = NA, wind_df = NA,
-                               distance = "euclidean", hessian = FALSE) {
+                               distance = "euclidean", hessian = FALSE,
+                               normalize = FALSE) {
   
   # Output names: always the same
   if (all(!is.na(wind_df))) {
@@ -1714,6 +1657,7 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
       threshold = TRUE,
       latlon = FALSE,
       distance = distance,
+      normalize = normalize,
       method = "L-BFGS-B",
       lower = lower_bounds,
       upper = upper_bounds,
