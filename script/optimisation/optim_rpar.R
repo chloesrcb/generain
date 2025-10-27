@@ -8,7 +8,7 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- TRUE
+muse <- FALSE
 
 if (muse) {
   # Get the muse folder
@@ -297,6 +297,7 @@ if (init_diff) {
 
 # # Optimization
 # init_params <- c(params[1:4], 0, 0)
+init_params <- true_param
 
 result_list <- mclapply(1:M, process_simulation, m = m,
                         list_simu = list_rpar, u = u,
