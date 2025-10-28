@@ -257,3 +257,237 @@ test_that("neg_ll_composite validates distance argument", {
     "should be 'lalpha' or 'euclidean'"
   )
 })
+
+
+
+context("Advanced property-based tests for chi and likelihoods")
+
+# ----------------- Helpers -----------------
+make_df_lags <- function(tau_vec, s1x=0, s1y=0, s2x=1, s2y=0) {
+  n <- length(tau_vec)
+  data.frame(
+    s1   = rep(1L, n),
+    s2   = rep(2L, n),
+    tau  = tau_vec,
+    s1x  = rep(s1x, n),
+    s1y  = rep(s1y, n),
+    s2x  = rep(s2x, n),
+    s2y  = rep(s2y, n),
+    hnorm = rep(sqrt((s2x - s1x)^2 + (s2y - s1y)^2), n)
+  )
+}
+make_excesses <- function(n, kij = NULL, Tobs = NULL) {
+  if (is.null(kij)) kij <- rep(0L, n)
+  if (is.null(Tobs)) Tobs <- rep(1L, n)
+  data.frame(kij = as.integer(kij), Tobs = as.integer(Tobs))
+}
+
+# ================== theoretical_chi ==================
+
+test_that("chi decreases when variogram scales (beta1,beta2) increase", {
+  # Deux lignes: même h, deux valeurs de tau distinctes
+  df_lags <- make_df_lags(tau_vec = c(0, 3), s2x = 4, s2y = 0)
+  # beta1,beta2 petit -> vario plus petit -> chi plus grand
+  p_small <- c(0.2, 0.2, 1.0, 1.0, 0, 0)
+  p_large <- c(2.0, 2.0, 1.0, 1.0, 0, 0)
+
+  chi_small <- theoretical_chi(p_small, df_lags, distance="euclidean", normalize=FALSE)$chi
+  chi_large <- theoretical_chi(p_large, df_lags, distance="euclidean", normalize=FALSE)$chi
+
+  expect_true(all(chi_large < chi_small))
+})
+
+test_that("chi is identical for normalize TRUE/FALSE under the intended scaling", {
+  # lags hétérogènes pour que les médianes soient bien définies
+  df_lags <- rbind(
+    make_df_lags(tau_vec = c(0,2,4), s2x=2, s2y=1),
+    make_df_lags(tau_vec = c(1,3,5), s2x=5, s2y=4)
+  )
+  params <- c(0.7, 0.9, 1.3, 0.6, 0.0, 0.0)
+
+  res_no  <- theoretical_chi(params, df_lags, distance="euclidean", normalize=FALSE)
+  res_yes <- theoretical_chi(params, df_lags, distance="euclidean", normalize=TRUE)
+
+  expect_equal(res_yes$chi, res_no$chi, tolerance = 1e-10)
+})
+
+test_that("advection is neutral when tau==0 and changes chi when tau!=0", {
+  df_lags <- make_df_lags(tau_vec = c(0, 2), s2x=3, s2y=0)
+  params0 <- c(0.8, 0.8, 1.0, 1.0, 0.0, 0.0)
+  paramsA <- c(0.8, 0.8, 1.0, 1.0, 0.5, 0.0)  # advx=0.5
+
+  chi0 <- theoretical_chi(params0, df_lags)$chi
+  chiA <- theoretical_chi(paramsA, df_lags)$chi
+
+  expect_equal(chi0[1], chiA[1], tolerance = 1e-15)  # tau=0
+  expect_false(isTRUE(all.equal(chi0[2], chiA[2], tolerance = 1e-12))) # tau=2
+})
+
+test_that("lalpha branch equals manual formula on random rows", {
+  set.seed(123)
+  df_lags <- data.frame(
+    s1=1, s2=2,
+    tau = sample(1:5, 5, replace=TRUE),
+    s1x=0, s1y=0,
+    s2x = runif(5, -2, 2),
+    s2y = runif(5, -2, 2),
+    hnorm = NA_real_
+  )
+  df_lags$hnorm <- sqrt((df_lags$s2x - df_lags$s1x)^2 + (df_lags$s2y - df_lags$s1y)^2)
+  params <- c(1.7, 0.9, 1.4, 0.8, 0, 0)
+
+  out <- theoretical_chi(params, df_lags, distance="lalpha", normalize=FALSE)
+  hx <- df_lags$s2x - df_lags$s1x
+  hy <- df_lags$s2y - df_lags$s1y
+  tt <- abs(df_lags$tau)
+
+  vario_manual <- (2*params[1])*(abs(hx)^params[3] + abs(hy)^params[3]) +
+                  (2*params[2])*(abs(tt)^params[4])
+  expect_equal(out$vario, vario_manual, tolerance=1e-12)
+})
+
+test_that("extreme lags produce chi within clipping bounds and finite", {
+  # Très grands h et tau
+  df_lags <- data.frame(
+    s1=1, s2=2, tau = c(0, 50, 200),
+    s1x=0, s1y=0, s2x= c(0, 1e3, 1e4), s2y=0,
+    hnorm = c(0, 1e3, 1e4)
+  )
+  params <- c(1, 1, 1.2, 0.7, 0, 0)
+  out <- theoretical_chi(params, df_lags)
+
+  expect_true(all(is.finite(out$chi)))
+  expect_true(all(out$chi >= 1e-12 & out$chi <= 1 - 1e-12))
+})
+
+# ================== neg_ll ==================
+
+test_that("neg_ll is additive over rows and matches manual per-row sum", {
+  df_lags <- rbind(
+    make_df_lags(tau_vec = 0, s2x=1),
+    make_df_lags(tau_vec = 2, s2x=3)
+  )
+  params <- c(0.5, 0.4, 1.0, 1.0, 0, 0)
+  exc <- data.frame(kij=c(1L, 0L), Tobs=c(1L, 2L))
+
+  # calcul interne
+  nll <- neg_ll(params, df_lags, exc, rpar=TRUE)
+
+  # recompose manuellement: chi, pchi, ll
+  chi <- theoretical_chi(params, df_lags)$chi
+  p <- 1
+  eps <- 1e-12
+  pchi <- pmax(pmin(1 - p*chi, 1 - eps), eps)
+  ll_row1 <- exc$kij[1]*log(chi[1]) + (exc$Tobs[1]-exc$kij[1])*log(pchi[1])
+  ll_row2 <- exc$kij[2]*log(chi[2]) + (exc$Tobs[2]-exc$kij[2])*log(pchi[2])
+  nll_manual <- -(ll_row1 + ll_row2)
+
+  expect_equal(nll, nll_manual, tolerance = 1e-12)
+})
+
+test_that("neg_ll increases with beta when all kij=1 (monotonicity check)", {
+  # Si tous kij=1, augmenter vario (via beta) diminue chi et augmente -log-lik
+  df_lags <- rbind(
+    make_df_lags(tau_vec=0, s2x=2),
+    make_df_lags(tau_vec=3, s2x=2)
+  )
+  exc <- make_excesses(nrow(df_lags), kij = c(1,1), Tobs = c(1,1))
+
+  nll1 <- neg_ll(c(0.3, 0.3, 1.0, 1.0, 0,0), df_lags, exc)
+  nll2 <- neg_ll(c(1.5, 1.5, 1.0, 1.0, 0,0), df_lags, exc)
+
+  expect_gt(nll2, nll1)
+})
+
+test_that("hmax subsetting equals recomputing on the filtered subset", {
+  df_lags <- rbind(
+    make_df_lags(tau_vec=0, s2x=1),  # h=1
+    make_df_lags(tau_vec=1, s2x=3)   # h=3
+  )
+  params <- c(0.7, 0.5, 1.0, 1.0, 0,0)
+  exc <- make_excesses(2, kij=c(1,0), Tobs=c(2,2))
+
+  # nll avec hmax=1.5
+  nll_hmax <- neg_ll(params, df_lags, exc, hmax=1.5)
+
+  # filtre manuel puis nll
+  keep <- df_lags$hnorm <= 1.5
+  nll_ref <- neg_ll(params, df_lags[keep,], exc[keep,])
+
+  expect_equal(nll_hmax, nll_ref, tolerance = 1e-12)
+})
+
+# ================== neg_ll_composite ==================
+
+test_that("composite equals sum of per-episode nll with advection per-episode", {
+  # 3 épisodes avec adv différents (via wind_df)
+  l1 <- make_df_lags(tau_vec=c(0,2), s2x=2)
+  l2 <- make_df_lags(tau_vec=c(1,3), s2x=2)
+  l3 <- make_df_lags(tau_vec=c(2,4), s2x=2)
+
+  e1 <- make_excesses(nrow(l1), kij=c(1,0))
+  e2 <- make_excesses(nrow(l2), kij=c(0,1))
+  e3 <- make_excesses(nrow(l3), kij=c(1,1))
+
+  wind_df <- data.frame(vx=c(0, 5, -2), vy=c(0, 0, 0))  # 3 advx différents
+  params  <- c(0.6, 0.8, 1.0, 1.0, 0.1, 1.0)           # eta1=0.1, eta2=1
+
+  # somme manuelle
+  adv_vec <- 0.1 * sign(wind_df$vx) * abs(wind_df$vx)^1
+  nll_sum <- neg_ll(c(0.6,0.8,1.0,1.0, adv_vec[1], 0), l1, e1) +
+             neg_ll(c(0.6,0.8,1.0,1.0, adv_vec[2], 0), l2, e2) +
+             neg_ll(c(0.6,0.8,1.0,1.0, adv_vec[3], 0), l3, e3)
+
+  nll_comp <- neg_ll_composite(params,
+                               list_episodes=list(NA,NA,NA),
+                               list_excesses=list(e1,e2,e3),
+                               list_lags=list(l1,l2,l3),
+                               wind_df=wind_df, rpar=TRUE)
+
+  expect_equal(nll_comp, nll_sum, tolerance=1e-12)
+})
+
+test_that("fixed_eta wrapper reproduces composite when fixing both etas", {
+  lags <- make_df_lags(tau_vec=c(0,2,4), s2x=3)
+  exc  <- make_excesses(nrow(lags), kij=c(1,0,1))
+  wind_df <- data.frame(vx=3, vy=-4)
+  base <- c(0.5,0.7,1.1,0.9, 0.3, 1.2)
+
+  nll_free <- neg_ll_composite(base,
+                               list_episodes=list(NA),
+                               list_excesses=list(exc),
+                               list_lags=list(lags),
+                               wind_df=wind_df, rpar=TRUE)
+
+  nll_fixed <- neg_ll_composite_fixed_eta(params=base[1:4],
+                                          list_episodes=list(NA),
+                                          list_excesses=list(exc),
+                                          list_lags=list(lags),
+                                          wind_df=wind_df,
+                                          fixed_eta1=base[5],
+                                          fixed_eta2=base[6],
+                                          rpar=TRUE)
+  expect_equal(nll_free, nll_fixed, tolerance=1e-12)
+})
+
+# ================== Stress / edge cases ==================
+
+test_that("handles NAs in df_lags rows gracefully (excluded in sums)", {
+  df_lags <- make_df_lags(tau_vec=c(0,1))
+  df_lags$hnorm[2] <- NA_real_
+  params <- c(0.4, 0.6, 1.0, 1.0, 0,0)
+  exc <- make_excesses(2, kij=c(1,0), Tobs=c(1,1))
+  # theoretical_chi->chi has NA in vario for row2; neg_ll sums with na.rm=TRUE
+  nll <- neg_ll(params, df_lags, exc)
+  expect_true(is.finite(nll))
+})
+
+test_that("very small chi values are clipped -> finite nll", {
+  # Gros betas et lags => chi très petit, mais pas 0 grâce au clipping
+  df_lags <- make_df_lags(tau_vec=c(10, 20), s2x=100, s2y=0)
+  params <- c(50, 50, 1.5, 1.5, 0,0)
+  exc <- make_excesses(2, kij=c(0,0), Tobs=c(10,10))
+  nll <- neg_ll(params, df_lags, exc)
+  expect_true(is.finite(nll))
+})
+

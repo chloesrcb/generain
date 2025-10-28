@@ -1,9 +1,9 @@
-# ### Test file for wind functions
+### Test file for wind functions
 
-# # Load libraries
-# library(dplyr)
+# Load libraries
+library(dplyr)
 
-# ### Test for function convert_to_cardinal --------------------------------------
+### Test for function convert_to_cardinal --------------------------------------
 # test_that("convert_to_cardinal works correctly", {
 
 #   # Basic cardinal points
@@ -45,51 +45,51 @@
 # })
 
 
-# ### Test for function cardinal_to_degree ---------------------------------------
-# test_that("cardinal_to_degree works correctly", {
+### Test for function cardinal_to_degree ---------------------------------------
+test_that("cardinal_to_degree works correctly", {
 
-#   # Basic cardinal points
-#   expect_equal(cardinal_to_degree("N"), 0)
-#   expect_equal(cardinal_to_degree("NE"), 45)
-#   expect_equal(cardinal_to_degree("E"), 90)
-#   expect_equal(cardinal_to_degree("SE"), 135)
-#   expect_equal(cardinal_to_degree("S"), 180)
-#   expect_equal(cardinal_to_degree("SW"), 225)
-#   expect_equal(cardinal_to_degree("W"), 270)
-#   expect_equal(cardinal_to_degree("NW"), 315)
+  # Basic cardinal points
+  expect_equal(cardinal_to_degree("N"), 0)
+  expect_equal(cardinal_to_degree("NE"), 45)
+  expect_equal(cardinal_to_degree("E"), 90)
+  expect_equal(cardinal_to_degree("SE"), 135)
+  expect_equal(cardinal_to_degree("S"), 180)
+  expect_equal(cardinal_to_degree("SW"), 225)
+  expect_equal(cardinal_to_degree("W"), 270)
+  expect_equal(cardinal_to_degree("NW"), 315)
 
-#   # Handling NA input
-#   expect_true(is.na(cardinal_to_degree(NA)))
+  # Handling NA input
+  expect_true(is.na(cardinal_to_degree(NA)))
 
-#   # Invalid input should return NA
-#   expect_true(is.na(cardinal_to_degree("INVALID")))
-#   expect_true(is.na(cardinal_to_degree("")))
-#   expect_true(is.na(cardinal_to_degree("north")))  # Case-sensitive check
-# })
+  # Invalid input should return NA
+  expect_true(is.na(cardinal_to_degree("INVALID")))
+  expect_true(is.na(cardinal_to_degree("")))
+  expect_true(is.na(cardinal_to_degree("north")))  # Case-sensitive check
+})
 
-# ### Test for function get_mode_dir ---------------------------------------------
-# test_that("get_mode_dir works correctly", {
+### Test for function get_mode_dir ---------------------------------------------
+test_that("get_mode_dir works correctly", {
 
-#   # Basic case: clear mode
-#   expect_equal(get_mode_dir(c("N", "N", "E", "N", "S")), "N")
+  # Basic case: clear mode
+  expect_equal(get_mode_dir(c("N", "N", "E", "N", "S")), "N")
 
-#   # Tie-breaking: returns first most frequent value
-#   expect_equal(get_mode_dir(c("N", "E", "E", "N")), "N")
-#   # Both "N" and "E" appear twice, "N" comes first
+  # Tie-breaking: returns first most frequent value
+  expect_equal(get_mode_dir(c("N", "E", "E", "N")), "N")
+  # Both "N" and "E" appear twice, "N" comes first
 
-#   # All unique values: should return the first element
-#   expect_equal(get_mode_dir(c("N", "E", "S", "W")), "N")
+  # All unique values: should return the first element
+  expect_equal(get_mode_dir(c("N", "E", "S", "W")), "N")
 
-#   # Single element input: should return the same value
-#   expect_equal(get_mode_dir(c("N")), "N")
+  # Single element input: should return the same value
+  expect_equal(get_mode_dir(c("N")), "N")
 
-#   # Handling NA values: should ignore NA
-#   expect_equal(get_mode_dir(c("N", "N", "E", "N", "S", NA)), "N")
-#   # "N" is still the most frequent
+  # Handling NA values: should ignore NA
+  expect_equal(get_mode_dir(c("N", "N", "E", "N", "S", NA)), "N")
+  # "N" is still the most frequent
 
-#   # Only NA values: should return NA
-#   expect_true(is.na(get_mode_dir(c(NA, NA, NA))))
-# })
+  # Only NA values: should return NA
+  expect_true(is.na(get_mode_dir(c(NA, NA, NA))))
+})
 
 
 # ### Test for function compute_wind_episode -------------------------------------

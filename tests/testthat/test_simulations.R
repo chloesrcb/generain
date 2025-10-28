@@ -351,7 +351,6 @@
 # })
 
 
-# library(testthat)
 
 # test_that("save_simulations correctly saves files and s0 > 1 at t = 1", {
 #   ngrid <- 5
@@ -445,56 +444,56 @@
 
 
 
-# test_that("compute_st_variogram returns gamma_s + gamma_t", {
-#   # Define a simple 1x1x1 grid (only one point in space and time)
-#   grid <- data.frame(
-#     x = 1, y = 1, t = 0,
-#     shifted_x = 1, shifted_y = 1
-#   )
+test_that("compute_st_variogram returns gamma_s + gamma_t", {
+  # Define a simple 1x1x1 grid (only one point in space and time)
+  grid <- data.frame(
+    x = 1, y = 1, t = 0,
+    shifted_x = 1, shifted_y = 1
+  )
 
-#   # Dummy variograms
-#   gamma_space <- list(2)   # gamma_s = 2
-#   gamma_temp <- list(3)    # gamma_t = 3
-#   adv <- c(0, 0)           # No advection
+  # Dummy variograms
+  gamma_space <- list(2)   # gamma_s = 2
+  gamma_temp <- list(3)    # gamma_t = 3
+  adv <- c(0, 0)           # No advection
 
-#   # Run the function
-#   result <- compute_st_variogram(
-#     grid = grid,
-#     gamma_space = gamma_space,
-#     gamma_temp = gamma_temp,
-#     adv = adv
-#   )
+  # Run the function
+  result <- compute_st_variogram(
+    grid = grid,
+    gamma_space = gamma_space,
+    gamma_temp = gamma_temp,
+    adv = adv
+  )
 
-#   # Expect gamma_s + gamma_t = 2 + 3 = 5
-#   expect_equal(result[1, 1, 1], 5)
-# })
+  # Expect gamma_s + gamma_t = 2 + 3 = 5
+  expect_equal(result[1, 1, 1], 5)
+})
 
 
-# test_that("compute_st_variogram returns gamma_s + gamma_t", {
-#   # Define a simple 1x1x1 grid (only one point in space and time)
-#   grid <- data.frame(
-#     x = 1, y = 1, t = 0,
-#     shifted_x = 1, shifted_y = 1
-#   )
+test_that("compute_st_variogram returns gamma_s + gamma_t", {
+  # Define a simple 1x1x1 grid (only one point in space and time)
+  grid <- data.frame(
+    x = 1, y = 1, t = 0,
+    shifted_x = 1, shifted_y = 1
+  )
 
-#   # Dummy variograms
-#   gamma_space_x <- list(2)   # gamma_sx = 2
-#   gamma_space_y <- list(1)   # gamma_sy = 1
-#   gamma_temp <- list(3)    # gamma_t = 3
-#   adv <- c(0, 0)           # No advection
+  # Dummy variograms
+  gamma_space_x <- list(2)   # gamma_sx = 2
+  gamma_space_y <- list(1)   # gamma_sy = 1
+  gamma_temp <- list(3)    # gamma_t = 3
+  adv <- c(0, 0)           # No advection
 
-#   # Run the function
-#   result <- compute_st_variogram(
-#     grid = grid,
-#     gamma_space_x = gamma_space_x,
-#     gamma_space_y = gamma_space_y,
-#     gamma_temp = gamma_temp,
-#     adv = adv
-#   )
+  # Run the function
+  result <- compute_st_variogram(
+    grid = grid,
+    gamma_space_x = gamma_space_x,
+    gamma_space_y = gamma_space_y,
+    gamma_temp = gamma_temp,
+    adv = adv
+  )
 
-#   # Expect gamma_s + gamma_t = 2 + 1 + 3 = 6
-#   expect_equal(result[1, 1, 1], 6)
-# })
+  # Expect gamma_s + gamma_t = 2 + 1 + 3 = 6
+  expect_equal(result[1, 1, 1], 6)
+})
 
 
 
