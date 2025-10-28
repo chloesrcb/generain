@@ -7,6 +7,14 @@
 # * https://testthat.r-lib.org/reference/test_package.html#special-files
 
 library(testthat)
-library(generain)
+source("./script/load_libraries.R")
 
-test_check("generain")
+# Get all files in the folder "R"
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
+# # load all functions in files
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
+# library(generain)
+
+# test_check("generain")
+test_dir("./tests/testthat")

@@ -1,37 +1,90 @@
-#' This function reshapes a distance matrix into a long dataframe.
+# #' This function reshapes a distance matrix into a long dataframe.
+# #'
+# #' @param locations A matrix or data frame containing the coordinates of the
+# #' locations.
+# #' @param dmax The maximum distance threshold if specified.
+# #' @param latlon Logical indicating whether the coordinates are in latitude and
+# #' longitude format. Default is TRUE.
+# #'
+# #' @return A distance matrix containing the reshaped distances.
+# #'
+# #' @import geodist
+# #'
+# #' @export
+# get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
+#   # get longitude and latitude in a dataframe to get distance between points
+#   loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
+
+#   # without advection
+#   if (latlon) {
+#     dist_mat <- geodist(loc, measure = "haversine") # meters by default
+#   } else {
+#     dist_mat <- as.matrix(dist(loc))
+#   }
+
+#   if (!is.na(dmax)) { # threshold
+#     dist_mat[dist_mat > dmax] <- 0
+#   }
+#   # put names if Station column exists
+#   if (!is.null(locations$Station)) {
+#     rownames(dist_mat) <- colnames(dist_mat) <- locations$Station
+#   }
+
+#   return(dist_mat)
+# }
+
+#' Compute a spatial distance matrix between sites.
 #'
-#' @param locations A matrix or data frame containing the coordinates of the
-#' locations.
-#' @param dmax The maximum distance threshold if specified.
-#' @param latlon Logical indicating whether the coordinates are in latitude and
-#' longitude format. Default is TRUE.
+#' This function computes a distance matrix (in meters or Euclidean units)
+#' between spatial coordinates and ensures that row/column names are assigned
+#' based on site identifiers.
 #'
-#' @return A distance matrix containing the reshaped distances.
+#' @param locations A matrix or data frame containing coordinates.
+#'                  Must have columns named "Latitude" and "Longitude".
+#' @param dmax Optional maximum distance threshold (values above set to 0).
+#' @param latlon Logical; TRUE if coordinates are latitude/longitude,
+#'               FALSE for Cartesian (Euclidean). Default TRUE.
+#'
+#' @return A square numeric matrix of distances with proper row/column names.
 #'
 #' @import geodist
-#'
 #' @export
 get_dist_mat <- function(locations, dmax = NA, latlon = TRUE) {
-  # get longitude and latitude in a dataframe to get distance between points
+
+  # Ensure correct format
+  if (!all(c("Latitude", "Longitude") %in% names(locations))) {
+    stop("The 'locations' data must have columns 'Latitude' and 'Longitude'.")
+  }
+
+  # Extract coordinates
   loc <- data.frame(lat = locations$Latitude, lon = locations$Longitude)
 
-  # without advection
+  # Compute distances
   if (latlon) {
-    dist_mat <- geodist(loc, measure = "haversine") # meters by default
+    dist_mat <- geodist::geodist(loc, measure = "haversine")  # meters
   } else {
-    dist_mat <- as.matrix(dist(loc))
+    dist_mat <- as.matrix(stats::dist(loc))                   # Euclidean units
   }
 
-  if (!is.na(dmax)) { # threshold
+  # Optional threshold
+  if (!is.na(dmax)) {
     dist_mat[dist_mat > dmax] <- 0
   }
-  # put names if Station column exists
+
+  # --- Assign names robustly ---
   if (!is.null(locations$Station)) {
-    rownames(dist_mat) <- colnames(dist_mat) <- locations$Station
+    site_names <- locations$Station
+  } else if (!is.null(rownames(locations)) && all(rownames(locations) != "")) {
+    site_names <- rownames(locations)
+  } else {
+    site_names <- paste0("Site", seq_len(nrow(locations)))
   }
+
+  rownames(dist_mat) <- colnames(dist_mat) <- site_names
 
   return(dist_mat)
 }
+
 
 #' This function reshapes a distance matrix into a long dataframe.
 #'

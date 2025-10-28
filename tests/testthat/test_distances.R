@@ -91,152 +91,97 @@ test_that("get_conditional_lag_vectors", {
   expect_equal(nrow(df_lags), ngrid^2 * length(tau_vect))
 })
 
+# ======================================================================
+# TESTS FOR get_dist_mat()
+# ======================================================================
 
-test_that("haversine_distance_with_advection works correctly", {
-  # Real-world lat/lon coordinates for Montpellier and Lunel
-  lat1 <- 43.62505
-  lon1 <- 3.862038
-  lat2 <- 43.68333
-  lon2 <- 4.133333
-  adv <- c(0.0, 0.0)
-  tau <- 0
-  expected_distance_km <- 22.77
+test_that("get_dist_mat computes Euclidean distances correctly", {
+  # Simple 3-point grid
+  coords <- data.frame(
+    Longitude = c(0, 1, 2),
+    Latitude = c(0, 1, 2)
+  )
+  rownames(coords) <- c("A", "B", "C")
 
-  distance_with_adv <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                        adv, tau)$distance
-  expect_equal(round(distance_with_adv, 2), expected_distance_km)
+  dist_mat <- get_dist_mat(coords, latlon = FALSE)
 
-  theta_dir <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                        adv, tau)$theta_meteo
-  theta_meteo_deg <- theta_dir * 180 / pi
-  dir_card_meteo <- convert_to_cardinal(theta_meteo_deg)
-  expect_equal(dir_card_meteo, "E")
+  # Check matrix structure
+  expect_true(is.matrix(dist_mat))
+  expect_equal(dim(dist_mat), c(3, 3))
+  expect_true(all(rownames(dist_mat) == colnames(dist_mat)))
 
-  # Real-world lat/lon coordinates for Paris and London
-  lat1 <- 48.8566 # Paris
-  lon1 <- 2.3522
-  lat2 <- 51.5074 # London
-  lon2 <- -0.1278
-  adv <- c(0.0, 0.0)
-  tau <- 0
-  expected_distance_km <- 343.51 # Approx distance in km
+  # Verify Euclidean distances
+  expect_equal(dist_mat["A", "B"], sqrt(2), tolerance = 1e-6)
+  expect_equal(dist_mat["A", "C"], sqrt(8), tolerance = 1e-6)
+  expect_equal(dist_mat["B", "C"], sqrt(2), tolerance = 1e-6)
 
-  # Expected values assuming haversine distance
-  # Angle from Paris to London
-  expected_theta_PL <- atan2(48.8566 - 51.5074, 2.3522 - (-0.1278))
-  expected_theta_deg_PL <- expected_theta_PL * 180 / pi
-  expected_x_polar_PL <- expected_distance_km * cos(expected_theta_PL)
-  expected_y_polar_PL <- expected_distance_km * sin(expected_theta_PL)
-  # Angle from London to Paris
-  expected_theta_LP <- atan2(51.5074 - 48.8566, -0.1278 - 2.3522)
-  expected_theta_deg_LP <- expected_theta_LP * 180 / pi
-  expected_x_polar_LP <- expected_distance_km * cos(expected_theta_LP)
-  expected_y_polar_LP <- expected_distance_km * sin(expected_theta_LP)
-
-  distance_LP <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                        adv, tau)$distance
-  distance_PL <- haversine_distance_with_advection(lat2, lon2, lat1, lon1,
-                        adv, tau)$distance
-  expect_equal(round(distance_LP, 0), round(expected_distance_km, 0))
-  expect_equal(round(distance_PL, 0), round(expected_distance_km, 0))
-  expect_equal(round(distance_LP, 0), round(distance_PL, 0))
-
-  theta_LP <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                        adv, tau)$theta
-  theta_PL <- haversine_distance_with_advection(lat2, lon2, lat1, lon1,
-                        adv, tau)$theta
-  expect_equal(round(theta_LP, 2), round(expected_theta_LP, 2))
-  expect_equal(round(theta_PL, 2), round(expected_theta_PL, 2))
-  expect_false(theta_LP == theta_PL)
-
-  x_polar_LP <- distance_LP * cos(theta_LP)
-  y_polar_LP <- distance_LP * sin(theta_LP)
-  x_polar_PL <- distance_PL * cos(theta_PL)
-  y_polar_PL <- distance_PL * sin(theta_PL)
-
-  expect_equal(round(x_polar_LP, 0), round(expected_x_polar_LP, 0))
-  expect_equal(round(y_polar_LP, 0), round(expected_y_polar_LP, 0))
-  expect_equal(round(x_polar_PL, 0), round(expected_x_polar_PL, 0))
-  expect_equal(round(y_polar_PL, 0), round(expected_y_polar_PL, 0))
-
+  # Diagonal must be zero
+  expect_true(all(diag(dist_mat) == 0))
 })
 
 
-test_that("haversine_distance_with_advection accounts for advection correctly", {
-  lat1 <- 48.8566 # Paris
-  lon1 <- 2.3522
-  lat2 <- 51.5074 # London
-  lon2 <- -0.1278
+test_that("get_dist_mat assigns names from Station column if available", {
+  coords <- data.frame(
+    Station = c("S1", "S2", "S3"),
+    Longitude = c(1, 2, 3),
+    Latitude = c(4, 5, 6)
+  )
 
-  # No advection case
-  adv_0 <- c(0.0, 0.0)
-  tau_0 <- 0
+  dist_mat <- get_dist_mat(coords, latlon = FALSE)
 
-  # With advection: 1 m/s East (longitude) and 1 m/s North (latitude), for 100s
-  adv <- c(1, 1)
-  tau <- 100
-
-  # Compute results
-  result_no_adv <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                                                                  adv_0, tau_0)
-  result_with_adv <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                                                                      adv, tau)
-
-  # Expected base distance
-  expected_distance_km <- result_no_adv$distance
-
-  # Compute new lat/lon due to advection
-  adv_x <- adv[1] * tau  # Advection in X (meters)
-  adv_y <- adv[2] * tau  # Advection in Y (meters)
-
-  # Adjusted lat/lon
-  lon2_adj <- lon2 - adv_x / (111319 * cos(lat2 * pi / 180))
-  lat2_adj <- lat2 - adv_y / 111319
-
-  # Compute expected distance using Haversine again
-  expected_adjusted_distance_km <- haversine_distance_with_advection(lat1,
-                              lon1, lat2_adj, lon2_adj, adv_0, tau_0)$distance
-
-  # Check that the baseline distance matches expected
-  expect_equal(round(result_no_adv$distance, 2), round(expected_distance_km, 2))
-
-  # Check that the adjusted distance is within reasonable bounds of
-  # the recomputed expected distance
-  expect_equal(round(result_with_adv$distance, 0),
-                          round(expected_adjusted_distance_km, 0))
+  expect_true(all(c("S1", "S2", "S3") %in% rownames(dist_mat)))
+  expect_true(all(rownames(dist_mat) == colnames(dist_mat)))
 })
 
 
+test_that("get_dist_mat handles missing Station but uses rownames", {
+  coords <- data.frame(
+    Longitude = c(0, 1, 2),
+    Latitude = c(0, 1, 2)
+  )
+  rownames(coords) <- c("P1", "P2", "P3")
 
-test_that("haversine_distance_with_advection  computes correct values with different etas", {
-  wind_vect <- c(-9.8, 8)  # Wind effect for a simple test case
-  wind_vect_kmh <- wind_vect  # Convert wind to km/h
+  dist_mat <- get_dist_mat(coords, latlon = FALSE)
 
-  eta1 <- 0.5
-  eta2 <- 0.1
-  adv1 <- (abs(wind_vect_kmh)^eta1) * sign(wind_vect_kmh) * eta2  # in km/h
-  adv2 <- (abs(wind_vect_kmh)^eta2) * sign(wind_vect_kmh) * eta1  # in km/h
-  # Real-world lat/lon coordinates for Paris and close to Paris
-  lat1 <- 48.8566 # Paris
-  lon1 <- 2.3522
-  lat2 <- 48.8566 # Close to Paris
-  lon2 <- 2.3523
+  expect_equal(rownames(dist_mat), c("P1", "P2", "P3"))
+  expect_equal(colnames(dist_mat), c("P1", "P2", "P3"))
+})
 
-  result_no_adv <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                                                      c(0, 0), 0)
-  # First case: eta1 = 0.5, eta2 = 0.1
-  result1 <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                                                adv1, 1)
-  # Second case: eta1 = 0.1, eta2 = 0.5
-  result2 <- haversine_distance_with_advection(lat1, lon1, lat2, lon2,
-                                                adv2, 1)
 
-  distance_no_adv <- result_no_adv$distance
-  distance1 <- result1$distance
-  distance2 <- result2$distance
+test_that("get_dist_mat applies distance threshold (dmax) correctly", {
+  coords <- data.frame(
+    Longitude = c(0, 1, 2),
+    Latitude = c(0, 0, 0)
+  )
+  rownames(coords) <- c("X", "Y", "Z")
 
-  # Check that the baseline distance is the same
-  expect_false(distance_no_adv == distance1)
-  expect_false(distance_no_adv == distance2)
-  expect_false(distance1 == distance2)
+  # Distance X-Z = 2 > 1.5, should be set to 0
+  dist_mat <- get_dist_mat(coords, dmax = 1.5, latlon = FALSE)
+
+  expect_equal(dist_mat["X", "Z"], 0)
+  expect_equal(dist_mat["X", "Y"], 1)
+})
+
+
+test_that("get_dist_mat computes haversine distances (latlon = TRUE)", {
+  coords <- data.frame(
+    Station = c("A", "B"),
+    Latitude = c(0, 0),
+    Longitude = c(0, 1)
+  )
+
+  dist_mat <- get_dist_mat(coords, latlon = TRUE)
+
+  # Haversine: distance at equator for 1° longitude ≈ 111.3 km
+  expect_true(all(dim(dist_mat) == c(2, 2)))
+  expect_true(all(diag(dist_mat) == 0))
+  expect_true(dist_mat["A", "B"] > 100000 && dist_mat["A", "B"] < 120000)
+})
+
+
+test_that("get_dist_mat throws error for invalid coordinates", {
+  coords <- data.frame(x = 1:3, y = 1:3)
+
+  expect_error(get_dist_mat(coords, latlon = FALSE),
+               "must have columns 'Latitude' and 'Longitude'")
 })
