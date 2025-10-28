@@ -491,3 +491,207 @@ test_that("very small chi values are clipped -> finite nll", {
   expect_true(is.finite(nll))
 })
 
+
+
+
+
+context("End-to-end optimization of neg_ll_composite")
+
+# --- Helpers to build synthetic lags and excesses -----------------------------
+
+make_random_df_lags <- function(n_rows, seed=1) {
+  set.seed(seed)
+  # s1 toujours 1, s2 aléatoire parmi {2,3,4} pour divers hx/hy
+  s1  <- rep(1L, n_rows)
+  s2  <- sample(2:4, n_rows, replace=TRUE)
+  s1x <- rep(0, n_rows); s1y <- rep(0, n_rows)
+  # positions s2 dans un petit plan euclidien
+  s2x <- rnorm(n_rows, mean=3, sd=1.0)
+  s2y <- rnorm(n_rows, mean=0, sd=1.0)
+  tau <- sample(0:6, n_rows, replace=TRUE)
+  hnorm <- sqrt((s2x - s1x)^2 + (s2y - s1y)^2)
+
+  data.frame(s1,s2,tau,s1x,s1y,s2x,s2y,hnorm, check.names = FALSE)
+}
+
+simulate_excesses_from_params <- function(params6, df_lags, Tobs = 200L) {
+  # params6 = c(beta1,beta2,alpha1,alpha2, advx, advy)
+  chi <- theoretical_chi(params6, df_lags, distance="euclidean", normalize=FALSE)$chi
+  # Simule kij ~ Binomial(Tobs, chi) indépendamment pour chaque ligne
+  kij <- stats::rbinom(n = length(chi), size = Tobs, prob = chi)
+  data.frame(kij = as.integer(kij), Tobs = as.integer(rep(Tobs, length(chi))))
+}
+
+# --- Test 1: optimisation avec vent (eta1, eta2) -----------------------------
+
+test_that("optim on neg_ll_composite recovers parameters with wind (eta1,eta2)", {
+  set.seed(42)
+
+  # VRAIS paramètres (modérés pour éviter des chi trop extrêmes)
+  true <- c(
+    beta1  = 0.6,
+    beta2  = 0.8,
+    alpha1 = 1.2,
+    alpha2 = 0.9,
+    eta1   = 0.20,  # échelle advection
+    eta2   = 1.10   # exposant vitesse
+  )
+
+  # 3 épisodes, vents différents pour que l’advection soit identifiable
+  wind_df <- data.frame(
+    vx = c( 0.0,  4.0, -2.0),
+    vy = c( 0.0, -1.0,  3.0)
+  )
+
+  # On fabrique pour chaque épisode un df_lags distinct, puis les excès simulés
+  list_lags <- list(
+    make_random_df_lags(30, seed=101),
+    make_random_df_lags(35, seed=202),
+    make_random_df_lags(40, seed=303)
+  )
+
+  # Construire adv par épisode pour simuler (comme le fait neg_ll_composite)
+  eta1 <- true["eta1"]; eta2 <- true["eta2"]
+  adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
+  adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
+
+  # Simule les excès à partir des "vrais" paramètres épisode par épisode
+  list_excesses <- vector("list", length(list_lags))
+  for (i in seq_along(list_lags)) {
+    params6 <- c(true[1:4], adv_x[i], adv_y[i])
+    list_excesses[[i]] <- simulate_excesses_from_params(params6, list_lags[[i]], Tobs=250L)
+  }
+
+  # Pas utilisé quand rpar=TRUE, mais l’API demande un list_episodes
+  list_episodes <- vector("list", length(list_lags))
+  list_episodes[] <- list(NA)
+
+  # Point de départ (bruité mais raisonnable)
+  start <- true
+  start[1:4] <- pmax(1e-3, start[1:4] * runif(4, 0.6, 1.4)) # beta/alpha > 0
+  start["eta1"] <- start["eta1"] * runif(1, 0.5, 1.5)
+  start["eta2"] <- pmax(0.5, start["eta2"] * runif(1, 0.7, 1.3))
+
+  # NLL au départ
+  nll0 <- neg_ll_composite(start, list_episodes, list_excesses, list_lags,
+                           wind_df=wind_df, rpar=TRUE, distance="euclidean")
+
+  # Optimisation L-BFGS-B avec bornes logiques (positivité pour {beta, alpha, eta2})
+  lower <- c(1e-6, 1e-6, 0.5, 0.5, -Inf, 0.5)
+  upper <- c(  5.0,   5.0, 2.0, 2.0,  Inf, 2.5)
+
+  opt <- optim(
+    par     = start,
+    fn      = function(par) neg_ll_composite(par, list_episodes, list_excesses, list_lags,
+                                             wind_df=wind_df, rpar=TRUE, distance="euclidean"),
+    method  = "L-BFGS-B",
+    lower   = lower,
+    upper   = upper,
+    control = list(maxit = 300, factr = 1e7) # convergence tolérante et rapide
+  )
+
+  # Vérifs: l’optim baisse la NLL
+  expect_true(is.finite(opt$value))
+  expect_lt(opt$value, nll0)
+
+  # Paramètres estimés ~ vrais (tolérances réalistes, les eta peuvent être plus durs)
+  est <- opt$par
+  # Tolerances: betas et alphas ~10-20%, etas un peu plus large
+  rel_err <- function(est, tru) abs(est - tru) / pmax(1e-8, abs(tru))
+
+  re_ba <- rel_err(est[1:4], true[1:4])
+  expect_true(all(re_ba < 0.25))  # 25% de relatif : robuste sur petits jeux
+
+  re_eta <- rel_err(est[5:6], true[5:6])
+  expect_true(all(re_eta < 0.40)) # etas un peu plus souples
+
+  # Sanity: remettre les estims dans la NLL doit être <= au point de départ
+  nll_hat <- neg_ll_composite(est, list_episodes, list_excesses, list_lags,
+                              wind_df=wind_df, rpar=TRUE)
+  expect_lte(nll_hat, nll0)
+})
+
+# --- Test 2: cas sans vent (params à 4) --------------------------------------
+
+test_that("optim works without wind (params length 4) and reduces NLL", {
+  set.seed(777)
+
+  true4 <- c(beta1=0.9, beta2=0.7, alpha1=1.1, alpha2=0.8) # pas d’advection
+  # 2 épisodes, pas de wind_df
+  list_lags <- list(
+    make_random_df_lags(25, seed=11),
+    make_random_df_lags(28, seed=22)
+  )
+
+  # Simule excès directement avec params_adv = (true4, adv=0)
+  list_excesses <- lapply(list_lags, function(L) {
+    simulate_excesses_from_params(c(true4, 0, 0), L, Tobs=200L)
+  })
+  list_episodes <- list(NA, NA)
+
+  start <- c(beta1=0.6, beta2=1.0, alpha1=0.9, alpha2=0.9) # point de départ
+
+  nll0 <- neg_ll_composite(start, list_episodes, list_excesses, list_lags,
+                           wind_df=NA, rpar=TRUE)
+
+  opt <- optim(
+    par     = start,
+    fn      = function(par) neg_ll_composite(par, list_episodes, list_excesses, list_lags,
+                                             wind_df=NA, rpar=TRUE),
+    method  = "L-BFGS-B",
+    lower   = c(1e-6, 1e-6, 0.5, 0.5),
+    upper   = c(  5.0,   5.0, 2.0, 2.0),
+    control = list(maxit=200)
+  )
+
+  expect_true(is.finite(opt$value))
+  expect_lt(opt$value, nll0)
+
+  # paramètres proches (tolérance 25% réaliste)
+  rel_err <- function(est, tru) abs(est - tru) / pmax(1e-8, abs(tru))
+  expect_true(all(rel_err(opt$par, true4) < 0.25))
+})
+
+# --- Test 3: normalisation TRUE vs FALSE n’empêche pas l’optim de converger ---
+
+test_that("optimization also works with normalize=TRUE", {
+  set.seed(999)
+  true <- c(beta1=0.5, beta2=0.6, alpha1=1.3, alpha2=0.7, eta1=0.15, eta2=1.2)
+  wind_df <- data.frame(vx=c(2, -3), vy=c(0, 1))
+
+  list_lags <- list(
+    make_random_df_lags(40, seed=5),
+    make_random_df_lags(32, seed=6)
+  )
+
+  eta1 <- true["eta1"]; eta2 <- true["eta2"]
+  adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
+  adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
+
+  list_excesses <- list(
+    simulate_excesses_from_params(c(true[1:4], adv_x[1], adv_y[1]), list_lags[[1]], Tobs=220L),
+    simulate_excesses_from_params(c(true[1:4], adv_x[2], adv_y[2]), list_lags[[2]], Tobs=220L)
+  )
+  list_episodes <- list(NA, NA)
+
+  start <- c(beta1=0.4, beta2=0.8, alpha1=1.1, alpha2=0.8, eta1=0.1, eta2=1.0)
+
+  nll0 <- neg_ll_composite(start, list_episodes, list_excesses, list_lags,
+                           wind_df=wind_df, rpar=TRUE, normalize=TRUE)
+
+  opt <- optim(
+    par     = start,
+    fn      = function(par) neg_ll_composite(par, list_episodes, list_excesses, list_lags,
+                                             wind_df=wind_df, rpar=TRUE, normalize=TRUE),
+    method  = "L-BFGS-B",
+    lower   = c(1e-6,1e-6,0.5,0.5, -Inf, 0.5),
+    upper   = c(  5.0,  5.0,2.0,2.0,  Inf, 2.5),
+    control = list(maxit=250)
+  )
+
+  expect_lt(opt$value, nll0)
+  # tolérances plus larges car normalize change l’échelle interne
+  rel_err <- function(est, tru) abs(est - tru) / pmax(1e-8, abs(tru))
+  expect_true(all(rel_err(opt$par[1:4], true[1:4]) < 0.35))
+})
+
