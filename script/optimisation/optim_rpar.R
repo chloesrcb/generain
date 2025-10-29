@@ -9,6 +9,24 @@ cat("\014")
 library(parallel)
 library(abind)
 muse <- TRUE
+# PARAMETERS ###################################################################
+adv <- c(0.1, 0.2)
+params <- c(0.1, 0.8, 0.5, 0.7)
+ngrid <- 5
+temp <- 0:29
+s0 <- c(1, 1)
+t0 <- 0
+random_s0 <- TRUE
+M <- 2
+m <- 250
+is_anisotropic <- TRUE
+s0_radius <- 7
+eta1 <- 1
+eta2 <- 1
+fixed_eta1 <- NA
+fixed_eta2 <- NA
+use_wind_data <- TRUE
+distance_type <- "lalpha" # "euclidean" or "lalpha"
 
 if (muse) {
   # Get the muse folder
@@ -152,7 +170,7 @@ tau_vect <- 0:10
 u <- 1
 sites_coords <- generate_grid_coords(ngrid)
 sites_coords <- as.data.frame(sites_coords)
-distance_type <- "euclidean"
+
 # Parallel configuration
 print("Starting simulations...")
 

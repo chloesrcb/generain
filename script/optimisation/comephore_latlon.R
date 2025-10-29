@@ -6,16 +6,6 @@ cat("\014")
 
 # Load libraries
 source("./script/load_libraries.R")
-library(sf)
-library(dplyr)
-library(ggplot2)
-library(gridExtra)
-library(latex2exp)
-library(lubridate)
-library(knitr)
-library(kableExtra)
-library(parallel)
-library(reshape2)
 
 ###############################################################################
 # LOAD FUNCTIONS
@@ -57,25 +47,8 @@ comephore <- df_comephore[-1]
 nsites <- nrow(loc_px)
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
-sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 4326)
-sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
 
-coords_m <- st_coordinates(sites_coords_sf)
-grid_coords_km <- sites_coords
-grid_coords_m  <- sites_coords
-grid_coords_m$x_m  <- coords_m[, "X"] - min(coords_m[, "X"])
-grid_coords_m$y_m  <- coords_m[, "Y"] - min(coords_m[, "Y"])
-grid_coords_km$x_km <- grid_coords_m$x_m / 1000
-grid_coords_km$y_km <- grid_coords_m$y_m / 1000
-
-filename <- paste0(data_folder, "comephore/grid/grid_coords_5km.csv")
-write.csv(grid_coords_km, file = filename, row.names = TRUE)
-
-grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
-colnames(grid_coords_m) <- c("Longitude", "Latitude")
-grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
-colnames(grid_coords_km) <- c("Longitude", "Latitude")
-dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
+dist_mat <- get_dist_mat(sites_coords, latlon = TRUE)
 
 df_dist <- reshape_distances(dist_mat)
 df_dist_km <- df_dist
@@ -108,54 +81,39 @@ starting_year_suffix <- if (starting_year == 2008) "" else paste0("_from", start
 ###############################################################################
 # SÉLECTION DES ÉPISODES
 ###############################################################################
-configs <- expand.grid(
-  q = c(0.95, 0.97),
-  min_spatial_dist = c(5, 7),
-  delta = c(30)
-)
+q <- 0.95
+min_spatial_dist <- 5  # in km
+delta <- 30  # in hours
 
-episode_counts <- data.frame()
+comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
 
-for (i in seq_len(nrow(configs))) {
-  q <- configs$q[i]
-  min_spatial_dist <- configs$min_spatial_dist[i]
-  delta <- configs$delta[i]
+set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q, remove_zeros = TRUE)
+list_s <- set_st_excess$list_s
+list_t <- set_st_excess$list_t
+list_u <- set_st_excess$list_u
 
-  comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
+s0t0_set <- get_s0t0_pairs(sites_coords, comephore_subset,
+                            min_spatial_dist = min_spatial_dist,
+                            episode_size = delta,
+                            set_st_excess = set_st_excess,
+                            n_max_episodes = 10000,
+                            latlon = TRUE)
 
-  set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q, remove_zeros = TRUE)
-  list_s <- set_st_excess$list_s
-  list_t <- set_st_excess$list_t
-  list_u <- set_st_excess$list_u
+selected_points <- s0t0_set
 
-  s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore_subset,
-                             min_spatial_dist = min_spatial_dist,
-                             episode_size = delta,
-                             set_st_excess = set_st_excess,
-                             n_max_episodes = 10000,
-                             latlon = FALSE)
+filename <- paste0(data_folder, "comephore/episodes/s0t0_pairs/s0t0_pairs_q",
+                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
+write.csv(selected_points, file = filename, row.names = FALSE)
 
-  selected_points <- s0t0_set
+datetimes <- as.POSIXct(selected_points$t0_date, tz = "UTC")
+datetimes_df <- data.frame(datetime = unique(datetimes))
+filename_dt <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes",
+                    "_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+                    starting_year_suffix, ".csv")
+write.csv(datetimes_df, file = filename_dt, row.names = FALSE)
 
-  filename <- paste0(data_folder, "comephore/episodes/s0t0_pairs/s0t0_pairs_q",
-                     q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
-  write.csv(selected_points, file = filename, row.names = FALSE)
-
-  datetimes <- as.POSIXct(selected_points$t0_date, tz = "UTC")
-  datetimes_df <- data.frame(datetime = unique(datetimes))
-  filename_dt <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes",
-                        "_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-                        starting_year_suffix, ".csv")
-  write.csv(datetimes_df, file = filename_dt, row.names = FALSE)
-
-  u_min <- min(selected_points$u_s0)
-  u_max <- max(selected_points$u_s0)
-
-  episode_counts <- rbind(episode_counts, data.frame(
-    q = q, min_spatial_dist = min_spatial_dist, delta = delta,
-    n_episodes = nrow(selected_points), u_min = u_min, u_max = u_max
-  ))
-}
+u_min <- min(selected_points$u_s0)
+u_max <- max(selected_points$u_s0)
 
 foldername <- paste0(data_folder, "comephore/episodes/")
 write.csv(episode_counts,
@@ -165,26 +123,26 @@ write.csv(episode_counts,
 ###############################################################################
 # ANALYSE D’UN ÉPISODE (RECHARGEMENT)
 ###############################################################################
-q <- 0.95
-min_spatial_dist <- 5
-delta <- 30
+# q <- 0.95
+# min_spatial_dist <- 5
+# delta <- 30
 
-# Rechargement cohérent
-filename <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes_q",
-                   q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
-datetimes_df <- read.csv(filename, sep = ",")
-datetimes_df$datetime <- ifelse(
-  nchar(datetimes_df$datetime) == 10,
-  paste0(datetimes_df$datetime, " 00:00:00"),
-  datetimes_df$datetime
-)
-datetimes_df$datetime <- as.POSIXct(datetimes_df$datetime, tz = "UTC")
+# # Rechargement cohérent
+# filename <- paste0(data_folder, "comephore/episodes/t0_episodes/t0_episodes_q",
+#                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
+# datetimes_df <- read.csv(filename, sep = ",")
+# datetimes_df$datetime <- ifelse(
+#   nchar(datetimes_df$datetime) == 10,
+#   paste0(datetimes_df$datetime, " 00:00:00"),
+#   datetimes_df$datetime
+# )
+# datetimes_df$datetime <- as.POSIXct(datetimes_df$datetime, tz = "UTC")
 
-# Recharger les paires
-file_s0t0 <- paste0(data_folder, "comephore/episodes/s0t0_pairs/s0t0_pairs_q",
-                    q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
-selected_points <- read.csv(file_s0t0)
-selected_points$t0_date <- as.POSIXct(selected_points$t0_date, tz = "UTC")
+# # Recharger les paires
+# file_s0t0 <- paste0(data_folder, "comephore/episodes/s0t0_pairs/s0t0_pairs_q",
+#                     q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
+# selected_points <- read.csv(file_s0t0)
+# selected_points$t0_date <- as.POSIXct(selected_points$t0_date, tz = "UTC")
 
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                      episode_size = delta, unif = FALSE,
@@ -196,7 +154,7 @@ s0_list <- selected_points$s0
 u_list <- selected_points$u_s0
 tau_vect <- 0:10
 tmax <- max(tau_vect)
-df_coords <- as.data.frame(grid_coords_km)
+df_coords <- as.data.frame(sites_coords)
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -206,18 +164,21 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   episode <- list_episodes[[i]]
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = FALSE)
+                                tau_vect, latlon = TRUE)
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
   excesses <- empirical_excesses_rpar(episode,
                                   threshold = u, # !!!!!!!
                                   df_lags = lags, t0 = ind_t0_ep)
   lags$tau <- lags$tau # convert tau from hours to seconds
+  lags$hnorm <- lags$hnorm / 1000 # convert to km
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
+head(list_lags[[1]])
+list_lags[[1]]$hnorm
 
 ###############################################################################
 # AJOUT DES ESTIMATIONS D’ADVECTION
@@ -226,6 +187,7 @@ adv_filename <- paste0(data_folder, "comephore/adv_estim/advection_results_q",
                        q * 100, "_delta", delta, "_dmin", min_spatial_dist, starting_year_suffix, ".csv")
 adv_df <- read.csv(adv_filename, sep = ",")
 adv_df$t0 <- as.POSIXct(adv_df$t0, tz = "UTC")
+selected_points$t0_date <- as.POSIXct(selected_points$t0_date, tz = "UTC")
 
 matching_indices <- match(selected_points$t0_date, adv_df$t0)
 matching_indices <- matching_indices[!is.na(matching_indices)]
@@ -245,9 +207,6 @@ for (i in 1:nrow(selected_episodes)) {
   }
 }
 
-# Nettoyage des NA
-ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
-selected_episodes_nona <- selected_episodes[-ind_NA_adv, ]
 
 wind_df <- data.frame(
   vx = selected_episodes$adv_x * 3.6,  # m/s -> km/h
@@ -255,8 +214,6 @@ wind_df <- data.frame(
 )
 head(wind_df)
 
-stopif(length(wind_df) != length(list_episodes), "Length of wind_df and list_episodes must match.")
-stopif(length(wind_df) != length(list_lags), "Length of wind_df and list_lags must match.")
 ###############################################################################
 # OPTIMISATION
 ###############################################################################
@@ -274,36 +231,10 @@ result <- optim(
   list_excesses = list_excesses,
   hmax = 7,
   wind_df = wind_df,
-  latlon = FALSE,
+  latlon = TRUE,
   distance = "lalpha",
-  method = "L-BFGS-B",
-  lower = c(1e-08, 1e-08, 1e-08, 1e-08, -1e-08, 1e-08),
-  upper = c(10, 10, 1.999, 1.999, 10, 10),
-  control = list(maxit = 10000, trace = 1)
-)
-
-
-# > result
-# $par
-# [1] 0.9703870 0.2000875 0.3371085 1.0019900 0.6011119 1.3652541
-
-# $value
-# [1] 409204.8
-
-
-result <- optim(
-  par = init_param,
-  fn = neg_ll_composite,
-  list_lags = list_lags,
-  list_episodes = list_episodes,
-  list_excesses = list_excesses,
-  hmax = 7,
-  wind_df = wind_opt,
-  latlon = FALSE,
-  distance = "euclidean",
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
   upper = c(10, 10, 1.999, 1.999, 10, 10),
-  control = list(maxit = 10000, trace = 1),
-  hessian = TRUE
+  control = list(maxit = 10000, trace = 1)
 )

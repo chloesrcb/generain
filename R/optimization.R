@@ -106,6 +106,8 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   # Distance matrix
   if (latlon) {
     dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
+    # convert in km
+    dist_matrix <- dist_matrix / 1000
   } else {
     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
     dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
