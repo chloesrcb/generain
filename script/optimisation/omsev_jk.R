@@ -308,7 +308,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
   u <- u0_list[i]
-  excesses <- empirical_excesses_rpar(episode, quantile = u, threshold = TRUE,
+  excesses <- empirical_excesses_rpar(episode, threshold = u,
                                       df_lags = lags, t0 = ind_t0_ep)
   # tau is in 5 minutes
   lags$tau <- lags$tau * 5 / 60 # convert to hours
@@ -334,7 +334,7 @@ params_com <- com_results[com_results$q == q*100 &
                            com_results$dmin == 5, ]
 init_params_com <- c(params_com$beta1, params_com$beta2,
                      params_com$alpha1, params_com$alpha2,
-                     params_com$eta1, params_com$eta2)
+                     2.5, 5)
 # check for na in adv and wind
 hmax <- max(dist_mat) / 1000
 
@@ -344,7 +344,7 @@ hmax <- max(dist_mat) / 1000
 # only beta1, beta2, alpha1, alpha2 are estimated
 init_params_com <- c(params_com$beta1, params_com$beta2,
                      params_com$alpha1, params_com$alpha2,
-                     params_com$eta1, params_com$eta2)
+                     2.5, 5)
 
 # # try with 0 adv
 # V_episodes_noadv <- V_episodes
@@ -365,9 +365,9 @@ result <- optim(
   hmax = hmax,
   wind_df = V_episodes,
   latlon = FALSE,
-  distance = "euclidean",
-  fixed_eta1 = init_params_com[5],
-  fixed_eta2 = init_params_com[6],
+  distance = "lalpha",
+  fixed_eta1 = 1,
+  fixed_eta2 = 3,
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08),
   upper = c(10, 10, 1.999, 1.999),
@@ -379,7 +379,7 @@ result
 # compute gradient at the optimum
 objfun <- function(p) {
   neg_ll_composite_fixed_eta(p, list_episodes, list_excesses, list_lags, wind_df = V_episodes,
-  latlon = FALSE, distance = "euclidean", fixed_eta1 = init_params_com[5], fixed_eta2 = init_params_com[6],
+  latlon = FALSE, distance = "lalpha", fixed_eta1 = init_params_com[5], fixed_eta2 = init_params_com[6],
   hmax = hmax)
 }
 

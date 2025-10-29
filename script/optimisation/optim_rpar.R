@@ -8,7 +8,7 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- FALSE
+muse <- TRUE
 
 if (muse) {
   # Get the muse folder
@@ -308,18 +308,6 @@ result_list <- mclapply(1:M, process_simulation, m = m,
                         hmax = 7, wind_df = NA,
                         normalize = TRUE,
                         mc.cores = num_cores)
-
-objfun <- function(params) {
-  neg_ll_composite(params, list_episodes = list_rpar,
-                   list_lags = list_lags,
-                   list_excesses = list_excesses,
-                   distance = distance_type,
-                   hmax = 7, wind_df = NA,
-                   normalize = TRUE)
-}
-
-vector_result <- as.vector(unlist(result_list[1]))
-grad(objfun, vector_result)
 
 print("Optimization done")
 # Combine results int a data frame

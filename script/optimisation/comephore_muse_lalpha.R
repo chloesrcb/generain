@@ -76,13 +76,11 @@ df_comephore <- as.data.frame(comephore_raw)
 colnames(df_comephore)[1] <- "date"
 df_comephore$date <- as.POSIXct(df_comephore$date,
                                 format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-sum(duplicated(df_comephore$date))
-df_comephore$date[duplicated(df_comephore$date)]
-# Take only data after 2007
-df_comephore <- df_comephore[df_comephore$date >= "2008-01-01", ]
+# sum(duplicated(df_comephore$date))
+# df_comephore$date[duplicated(df_comephore$date)]
 rownames(df_comephore) <- format(as.POSIXct(df_comephore$date), "%Y-%m-%d %H:%M:%S")
 comephore <- df_comephore[-1] # remove dates column
-
+head(comephore)
 
 # DISTANCE AND COORDS ##########################################################
 
@@ -117,15 +115,9 @@ rownames(grid_coords_km) <- rownames(sites_coords)
 # Spatial chi
 df_dist <- reshape_distances(dist_mat)
 df_dist_km <- df_dist
-df_dist_km$value <- round(df_dist$value / 1000, 1)
+df_dist_km$value <- df_dist$value / 1000
 
 # Spatial chi WLSE #############################################################
-h_vect <- sort(unique(df_dist_km$value))
-h_vect <- h_vect[h_vect > 0]  # remove 0
-hmax <- h_vect[10] # 10th value
-hmax <- 7
-tmax <- 10
-
 foldername <- paste0(data_folder, "/comephore/WLSE/")
 
 # get csv
@@ -153,21 +145,11 @@ alpha2 <- df_result$alpha2
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
 # get central site from sites_coords
-comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
-set_st_excess <- get_spatiotemp_excess(data = comephore_subset, quantile = q,
+set_st_excess <- get_spatiotemp_excess(data = comephore, quantile = q,
                                       remove_zeros = TRUE)
-starting_year <- as.character(year(rownames(comephore_subset)[1]))
-if (starting_year == "2008") {
-  starting_year <- ""
-} else {
-  starting_year <- paste0("_from", starting_year)
-}
-
-# remove date column if exists
-if ("date" %in% colnames(comephore_subset)) {
-  comephore_subset <- comephore_subset[,
-                                -c(which(colnames(comephore_subset) == "date"))]
-}
+first_ts <- as.POSIXct(rownames(comephore)[1], tz = "UTC")
+starting_year <- year(first_ts)
+starting_year_suffix <- if (starting_year == 2008) "" else paste0("_from", starting_year)
 
 list_s <- set_st_excess$list_s
 list_t <- set_st_excess$list_t
@@ -180,17 +162,15 @@ for (i in seq_along(list_s)) {
   u_s0 <- list_u[[i]][1]                # numeric threshold
 
   # Check if the value at (t0, s0) is above threshold
-  if (comephore_subset[t0, s0] <= u_s0) {
+  if (comephore[t0, s0] <= u_s0) {
     message <- paste("Excess is not above threshold for s =", s0, "and t =", t0)
     print(message)
     stop()
   }
 }
 
-print(grid_coords_km)
-
 # Spatio-temporal neighborhood parameters
-s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore_subset,
+s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
@@ -203,7 +183,7 @@ n_episodes <- length(selected_points$s0)
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 u_list <- selected_points$u_s0
-list_episodes_points <- get_extreme_episodes(selected_points, comephore_subset,
+list_episodes_points <- get_extreme_episodes(selected_points, comephore,
                                      episode_size = delta, unif = FALSE,
                                      beta = 0)
 
@@ -211,6 +191,7 @@ list_episodes <- list_episodes_points$episodes
 s0_list <- selected_points$s0
 t0_list <- selected_points$t0
 u_list <- selected_points$u_s0
+episode <- list_episodes[[1]]
 
 library(parallel)
 
@@ -236,16 +217,17 @@ list_results <- parallel::mclapply(1:length(s0_list), function(i) {
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 
-
 # ADD ADVECTION ESTIMATES ######################################################
 adv_filename <- paste0(
   data_folder, "comephore/adv_estim/advection_results_q",
   q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-  starting_year, ".csv"
+  starting_year_suffix, ".csv"
 )
 
 adv_df <- read.csv(adv_filename, sep = ",")
-
+head(adv_df)
+# keep only relevant columns
+adv_df <- adv_df[, c("t0", "mean_dx_kmh", "mean_dy_kmh")]
 # Convert POSIXct
 adv_df$t0 <- as.POSIXct(adv_df$t0, format="%Y-%m-%d %H:%M:%S", tz="UTC")
 
@@ -264,6 +246,12 @@ selected_points$t0_date <- as.POSIXct(
   format="%Y-%m-%d %H:%M:%S", tz="UTC"
 )
 
+# check that all t0 in selected_points are in adv_df
+missing_t0 <- setdiff(selected_points$t0_date, adv_df$t0)
+if (length(missing_t0) > 0) {
+  stop("Some t0 in selected_points are missing in adv_df")
+}
+
 # FULL JOIN in the exact order of selected_points
 adv_merged <- merge(
   selected_points[, c("t0_date")],
@@ -273,7 +261,7 @@ adv_merged <- merge(
   all.x = TRUE,
   sort = FALSE
 )
-
+head(adv_merged)
 # Vérification : mêmes longueurs
 stopifnot(nrow(adv_merged) == nrow(selected_points))
 
@@ -284,42 +272,63 @@ selected_episodes$adv_y <- adv_merged$mean_dy_kmh
 
 # Remove episodes with NA advection values
 ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
-selected_episodes_nona <- selected_episodes[-ind_NA_adv, ]
+if (length(ind_NA_adv) > 0) {
+  cat("Removing", length(ind_NA_adv), "episodes with NA advection values\n")
+  selected_episodes <- selected_episodes[-ind_NA_adv, ]
+}
 
 wind_df <- selected_episodes[, c("adv_x", "adv_y")]
 colnames(wind_df) <- c("vx", "vy")
 length(wind_df$vx) # should be the same as number of episodes
 
 # OPTIMIZATION #################################################################
+hmax <- 7
+stopifnot(length(list_episodes) == nrow(wind_df),
+          length(list_lags)     == nrow(wind_df),
+          length(list_excesses) == nrow(wind_df))
 
-ind_NA_adv <- which(is.na(selected_episodes$adv_x) | is.na(selected_episodes$adv_y))
-ind_NA_any <- union(ind_NA_adv, which(is.na(wind_df$vx) | is.na(wind_df$vy)))
-ind_NA <- ind_NA_any
-wind_opt <- wind_df
-if (any(ind_NA > 0)) {
-  # remove these episodes
-  wind_opt <- wind_df[-ind_NA, ]
-  episodes_opt <- list_episodes[-ind_NA]
-  lags_opt <- list_lags[-ind_NA]
-  excesses_opt <- list_excesses[-ind_NA]
-} else {
-  wind_opt <- wind_df
-  episodes_opt <- list_episodes
-  lags_opt <- list_lags
-  excesses_opt <- list_excesses
-}
-stopifnot(length(episodes_opt) == nrow(wind_opt),
-          length(lags_opt)     == nrow(wind_opt),
-          length(excesses_opt) == nrow(wind_opt))
+df_lags <- list_lags[[1]]
+# Sur df_lags d'un épisode (ou échantillon)
+hx_raw <- df_lags$s2x - df_lags$s1x
+hy_raw <- df_lags$s2y - df_lags$s1y
+adv <- wind_df[1, ] # advection for the episode
+hx_cor <- hx_raw - adv$vx * df_lags$tau
+hy_cor <- hy_raw - adv$vy * df_lags$tau
+mean(abs(hx_raw))
+mean(abs(hx_cor))  # doit être < mean(abs(hx_raw)) si adv bien orientée
+mean(abs(hy_cor))
+cor(abs(hx_raw), abs(df_lags$tau), use="complete.obs")   # souvent > 0
+cor(abs(hx_cor), abs(df_lags$tau), use="complete.obs")   # doit diminuer
+
+hx  <- df_lags$s2x - df_lags$s1x   # km
+hy  <- df_lags$s2y - df_lags$s1y   # km
+tau <- df_lags$tau                 # h
+vx  <- as.numeric(adv$vx)          # km/h
+vy  <- as.numeric(adv$vy)          # km/h
+
+ux <- vx * tau
+uy <- vy * tau
+
+num <- sum(hx*ux + hy*uy, na.rm=TRUE)         # h · (v τ)
+den <- sum(ux*ux + uy*uy, na.rm=TRUE)         # ||v τ||^2
+gamma_star <- if (den > 0) num / den else 0
+gamma_star
+
+hx_cor_g <- hx - gamma_star * ux
+hy_cor_g <- hy - gamma_star * uy
+hn_raw   <- sqrt(hx^2 + hy^2)
+hn_cor_g <- sqrt(hx_cor_g^2 + hy_cor_g^2)
+
+c(mean(hn_raw), mean(hn_cor_g), median(hn_raw), median(hn_cor_g))
 
 
 print("Starting optimization")
 if (eta_type == "free_eta") {
-  init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+  init_param <- c(0.2, 0.6, 1.2, 0.7, 0.5, 1)
   result <- optim(par = init_param, fn = neg_ll_composite,
-          list_lags = lags_opt, list_episodes = episodes_opt,
-          list_excesses = excesses_opt, hmax = hmax,
-          wind_df = wind_opt,
+          list_lags = list_lags, list_episodes = list_episodes,
+          list_excesses = list_excesses, hmax = hmax,
+          wind_df = wind_df,
           latlon = FALSE,
           distance = distance_type,
           method = "L-BFGS-B",
@@ -330,9 +339,9 @@ if (eta_type == "free_eta") {
 } else if (eta_type == "fixed_eta1") {
   init_param <- c(beta1, beta2, alpha1, alpha2, 1)
   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = lags_opt, list_episodes = episodes_opt,
-          list_excesses = excesses_opt, hmax = hmax,
-          wind_df = wind_opt,
+          list_lags = list_lags, list_episodes = list_episodes,
+          list_excesses = list_excesses, hmax = hmax,
+          wind_df = wind_df,
           latlon = FALSE,
           distance = distance_type,
           fixed_eta1 = fixed_eta1,
@@ -344,9 +353,9 @@ if (eta_type == "free_eta") {
 } else if (eta_type == "fixed_eta2") {
   init_param <- c(beta1, beta2, alpha1, alpha2, 1)
   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = lags_opt, list_episodes = episodes_opt,
-          list_excesses = excesses_opt, hmax = hmax,
-          wind_df = wind_opt,
+          list_lags = list_lags, list_episodes = list_episodes,
+          list_excesses = list_excesses, hmax = hmax,
+          wind_df = wind_df,
           latlon = FALSE,
           distance = distance_type,
           fixed_eta2 = fixed_eta2,
@@ -358,9 +367,9 @@ if (eta_type == "free_eta") {
   } else if (eta_type == "fixed_eta") {
   init_param <- c(beta1, beta2, alpha1, alpha2)
   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = lags_opt, list_episodes = episodes_opt,
-          list_excesses = excesses_opt, hmax = hmax,
-          wind_df = wind_opt,
+          list_lags = list_lags, list_episodes = list_episodes,
+          list_excesses = list_excesses, hmax = hmax,
+          wind_df = wind_df,
           latlon = FALSE,
           distance = distance_type,
           fixed_eta1 = fixed_eta1,
@@ -378,7 +387,7 @@ if (result$convergence != 0) {
 }
 
 
-
+# GRADIENT AT OPTIMUM ###########################################################
 library(numDeriv)
 cat("Computing gradient at optimum...\n")
 
@@ -386,8 +395,9 @@ cat("Computing gradient at optimum...\n")
 # compute gradient at the optimum
 if (eta_type == "fixed_eta") {
   objfun <- function(p) {
-    neg_ll_composite_fixed_eta(p, episodes_opt, excesses_opt, lags_opt,
-    wind_df = wind_opt,
+    neg_ll_composite_fixed_eta(p, list_episodes = list_episodes, 
+    list_excesses = list_excesses, list_lags = list_lags,
+    wind_df = wind_df,
     latlon = FALSE, distance = distance_type,
     fixed_eta1 = fixed_eta1,
     fixed_eta2 = fixed_eta2,
@@ -395,16 +405,18 @@ if (eta_type == "fixed_eta") {
   }
 } else if (eta_type == "fixed_eta1") {
   objfun <- function(p) {
-    neg_ll_composite_fixed_eta(p, episodes_opt, excesses_opt, lags_opt,
-    wind_df = wind_opt,
+    neg_ll_composite_fixed_eta(p, list_episodes = list_episodes, 
+    list_excesses = list_excesses, list_lags = list_lags,
+    wind_df = wind_df,
     latlon = FALSE, distance = distance_type,
     fixed_eta1 = fixed_eta1,
     hmax = hmax)
   }
 } else {
   objfun <- function(p) {
-      neg_ll_composite(p, episodes_opt, excesses_opt, lags_opt,
-      wind_df = wind_opt,
+      neg_ll_composite(p, p, list_episodes = list_episodes, 
+      list_excesses = list_excesses, list_lags = list_lags,
+      wind_df = wind_df,
       latlon = FALSE, distance = distance_type,
       hmax = hmax)
   }
@@ -438,8 +450,8 @@ foldername_res <- file.path(
   eta_type
 )
 filename <- paste0(foldername_res, "/results_q",
-           q * 100, "_delta", delta, "_dmin", min_spatial_dist, 
-           starting_year, ".csv")
+           q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+           starting_year_suffix, ".csv")
 
 write.csv(result_df, filename, row.names = FALSE)
 print(result_df)

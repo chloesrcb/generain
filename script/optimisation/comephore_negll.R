@@ -1,5 +1,6 @@
 library(ggplot2)
 
+V_episodes <- wind_df
 # --- fonction générique ---
 profile_param <- function(param_name, grid, base_params, index,
                           filename_prefix = "profile", wind_df = V_episodes,
@@ -64,7 +65,7 @@ profile_param <- function(param_name, grid, base_params, index,
 }
 
 
-base_params <- c(0.21, 0.76, 0.37, 0.70, 2.5, 5)
+base_params <- c(0.21, 0.76, 0.37, 0.70, 2, 5)
 
 foldername <- paste0(im_folder, "optim/comephore/profiles/")
 

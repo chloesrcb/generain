@@ -79,7 +79,6 @@ df_comephore$date <- as.POSIXct(df_comephore$date,
 sum(duplicated(df_comephore$date))
 df_comephore$date[duplicated(df_comephore$date)]
 # Take only data after 2007
-df_comephore <- df_comephore[df_comephore$date >= "2008-01-01", ]
 rownames(df_comephore) <- format(as.POSIXct(df_comephore$date), "%Y-%m-%d %H:%M:%S")
 comephore <- df_comephore[-1] # remove dates column
 
@@ -153,21 +152,19 @@ alpha2 <- df_result$alpha2
 # CHOOSE EXTREME EPISODE FOR R-PARETO ##########################################
 
 # get central site from sites_coords
-comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
+comephore_subset <- comephore
 set_st_excess <- get_spatiotemp_excess(data = comephore_subset, quantile = q,
                                       remove_zeros = TRUE)
-starting_year <- as.character(year(rownames(comephore_subset)[1]))
-if (starting_year == "2008") {
-  starting_year <- ""
-} else {
-  starting_year <- paste0("_from", starting_year)
-}
+first_ts <- as.POSIXct(rownames(comephore)[1], tz = "UTC")
+starting_year <- year(first_ts)
+starting_year_suffix <- if (starting_year == 2008) "" else paste0("_from", starting_year)
+
 
 # remove date column if exists
-if ("date" %in% colnames(comephore_subset)) {
-  comephore_subset <- comephore_subset[,
-                                -c(which(colnames(comephore_subset) == "date"))]
-}
+# if ("date" %in% colnames(comephore_subset)) {
+#   comephore_subset <- comephore_subset[,
+#                                 -c(which(colnames(comephore_subset) == "date"))]
+# }
 
 list_s <- set_st_excess$list_s
 list_t <- set_st_excess$list_t
@@ -241,7 +238,7 @@ list_excesses <- lapply(list_results, `[[`, "excesses")
 adv_filename <- paste0(
   data_folder, "comephore/adv_estim/advection_results_q",
   q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-  starting_year, ".csv"
+  starting_year_suffix, ".csv"
 )
 
 adv_df <- read.csv(adv_filename, sep = ",")
@@ -314,7 +311,7 @@ stopifnot(length(episodes_opt) == nrow(wind_opt),
 
 filename <- paste0(foldername_res, "/results_q",
            q * 100, "_delta", delta, "_dmin", min_spatial_dist, 
-           starting_year, ".csv")
+           starting_year_suffix, ".csv")
 
 print("Starting optimization")
 if (eta_type == "free_eta") {

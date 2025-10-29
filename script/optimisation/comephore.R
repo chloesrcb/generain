@@ -82,37 +82,7 @@ grid_coords_m$x_m <- (coords_m[, "X"] - min(coords_m[, "X"]))
 grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
 grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
 grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
-
-
-# save grid coordinates
-filename <- paste0(data_folder, "comephore/grid/grid_coords_5km.csv")
-write.csv(grid_coords_km, file = filename, row.names = TRUE)
-
-# ncol(df_comephore)
-# p1 <- ggplot(grid_coords_km, aes(x = Longitude, y = Latitude)) +
-#   geom_point(color = "blue", size = 2) +
-#   geom_text(aes(label = rownames(grid_coords_km)), hjust = -0.2, size = 1.5) +
-#   coord_fixed() +
-#   ggtitle("GPS coordinates WGS84") +
-#   theme_minimal()
-
-# p2 <- ggplot(grid_coords_km, aes(x = x_km, y = y_km)) +
-#   geom_point(color = "red") +
-#   geom_text(aes(label = rownames(grid_coords_km)), size = 1.5, hjust = -0.2) +
-#   coord_fixed() +
-#   theme_minimal() +
-#   xlab("x in km") +
-#   ylab("y in km") +
-#   ggtitle("Transformed coordinates in km")
-
-# p_coords <- grid.arrange(p1, p2, ncol = 2)
-
-# # save plot
-# filename <- paste(im_folder, "optim/comephore/coords_transformation_5km.png",
-#                   sep = "")
-# ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
-#        units = "cm")
-
+# remove Longitude and Latitude columns
 # get distance matrix
 grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
 grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
@@ -170,7 +140,7 @@ for (i in seq_len(nrow(configs))) {
   min_spatial_dist <- configs$min_spatial_dist[i]
   delta <- configs$delta[i]
 
-  comephore_subset <- comephore[rownames(comephore) >= "2008-01-01", ]
+  comephore_subset <- comephore
   set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q, remove_zeros = TRUE)
   starting_year <- as.character(year(rownames(comephore_subset)[1]))
   if (starting_year == "2008") {
