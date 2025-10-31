@@ -1358,25 +1358,49 @@ convert_single_simulation_to_df <- function(simu_i, ngrid) {
 }
 
 
-
-
-
-
-sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0) {
+sim_episode <- function(params_vario, params_margins, x, y, times, adv, t0, s0) {
   sim <- sim_rpareto(
     beta1 = params_vario$beta1,
     beta2 = params_vario$beta2,
     alpha1 = params_vario$alpha1,
     alpha2 = params_vario$alpha2,
     adv = adv,
-    x = coords$x, y = coords$y, t = times,
-    t0 = t0, s0 = s0
+    x = x,
+    y = y,
+    t = times,
+    t0 = t0,
+    s0 = s0
   )
-  Z <- sim$Z[,,,1]
+  Z <- sim$Z
   U <- 1 - 1/Z
   X <- array(NA, dim = dim(Z))
   for (i in 1:length(coords$x)) {
-    X[i,,] <- qegpd(U[i,,], xi = params_margins$xi[i], 
+    X[i,,] <- qextgp(U[i,,], type = 1, xi = params_margins$xi[i], 
+              sigma = params_margins$sigma[i], kappa = params_margins$kappa[i])
+  }
+  return(X)
+}
+
+
+
+
+sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0) {
+  sim <- sim_rpareto_coords(
+    beta1 = params_vario$beta1,
+    beta2 = params_vario$beta2,
+    alpha1 = params_vario$alpha1,
+    alpha2 = params_vario$alpha2,
+    adv = adv,
+    coords = coords,
+    t = times,
+    t0 = t0,
+    s0 = s0
+  )
+  Z <- sim$Z
+  U <- 1 - 1/Z
+  X <- array(NA, dim = dim(Z))
+  for (i in 1:length(coords$x)) {
+    X[i,,] <- qextgp(U[i,,], type = 1, xi = params_margins$xi[i], 
               sigma = params_margins$sigma[i], kappa = params_margins$kappa[i])
   }
   return(X)
@@ -1458,17 +1482,17 @@ sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0
   }
 
   # 4) Occurrence binaire (probit-GRF) + advection
-  O <- sim_occurrence_probit(coords, times, adv,
-                             beta_occ = beta_occ, alpha_occ = alpha_occ,
-                             p_wet = p_wet, t0 = t0, s0 = s0)
+  # O <- sim_occurrence_probit(coords, times, adv,
+  #                            beta_occ = beta_occ, alpha_occ = alpha_occ,
+  #                            p_wet = p_wet, t0 = t0, s0 = s0)
 
-  # 5) Champ final avec zéros
-  X <- O * Xpos
+  # # 5) Champ final avec zéros
+  # X <- O * Xpos
 
   # Option: petite censure pour éviter le "drizzle"
   # X[X < 0.05] <- 0
 
-  return(list(X = X, O = O, U = U, Z = Z, s0 = s0, t0 = t0))
+  return(list(X = X, U = U, Z = Z, s0 = s0, t0 = t0))
 }
 
 get_prob_occurence <- function(data_rain) {

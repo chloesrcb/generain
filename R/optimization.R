@@ -79,6 +79,7 @@ get_spatiotemp_excess <- function(data, quantile = NULL,
 #'                      list_s, list_t, and list_u.
 #' @param n_max_episodes The maximum number of episodes to select. Default is 10000.
 #' @param latlon A boolean value indicating if the coordinates are in latitude/longitude.
+#' @param beta The temporal window extension. Default is 0.
 #' @return A data.table with selected pairs of sites and times (s0, t0) and their
 #'         corresponding excess values u_s0.
 #' 
@@ -87,7 +88,8 @@ get_spatiotemp_excess <- function(data, quantile = NULL,
 #' @export
 get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
                            episode_size, set_st_excess,
-                           n_max_episodes = 10000, latlon = FALSE) {
+                           n_max_episodes = 10000, latlon = FALSE,
+                           beta = 0) {
 
   data <- as.matrix(data)
   site_names <- colnames(data)
@@ -97,20 +99,20 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
   if (is.null(coord_names)) stop("ERROR: 'sites_coords' must have row names.")
 
   missing_in_coords <- setdiff(site_names, coord_names)
-  if (length(missing_in_coords) > 0)
+  if (length(missing_in_coords) > 0){
     stop(paste("Missing sites in coords:", paste(missing_in_coords, collapse = ", ")))
-
+  }
   # Reorder coords
   sites_coords <- sites_coords[site_names, , drop = FALSE]
 
   # Distance matrix
   if (latlon) {
-    dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE)
+    dist_matrix <- get_dist_mat(sites_coords, latlon = TRUE) # meters
     # convert in km
     dist_matrix <- dist_matrix / 1000
   } else {
     dist_matrix <- get_dist_mat(sites_coords, latlon = FALSE)
-    dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
+    # dist_matrix <- ceiling(round(dist_matrix, 1) * 1000) / 1000
   }
   rownames(dist_matrix) <- site_names
   colnames(dist_matrix) <- site_names
@@ -149,7 +151,7 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
       if (is.na(s_prev) || is.na(t_prev)) next
       spatial_dist <- dist_matrix[s0, s_prev]
       temporal_dist <- abs(t0 - t_prev)
-      if (spatial_dist < min_spatial_dist && temporal_dist < episode_size) {
+      if (spatial_dist < min_spatial_dist && temporal_dist < (episode_size + 2 * beta)) {
         is_valid <- FALSE
         break
       }
@@ -346,14 +348,13 @@ check_intervals_overlap <- function(s0_value, selected_points, delta,
 #' @param selected_points The selected points (s0, t0).
 #' @param data The rainfall data.
 #' @param episode_size The temporal window size.
-#' @param beta The temporal window extension. Default is 0.
 #' @param unif A boolean value to indicate if we want to get the uniformized
 #'            data episodes. Default is FALSE.
 #'
 #' @return The list of extreme episodes of size 2 * delta each.
 #'
 #' @export
-get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
+get_extreme_episodes <- function(selected_points, data, episode_size,
                                 unif = FALSE) {
   if (unif) { # Uniformize the data
     data <- apply(data, 2, function(col) rank(col, na.last = "keep") /
@@ -367,12 +368,12 @@ get_extreme_episodes <- function(selected_points, data, episode_size, beta = 0,
     # t_inf <- t0 - (delta) - beta
     # t_sup <- t0 + delta + 2 * beta
 
-    t_inf <- max(1, t0 - beta)
-    t_sup <- min(nrow(data), t0 + episode_size - 1 + beta)
+    t_inf <- max(1, t0)
+    t_sup <- min(nrow(data), t0 + episode_size - 1)
     # print(i)
     # Check that the episode is the correct size (episode_size)
     episode_size_test <- t_sup - t_inf + 1
-    if (episode_size_test == episode_size + 2 * beta) {
+    if (episode_size_test == episode_size) {
       episode <- data[t_inf:t_sup, , drop = FALSE] # Get the episode
       episodes <- append(episodes, list(episode))
       valid_indices <- c(valid_indices, i) # Mark this index as valid
@@ -721,14 +722,16 @@ neg_ll <- function(params, df_lags, excesses,
     nmarg <- get_marginal_excess(data, quantile, threshold)
     p <- nmarg / Tmax
   }
-  
-  if (!is.na(hmax)) { # filter by hmax
-    excesses <- excesses[df_lags$hnorm <= hmax, ]
-    df_lags <- df_lags[df_lags$hnorm <= hmax, ]
-  }
+
 
   # Get chi values
   chi <- theoretical_chi(params, df_lags, latlon, distance, normalize)
+  if (!is.na(hmax)) { # filter by hmax
+    ind_inf_hmax <- which(chi$hnormV < hmax)
+    excesses <- excesses[ind_inf_hmax, ]
+    df_lags <- df_lags[ind_inf_hmax, ]
+    chi <- chi[ind_inf_hmax, ]
+  }
   ll_df <- df_lags
   ll_df$kij <- excesses$kij
   ll_df$Tobs <- excesses$Tobs

@@ -183,8 +183,8 @@ for (i in seq_len(nrow(configs))) {
     s0 <- selected_points$s0[j]
     t0 <- selected_points$t0[j]
     u_s0 <- selected_points$u_s0[j]
-    if (comephore_subset[t0, s0] <= u_s0) {
-      print(comephore_subset[t0, s0])
+    if (comephore[t0, s0] <= u_s0) {
+      print(comephore[t0, s0])
       print(u_s0)
       stop(paste("Excess is not above threshold for s0 =", s0, "and t0 =", t0))
     }

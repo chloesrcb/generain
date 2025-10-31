@@ -44,8 +44,6 @@ eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "free_eta"
 }
 
-distance_type <- "lalpha"
-
 # Folder name to save the data
 foldername_res <- file.path(
   paste0(data_folder, "comephore/optim_results"),
@@ -76,13 +74,19 @@ rownames(df_comephore) <- format(df_comephore$date, "%Y-%m-%d %H:%M:%S")
 comephore <- df_comephore[-1] # remove dates column
 
 # DISTANCE AND COORDS ##########################################################
-
 # Get number of sites
 nsites <- nrow(loc_px)
 
 # Get coords
 sites_coords <- loc_px[, c("Longitude", "Latitude")]
 rownames(sites_coords) <- loc_px$pixel_name
+sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"),
+                            crs = 4326)
+sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
+coords_m <- st_coordinates(sites_coords_sf)
+grid_coords_km <- as.data.frame(coords_m / 1000)
+colnames(grid_coords_km) <- c("Longitude", "Latitude")
+rownames(grid_coords_km) <- rownames(sites_coords)
 
 # Spatial chi WLSE #############################################################
 foldername <- paste0(data_folder, "/comephore/WLSE/")
@@ -137,12 +141,13 @@ for (i in seq_along(list_s)) {
 }
 
 # Spatio-temporal neighborhood parameters
-s0t0_set <- get_s0t0_pairs(sites_coords, comephore,
+s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
                             n_max_episodes = 10000,
-                            latlon = TRUE)
+                            latlon = FALSE,
+                            beta = 0)
 
 selected_points <- s0t0_set
 
@@ -151,8 +156,7 @@ t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 u_list <- selected_points$u_s0
 list_episodes_points <- get_extreme_episodes(selected_points, comephore,
-                                     episode_size = delta, unif = FALSE,
-                                     beta = 0)
+                                     episode_size = delta, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
 s0_list <- selected_points$s0
@@ -164,7 +168,7 @@ library(parallel)
 
 tau_vect <- 0:10
 tmax <- max(tau_vect)
-df_coords <- as.data.frame(sites_coords)
+df_coords <- as.data.frame(grid_coords_km)
 
 # Compute the lags and excesses for each conditional point
 list_results <- parallel::mclapply(1:length(s0_list), function(i) {
@@ -174,11 +178,9 @@ list_results <- parallel::mclapply(1:length(s0_list), function(i) {
   episode <- list_episodes[[i]]
   ind_t0_ep <- 0 # index of t0 in the episode
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
-                                tau_vect, latlon = TRUE)
+                                tau_vect, latlon = FALSE)
   excesses <- empirical_excesses_rpar(episode, threshold = u, # !!!!!!!
                                   df_lags = lags, t0 = ind_t0_ep)
-  # lags$tau <- lags$tau
-  lags$hnorm <- lags$hnorm / 1000 # convert to km
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
 
@@ -208,15 +210,15 @@ for (i in 1:nrow(selected_episodes)) {
   t0_date <- selected_episodes$t0_date[i]
   adv_row <- adv_df[adv_df$t0 == t0_date, ]
   if (nrow(adv_row) > 0) {
-    selected_episodes$adv_x[i] <- adv_row$mean_dx_mps[1]
-    selected_episodes$adv_y[i] <- adv_row$mean_dy_mps[1]
+    selected_episodes$adv_x[i] <- adv_row$mean_dx_kmh[1]
+    selected_episodes$adv_y[i] <- adv_row$mean_dy_kmh[1]
   }
 }
 
 
 wind_df <- data.frame(
-  vx = selected_episodes$adv_x * 3.6,  # m/s -> km/h
-  vy = selected_episodes$adv_y * 3.6
+  vx = selected_episodes$adv_x, # * 3.6,  # m/s -> km/h
+  vy = selected_episodes$adv_y # * 3.6
 )
 head(wind_df)
 
@@ -225,113 +227,80 @@ hmax <- 7
 stopifnot(length(list_episodes) == nrow(wind_df),
           length(list_lags)     == nrow(wind_df),
           length(list_excesses) == nrow(wind_df))
-
+lags <- list_lags[[1]]
+excesses <- list_excesses[[1]]
 
 print("Starting optimization")
-if (eta_type == "free_eta") {
-  init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
-  result <- optim(par = init_param, fn = neg_ll_composite,
+init_param <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+result <- optim(par = init_param, fn = neg_ll_composite,
           list_lags = list_lags, list_episodes = list_episodes,
-          list_excesses = list_excesses, hmax = hmax,
+          list_excesses = list_excesses, hmax = NA,
           wind_df = wind_df,
-          latlon = TRUE,
+          latlon = FALSE,
           distance = distance_type,
           method = "L-BFGS-B",
           lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
           upper = c(10, 10, 1.999, 1.999, 10, 10),
-          control = list(maxit = 10000, trace = 1),
-          hessian = FALSE)
-} else if (eta_type == "fixed_eta1") {
-  init_param <- c(beta1, beta2, alpha1, alpha2, 1)
-  result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = list_lags, list_episodes = list_episodes,
-          list_excesses = list_excesses, hmax = hmax,
-          wind_df = wind_df,
-          latlon = TRUE,
-          distance = distance_type,
-          fixed_eta1 = fixed_eta1,
-          method = "L-BFGS-B",
-          lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-          upper = c(10, 10, 1.999, 1.999, 10),
-          control = list(maxit = 10000, trace = 1),
-          hessian = FALSE)
-} else if (eta_type == "fixed_eta2") {
-  init_param <- c(beta1, beta2, alpha1, alpha2, 1)
-  result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = list_lags, list_episodes = list_episodes,
-          list_excesses = list_excesses, hmax = hmax,
-          wind_df = wind_df,
-          latlon = TRUE,
-          distance = distance_type,
-          fixed_eta2 = fixed_eta2,
-          method = "L-BFGS-B",
-          lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-          upper = c(10, 10, 1.999, 1.999, 10),
-          control = list(maxit = 10000, trace = 1),
-          hessian = FALSE)
-  } else if (eta_type == "fixed_eta") {
-  init_param <- c(beta1, beta2, alpha1, alpha2)
-  result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
-          list_lags = list_lags, list_episodes = list_episodes,
-          list_excesses = list_excesses, hmax = hmax,
-          wind_df = wind_df,
-          latlon = TRUE,
-          distance = distance_type,
-          fixed_eta1 = fixed_eta1,
-          fixed_eta2 = fixed_eta2,
-          method = "L-BFGS-B",
-          lower = c(1e-08, 1e-08, 1e-08, 1e-08),
-          upper = c(10, 10, 1.999, 1.999),
-          control = list(maxit = 10000, trace = 1),
-          hessian = FALSE)
-}
+          control = list(maxit = 10000, trace = 1))
+
+# tau = 0:10, time window adv = +/-2 hours
+# hmax = NA
+# 1] 0.3247256 0.6725507 0.3863810 0.7220611 1.7808056 5.0345370
+# final  value 413678.487943 
+
+
+
+
+# } else if (eta_type == "fixed_eta1") {
+#   init_param <- c(beta1, beta2, alpha1, alpha2, 1)
+#   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
+#           list_lags = list_lags, list_episodes = list_episodes,
+#           list_excesses = list_excesses, hmax = hmax,
+#           wind_df = wind_df,
+#           latlon = FALSE,
+#           distance = distance_type,
+#           fixed_eta1 = fixed_eta1,
+#           method = "L-BFGS-B",
+#           lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#           upper = c(10, 10, 1.999, 1.999, 10),
+#           control = list(maxit = 10000, trace = 1),
+#           hessian = FALSE)
+# } else if (eta_type == "fixed_eta2") {
+#   init_param <- c(beta1, beta2, alpha1, alpha2, 1)
+#   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
+#           list_lags = list_lags, list_episodes = list_episodes,
+#           list_excesses = list_excesses, hmax = hmax,
+#           wind_df = wind_df,
+#           latlon = FALSE,
+#           distance = distance_type,
+#           fixed_eta2 = fixed_eta2,
+#           method = "L-BFGS-B",
+#           lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#           upper = c(10, 10, 1.999, 1.999, 10),
+#           control = list(maxit = 10000, trace = 1),
+#           hessian = FALSE)
+#   } else if (eta_type == "fixed_eta") {
+#   init_param <- c(beta1, beta2, alpha1, alpha2)
+#   result <- optim(par = init_param, fn = neg_ll_composite_fixed_eta,
+#           list_lags = list_lags, list_episodes = list_episodes,
+#           list_excesses = list_excesses, hmax = hmax,
+#           wind_df = wind_df,
+#           latlon = FALSE,
+#           distance = distance_type,
+#           fixed_eta1 = fixed_eta1,
+#           fixed_eta2 = fixed_eta2,
+#           method = "L-BFGS-B",
+#           lower = c(1e-08, 1e-08, 1e-08, 1e-08),
+#           upper = c(10, 10, 1.999, 1.999),
+#           control = list(maxit = 10000, trace = 1),
+#           hessian = FALSE)
+# }
 if (result$convergence != 0) {
   stop("Optimization did not converge")
 } else {
   print("Optimization converged")
 }
-
-
-# GRADIENT AT OPTIMUM ###########################################################
-library(numDeriv)
-cat("Computing gradient at optimum...\n")
-
-
-# compute gradient at the optimum
-if (eta_type == "fixed_eta") {
-  objfun <- function(p) {
-    neg_ll_composite_fixed_eta(p, list_episodes = list_episodes,
-    list_excesses = list_excesses, list_lags = list_lags,
-    wind_df = wind_df,
-    latlon = TRUE, distance = distance_type,
-    fixed_eta1 = fixed_eta1,
-    fixed_eta2 = fixed_eta2,
-    hmax = hmax)
-  }
-} else if (eta_type == "fixed_eta1") {
-  objfun <- function(p) {
-    neg_ll_composite_fixed_eta(p, list_episodes = list_episodes, 
-    list_excesses = list_excesses, list_lags = list_lags,
-    wind_df = wind_df,
-    latlon = TRUE, distance = distance_type,
-    fixed_eta1 = fixed_eta1,
-    hmax = hmax)
-  }
-} else {
-  objfun <- function(p) {
-      neg_ll_composite(p, p, list_episodes = list_episodes, 
-      list_excesses = list_excesses, list_lags = list_lags,
-      wind_df = wind_df,
-      latlon = TRUE, distance = distance_type,
-      hmax = hmax)
-  }
-}
-
-grad_vec <- grad(objfun, result$par)
-
-cat("Gradient computed:\n")
-print(grad_vec)
-
+# SAVE RESULTS #################################################################
 result_df <- data.frame(
   beta1 = result$par[1],
   beta2 = result$par[2],
@@ -339,13 +308,7 @@ result_df <- data.frame(
   alpha2 = result$par[4],
   eta1 = result$par[5],
   eta2 = result$par[6],
-  nll = result$value,
-  grad_beta1 = grad_vec[1],
-  grad_beta2 = grad_vec[2],
-  grad_alpha1 = grad_vec[3],
-  grad_alpha2 = grad_vec[4],
-  grad_eta1 = grad_vec[5],
-  grad_eta2 = grad_vec[6]
+  nll = result$value
 )
 
 # Folder name to save the data
@@ -363,89 +326,95 @@ print(result_df)
 cat("Results saved to", filename, "\n")
 
 # # JACKKNIFE CI #################################################################
-# # Initial parameters for jackknife (from full data optimization)
-# init_param_jk <- as.numeric(result_df)[-1]
-# selected_episodes$t0_date <- as.POSIXct(selected_episodes$t0_date, format="%Y-%m-%d %H:%M:%S", tz="UTC")
+# Initial parameters for jackknife (from full data optimization)
+init_param_jk <- as.numeric(result_df)[-1]
+selected_episodes$t0_date <- as.POSIXct(selected_episodes$t0_date, format="%Y-%m-%d %H:%M:%S", tz="UTC")
 
-# # Define season boundaries (using day-of-year)
-# get_season <- function(date) {
-#   yday <- as.integer(format(date, "%j"))
-#   if (yday >= 80 & yday <= 171) {
-#     return("Spring")
-#   } else if (yday >= 172 & yday <= 263) {
-#     return("Summer")
-#   } else if (yday >= 264 & yday <= 354) {
-#     return("Autumn")
-#   } else {
-#     return("Winter")
-#   }
-# }
+# Define season boundaries (using day-of-year)
+get_season <- function(date) {
+  yday <- as.integer(format(date, "%j"))
+  if (yday >= 80 & yday <= 171) {
+    return("Spring")
+  } else if (yday >= 172 & yday <= 263) {
+    return("Summer")
+  } else if (yday >= 264 & yday <= 354) {
+    return("Autumn")
+  } else {
+    return("Winter")
+  }
+}
 
-# season_vec <- sapply(selected_episodes$t0_date, get_season)
-# year_vec <- format(selected_episodes$t0_date, "%Y")
-# season_year_vec <- paste(season_vec, year_vec)
+season_vec <- sapply(selected_episodes$t0_date, get_season)
+year_vec <- format(selected_episodes$t0_date, "%Y")
+season_year_vec <- paste(season_vec, year_vec)
 
-# unique_season_years <- sort(unique(season_year_vec))
-# n_season_years <- length(unique_season_years)
+unique_season_years <- sort(unique(season_year_vec))
+n_season_years <- length(unique_season_years)
 
-# jack_estimates_list <- parallel::mclapply(unique_season_years, function(season_year) {
-#   cat("Excluding season-year:", season_year, "\n")
-#   exclude_idx <- which(season_year_vec == season_year)
-#   jack_episodes <- episodes_opt[-exclude_idx]
-#   jack_lags <- lags_opt[-exclude_idx]
-#   jack_excesses <- excesses_opt[-exclude_idx]
-#   jack_wind <- wind_opt[-exclude_idx, , drop = FALSE]
-#   res <- tryCatch({
-#     optim(par = init_param_jk, fn = neg_ll_composite,
-#       list_lags = jack_lags, list_episodes = jack_episodes,
-#       list_excesses = jack_excesses, hmax = hmax,
-#       wind_df = jack_wind,
-#       latlon = FALSE,
-#       distance = distance_type,
-#       method = "L-BFGS-B",
-#       lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-#       upper = c(10, 10, 1.999, 1.999, 10, 10),
-#       control = list(maxit = 10000),
-#       hessian = FALSE)
-#   }, error = function(e) NULL)
-#   if (!is.null(res)) {
-#     return(res$par)
-#   } else {
-#     return(rep(NA, length(init_param_jk)))
-#   }
-# }, mc.cores = ncores)
+jack_estimates_list <- parallel::mclapply(unique_season_years, function(season_year) {
+  cat("Excluding season-year:", season_year, "\n")
+  exclude_idx <- which(season_year_vec == season_year)
+  jack_episodes <- list_episodes[-exclude_idx]
+  jack_lags <- list_lags[-exclude_idx]
+  jack_excesses <- list_excesses[-exclude_idx]
+  jack_wind <- wind_df[-exclude_idx, , drop = FALSE]
+  res <- tryCatch({
+    optim(par = init_param_jk, fn = neg_ll_composite,
+      list_lags = jack_lags, list_episodes = jack_episodes,
+      list_excesses = jack_excesses, hmax = hmax,
+      wind_df = jack_wind,
+      latlon = FALSE,
+      distance = distance_type,
+      method = "L-BFGS-B",
+      lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+      upper = c(10, 10, 1.999, 1.999, 10, 10),
+      control = list(maxit = 10000),
+      hessian = FALSE)
+  }, error = function(e) NULL)
+  if (!is.null(res)) {
+    return(res$par)
+  } else {
+    return(rep(NA, length(init_param_jk)))
+  }
+}, mc.cores = ncores)
 
-# jack_estimates <- do.call(rbind, jack_estimates_list)
-# jack_estimates <- na.omit(jack_estimates)
-# n_eff <- nrow(jack_estimates)
+jack_estimates <- do.call(rbind, jack_estimates_list)
+jack_estimates <- na.omit(jack_estimates)
+n_eff <- nrow(jack_estimates)
 
-# filename <- paste0(data_folder, "comephore/optim_results/jackknife_estimates/all_results_jk_by_seasonyear_n", 
-#            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-# write.csv(jack_estimates, filename, row.names = FALSE)
+foldername <- file.path(
+  paste0(data_folder, "comephore/optim_results"),
+  distance_type,
+  eta_type,
+  "jackknife_estimates"
+)
+filename <- paste0(foldername, "/all_results_jk_by_seasonyear_n", 
+           n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+write.csv(jack_estimates, filename, row.names = FALSE)
 
-# jack_mean <- colMeans(jack_estimates)
-# pseudo_values <- matrix(NA, nrow = n_eff, ncol = length(init_param_jk))
-# for (i in 1:n_eff) {
-#   pseudo_values[i, ] <- n_eff * result$par - (n_eff - 1) * jack_estimates[i, ]
-# }
+jack_mean <- colMeans(jack_estimates)
+pseudo_values <- matrix(NA, nrow = n_eff, ncol = length(init_param_jk))
+for (i in 1:n_eff) {
+  pseudo_values[i, ] <- n_eff * result$par - (n_eff - 1) * jack_estimates[i, ]
+}
 
-# jack_mean_pseudo <- colMeans(pseudo_values)
-# jack_se <- apply(pseudo_values, 2, sd) / sqrt(n_eff)
+jack_mean_pseudo <- colMeans(pseudo_values)
+jack_se <- apply(pseudo_values, 2, sd) / sqrt(n_eff)
 
-# z <- qnorm(0.975)
-# lower_ci <- jack_mean_pseudo - z * jack_se
-# upper_ci <- jack_mean_pseudo + z * jack_se
+z <- qnorm(0.975)
+lower_ci <- jack_mean_pseudo - z * jack_se
+upper_ci <- jack_mean_pseudo + z * jack_se
 
-# jackknife_seasonyear_results <- data.frame(
-#   Parameter = c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2"),
-#   Estimate_full = result$par,
-#   Estimate_jk   = jack_mean_pseudo,
-#   StdError = jack_se,
-#   CI_lower = lower_ci,
-#   CI_upper = upper_ci
-# )
+jackknife_seasonyear_results <- data.frame(
+  Parameter = c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2"),
+  Estimate_full = result$par,
+  Estimate_jk   = jack_mean_pseudo,
+  StdError = jack_se,
+  CI_lower = lower_ci,
+  CI_upper = upper_ci
+)
 
 
-# filename <- paste0(data_folder, "comephore/optim_results/jackknife_estimates/results_jk_by_seasonyear_n", 
-#            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-# write.csv(jackknife_seasonyear_results, filename, row.names = FALSE)
+filename <- paste0(foldername, "/results_jk_by_seasonyear_n", 
+           n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+write.csv(jackknife_seasonyear_results, filename, row.names = FALSE)
