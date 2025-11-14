@@ -469,3 +469,242 @@ format_value <- function(x) {
   # Concatenate values
   return(paste(formatted_values, collapse = "_"))
 }
+
+
+
+
+
+
+create_generator_gif_grid <- function(simu_df, grid_coords, outfile,
+                                 interval = 0.4, forcedtemp = NULL,
+                                 s0 = NULL) {
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(viridis)
+  library(magick)
+
+  stopifnot(ncol(simu_df) == nrow(grid_coords))
+
+  # ----- Global color scale (fixed legend across time) -----
+  global_min <- min(simu_df, na.rm = TRUE)
+  global_max <- max(simu_df, na.rm = TRUE)
+
+  # ----- Stop before end if forcedtemp is specified -----
+  Tmax <- if (is.null(forcedtemp)) nrow(simu_df) else min(forcedtemp, nrow(simu_df))
+
+  # ----- 1 km pixel conversion -----
+  mean_lat <- mean(grid_coords$Latitude)
+  dy <- 1 / 111.32
+  dx <- 1 / (111.32 * cos(mean_lat*pi/180))
+  hx <- dx/2
+  hy <- dy/2
+
+  # ----- Construct static pixel polygons -----
+  poly_base <- grid_coords %>%
+    mutate(id = Site) %>%
+    rowwise() %>%
+    mutate(
+      px = list(c(Longitude - hx, Longitude + hx, Longitude + hx, Longitude - hx)),
+      py = list(c(Latitude  - hy, Latitude  - hy, Latitude  + hy, Latitude  + hy))
+    ) %>%
+    ungroup() %>%
+    unnest(c(px, py))
+
+  frames <- list()
+
+  for (t in 1:Tmax) {
+
+    values <- as.numeric(simu_df[t, ])
+    names(values) <- colnames(simu_df)
+
+    df_t <- merge(data.frame(Site = names(values), Value = values),
+                  grid_coords, by = "Site")
+
+    poly_t <- poly_base %>%
+      left_join(df_t[, c("Site", "Value")], by = "Site")
+
+    fill_scale <- scale_fill_gradientn(
+        colours = c("#70a7ae", "#b8967a", "#9d503d"),
+        values = scales::rescale(c(global_min, global_max)),
+        name = "Rainfall in mm",
+        limits = c(min_val, max_val)
+      ) 
+
+    p <- ggplot(poly_t, aes(px, py, group = Site, fill = Value)) +
+      geom_polygon(color = NA) +
+      coord_equal() +
+      fill_scale +
+      theme_void() +
+      labs(title = paste0("t = ", t-1), fill = "Value")
+
+    # ----- Add s0 marker if provided -----
+    if (!is.null(s0)) {
+      p <- p + 
+        geom_text(data = data.frame(x = s0[1], y = s0[2]),
+                  aes(x = x, y = y), label = "s0",
+                  color = "black", size = 5, fontface = "bold",
+                  inherit.aes = FALSE)
+    }
+
+    img <- magick::image_graph(width = 800, height = 700, res = 120)
+    print(p)
+    dev.off()
+
+    frames[[t]] <- img
+  }
+
+  message("Combining frames into GIF...")
+  animation <- magick::image_animate(magick::image_join(frames), fps = 1/interval)
+  magick::image_write(animation, outfile)
+  message("✅ GIF saved to: ", outfile)
+}
+
+
+
+create_generator_gif_points <- function(simu_df, coords, outfile,
+                                       interval = 0.4, forcedtemp = NULL,
+                                       s0 = NULL) {
+  library(dplyr)
+  library(ggplot2)
+  library(viridis)
+  library(magick)
+
+  # Checks
+  stopifnot(ncol(simu_df) == nrow(coords))
+  colnames(coords) <- c("Site", "x", "y")
+
+  # Global fixed legend scale
+  global_min <- min(simu_df, na.rm = TRUE)
+  global_max <- max(simu_df, na.rm = TRUE)
+
+  # Time range
+  Tmax <- if (is.null(forcedtemp)) nrow(simu_df) else min(forcedtemp, nrow(simu_df))
+
+  frames <- list()
+
+  for (t in 1:Tmax) {
+
+    values <- as.numeric(simu_df[t, ])
+    names(values) <- colnames(simu_df)
+
+    df_t <- merge(data.frame(Site = names(values), Value = values),
+                  coords, by = "Site")
+
+    # Color scale choice
+    col_scale <- scale_color_gradientn(
+      colours = c("#70a7ae", "#b8967a", "#9d503d"),
+      values = scales::rescale(c(global_min, global_max)),  # mapping palette
+      limits = c(global_min, global_max),                   # fixed legend
+      oob = scales::squish,                                  # clip if needed
+      name = "Rainfall (mm)"
+    )
+
+
+    p <- ggplot(df_t, aes(x, y, color = Value)) +
+      geom_point(size = 4) +
+      coord_equal() +
+      col_scale +
+      theme_minimal() +
+      labs(title = paste0("t = ", t - 1), color = "Value") +
+      theme(axis.title = element_blank(),
+            axis.text = element_blank())
+
+    # Optional s0 marker
+    if (!is.null(s0)) {
+      p <- p + geom_text(data = data.frame(x = s0[1], y = s0[2]),
+                         aes(x = x, y = y),
+                         label = "s0", color = "black",
+                         size = 6, fontface = "bold",
+                         inherit.aes = FALSE)
+    }
+
+    img <- magick::image_graph(width = 800, height = 700, res = 120)
+    print(p)
+    dev.off()
+    frames[[t]] <- img
+  }
+
+  animation <- magick::image_animate(magick::image_join(frames), fps = 1/interval)
+  magick::image_write(animation, outfile)
+
+  message("GIF saved to: ", outfile)
+}
+
+
+
+
+
+
+
+
+create_generator_gif_points <- function(simu_df, coords, outfile,
+                                       interval = 0.4, forcedtemp = NULL,
+                                       s0 = NULL) {
+
+  library(dplyr)
+  library(ggplot2)
+  library(viridis)
+  library(magick)
+
+  # Checks
+  stopifnot(ncol(simu_df) == nrow(coords))
+  colnames(coords) <- c("Site", "x", "y")
+
+  # Determine Tmax (stop time)
+  Tmax <- if (is.null(forcedtemp)) nrow(simu_df) else min(forcedtemp, nrow(simu_df))
+
+  # Compute legend range on the actual period shown
+  global_min <- min(simu_df[1:Tmax, ], na.rm = TRUE)
+  global_max <- max(simu_df[1:Tmax, ], na.rm = TRUE)
+
+  frames <- list()
+
+  for (t in 1:Tmax) {
+
+    date_t <- rownames(simu_df)[t]
+
+    values <- as.numeric(simu_df[t, ])
+    names(values) <- colnames(simu_df)
+
+    df_t <- merge(data.frame(Site = names(values), Value = values),
+                  coords, by = "Site")
+
+    # Fixed legend, custom palette
+    col_scale <- scale_color_gradientn(
+      colours = c("#70a7ae", "#b8967a", "#9d503d"),
+      values = scales::rescale(c(global_min, global_max)),
+      limits = c(global_min, global_max),
+      oob = scales::squish,
+      name = "Rainfall (mm)"
+    )
+
+    p <- ggplot(df_t, aes(x, y, color = Value)) +
+      geom_point(size = 4) +
+      coord_equal() +
+      col_scale +
+      theme_minimal() +
+      labs(title = date_t, color = "Value") +
+      theme(axis.title = element_blank(),
+            axis.text = element_blank())
+
+    if (!is.null(s0)) {
+      p <- p + geom_text(data = data.frame(x = s0[1], y = s0[2]),
+             aes(x = x, y = y),
+             label = "s0", color = "black",
+             size = 4, fontface = "bold",
+             hjust = 0.5, vjust = 1,
+             inherit.aes = FALSE)
+    }
+
+    img <- magick::image_graph(width = 800, height = 700, res = 120)
+    print(p)
+    dev.off()
+    frames[[t]] <- img
+  }
+
+  animation <- magick::image_animate(magick::image_join(frames), fps = 1/interval)
+  magick::image_write(animation, outfile)
+
+  message("✅ GIF saved to: ", outfile)
+}

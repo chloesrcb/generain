@@ -723,15 +723,15 @@ neg_ll <- function(params, df_lags, excesses,
     p <- nmarg / Tmax
   }
 
+  if (!is.na(hmax)) { # filter by hmax
+    ind_inf_hmax <- which(df_lags$hnorm < hmax)
+    excesses <- excesses[ind_inf_hmax, ]
+    df_lags <- df_lags[ind_inf_hmax, ]
+  }
 
   # Get chi values
   chi <- theoretical_chi(params, df_lags, latlon, distance, normalize)
-  if (!is.na(hmax)) { # filter by hmax
-    ind_inf_hmax <- which(chi$hnormV < hmax)
-    excesses <- excesses[ind_inf_hmax, ]
-    df_lags <- df_lags[ind_inf_hmax, ]
-    chi <- chi[ind_inf_hmax, ]
-  }
+  
   ll_df <- df_lags
   ll_df$kij <- excesses$kij
   ll_df$Tobs <- excesses$Tobs
@@ -806,8 +806,6 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     adv_df <- cbind(adv_x, adv_y)
     if (nrow(adv_df) == 1) adv <- as.vector(adv_df)
   }
-
-  print(params)
 
   m <- length(list_episodes)
   nll_composite <- 0

@@ -1116,30 +1116,30 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
       stop("No grid points found within specified radius of s0_center.")
     }
   }
-  
+
   # Prepare output containers
   n_s0 <- nrow(s0_df)
   s0_list <- vector("list", nres)   # store s0 used for each simulation
   Z <- array(NA, dim = c(lx, ly, lt, nres, n_s0))  # 5D output array
-  
+
   # Loop over simulations
   for (i in seq_len(nres)) {
     s0_list[[i]] <- list()
-    
+
     # Loop over all conditioning points
     for (j in seq_len(n_s0)) {
       s0_curr <- s0_df[j, , drop = FALSE]
-      
+
       # If random_s0, select randomly among candidate points
       if (random_s0) {
         selected_index <- sample(nrow(candidate_points), 1)
         s0_curr <- candidate_points[selected_index, , drop = FALSE]
       }
       s0_list[[i]][[j]] <- s0_curr
-      
+
       # Index in the grid for conditioning point at time t0
       ind_s0_t0 <- which(grid$x == s0_curr$x & grid$y == s0_curr$y & grid$t == t0)
-      
+
       # Temporal variogram centered at t0
       gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
 
@@ -1149,7 +1149,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
           modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
         gamma_space_y <- RandomFields::RFvariogram(
           modelSpace, x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
-        
+
         gamma_0 <- compute_st_variogram(
           grid,
           gamma_space_x = gamma_space_x,
@@ -1157,12 +1157,12 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
           gamma_temp = gamma_temp,
           adv = adv
         )
-        
+
         # Simulate Gaussian fields in x, y, and time
         W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
         W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
         W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
-        
+
         W <- compute_st_gaussian_process(
           grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
         )
@@ -1358,33 +1358,80 @@ convert_single_simulation_to_df <- function(simu_i, ngrid) {
 }
 
 
-sim_episode <- function(params_vario, params_margins, x, y, times, adv, t0, s0) {
+#' sim_episode function
+#' This function simulates a single episode of spatio-temporal data
+#' based on r-Pareto process simulations.
+#'' @param params_vario A list containing variogram parameters:
+#'                     beta1, beta2, alpha1, alpha2.
+#' @param params_margins A list containing marginal parameters:
+#'                       xi, sigma, kappa (vectors per site).
+#' @param x Vector for the first spatial dimension.
+#' @param y Vector for the second spatial dimension.
+#' @param times Vector for the temporal dimension.
+#' @param adv The advection coordinates vector.
+#' @param t0 The conditioning time point.
+#' @param s0 The conditioning spatial location (index).
+#' @param u_s Vector of thresholds per site for the Pareto transformation.
+#' 
+#' @return A 3D array of simulated data (sites x times).
+#' @export
+sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0, u_s) {
+  #---------------------------------------------------------
+  # Simulate r-Pareto process on the spatial grid
+  #---------------------------------------------------------
   sim <- sim_rpareto(
     beta1 = params_vario$beta1,
     beta2 = params_vario$beta2,
     alpha1 = params_vario$alpha1,
     alpha2 = params_vario$alpha2,
     adv = adv,
-    x = x,
-    y = y,
+    x = unique(coords$x),
+    y = unique(coords$y),
     t = times,
     t0 = t0,
     s0 = s0
   )
-  Z <- sim$Z
-  U <- 1 - 1/Z
-  X <- array(NA, dim = dim(Z))
-  for (i in 1:length(coords$x)) {
-    X[i,,] <- qextgp(U[i,,], type = 1, xi = params_margins$xi[i], 
-              sigma = params_margins$sigma[i], kappa = params_margins$kappa[i])
+
+  # Keep only first realization / first conditioning site
+  Z <- sim$Z[,,,1,1, drop = TRUE] * u_s[s0]
+
+  n_sites <- nrow(coords)
+  nx <- length(unique(coords$x))
+  ny <- length(unique(coords$y))
+  nt <- length(times)
+
+  U <- array(NA_real_, dim = c(nx, ny, nt))
+  X <- array(NA_real_, dim = c(nx, ny, nt))
+
+  #---------------------------------------------------------
+  # Transform site by site
+  #---------------------------------------------------------
+  for (k in seq_len(n_sites)) {
+    # Transform Pareto → Uniform using local threshold
+    xk <- coords$x[k]
+    yk <- coords$y[k]
+    U[xk, yk, ] <- pmax(1 - u_s[k] / Z[xk, yk, ], 0)
+
+    # Transform Uniform → rainfall intensity (EGPD)
+    X[xk, yk, ] <- qextgp(
+      U[xk, yk, ],
+      type  = 1,
+      xi    = params_margins$xi[k],
+      sigma = params_margins$sigma[k],
+      kappa = params_margins$kappa[k]
+    )
   }
+
+  # Return rainfall simulations (matrix [site × time])
   return(X)
 }
 
 
 
-
-sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0) {
+sim_episode_coords <- function(params_vario, params_margins, coords, times, adv, t0, s0, u_s) {
+  #---------------------------------------------------------
+  # Simulate r-Pareto process on the spatial grid
+  #---------------------------------------------------------
   sim <- sim_rpareto_coords(
     beta1 = params_vario$beta1,
     beta2 = params_vario$beta2,
@@ -1396,151 +1443,34 @@ sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0
     t0 = t0,
     s0 = s0
   )
-  Z <- sim$Z
-  U <- 1 - 1/Z
-  X <- array(NA, dim = dim(Z))
-  for (i in 1:length(coords$x)) {
-    X[i,,] <- qextgp(U[i,,], type = 1, xi = params_margins$xi[i], 
-              sigma = params_margins$sigma[i], kappa = params_margins$kappa[i])
+
+  # Keep only first realization / first conditioning site
+  index_s0 <- which(coords$Latitude == s0[2] & coords$Longitude == s0[1])
+  site_name <- rownames(coords)[index_s0]
+  Y <- sim$Z[,,1, drop = TRUE]
+  Z <- Y * u_s[site_name]
+  n_sites <- nrow(coords)
+  nt <- length(times)
+  U <- matrix(NA_real_, n_sites, nt, dimnames = list(rownames(coords), NULL))
+  X <- matrix(NA_real_, n_sites, nt, dimnames = list(rownames(coords), NULL))
+  #---------------------------------------------------------
+  # Transform site by site
+  #---------------------------------------------------------
+  for (k in seq_len(n_sites)) {
+    # Transform Pareto → Uniform using local threshold
+    sk <- rownames(coords)[k]
+    U[sk, ] <- pmax(1 - u_s[k] / Z[sk, ], 0.00001)
+
+    # Transform Uniform → rainfall intensity (EGPD)
+    X[sk, ] <- qextgp(
+      U[sk, ],
+      type  = 1,
+      xi    = params_margins$xi[k],
+      sigma = params_margins$sigma[k],
+      kappa = params_margins$kappa[k]
+    )
   }
+
+  # Return rainfall simulations (matrix [site × time])
   return(X)
-}
-
-
-
-
-sim_occurrence_probit <- function(coords, times, adv,
-                                  beta_occ = 0.1, alpha_occ = 1.2,
-                                  p_wet, t0 = NULL, s0 = NULL) {
-  # coords: data.frame avec colonnes x, y (grille régulière)
-  # times: vecteur d'indices t (entiers ou num)
-  # adv: c(vx, vy)
-  # p_wet: soit scalaire, soit vecteur/array de même taille que le champ
-  # beta_occ, alpha_occ: paramètres du RMfbm pour l'occurrence
-
-  lx <- length(unique(coords$x))
-  ly <- length(unique(coords$y))
-  lt <- length(times)
-
-  # Variogramme fract. Brownien pour occurrence
-  modelOcc <- RandomFields::RMfbm(alpha = alpha_occ, var = 2 * beta_occ)
-
-  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = times)
-  grid$shifted_x <- grid$x - grid$t * adv[1]
-  grid$shifted_y <- grid$y - grid$t * adv[2]
-
-  # Simule un seul champ gaussien sur les coords décalées
-  V <- RandomFields::RFsimulate(modelOcc,
-                                x = grid$shifted_x,
-                                y = grid$shifted_y,
-                                grid = FALSE)
-
-  # Prob wet -> seuil probit
-  # p_wet peut être scalaire, vecteur de longueur lx*ly*lt, ou matrice/array
-  if (length(p_wet) == 1L) p_wet <- rep(p_wet, lx * ly * lt)
-  q <- stats::qnorm(1 - p_wet)
-
-  O_vec <- as.numeric(V > q)
-  O <- array(O_vec, dim = c(lx, ly, lt))
-
-  # Force l'occurrence au point conditionnant si fourni
-  if (!is.null(s0) && !is.null(t0)) {
-    O[s0[1], s0[2], which.min(abs(times - t0))] <- 1L
-  }
-  return(O)
-}
-
-
-sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0,
-                        # --- nouveaux args occurrence ---
-                        p_wet = 0.05,
-                        beta_occ = 0.1, alpha_occ = 1.2) {
-
-  # 1) Simulation r-Pareto (dépendance extrême)
-  sim <- sim_rpareto(
-    beta1 = params_vario$beta1,
-    beta2 = params_vario$beta2,
-    alpha1 = params_vario$alpha1,
-    alpha2 = params_vario$alpha2,
-    adv = adv, x = coords$x, y = coords$y, t = times,
-    t0 = t0, s0 = s0
-  )
-  Z <- sim$Z[,,,1]
-
-  # 2) Pseudo-uniformes
-  U <- 1 - 1/Z
-  U <- pmin(pmax(U, 1e-10), 1 - 1e-10)  # garde-fous numériques
-
-  # 3) Intensités positives via EGPD
-  Xpos <- array(NA, dim = dim(Z))
-  n_sites <- nrow(coords)  # si coords = grille complète par site
-  for (s in seq_len(n_sites)) {
-    Xpos[s,,] <- qegpd(U[s,,],
-                       xi    = params_margins$xi[s],
-                       sigma = params_margins$sigma[s],
-                       kappa = params_margins$kappa[s])
-  }
-
-  # 4) Occurrence binaire (probit-GRF) + advection
-  # O <- sim_occurrence_probit(coords, times, adv,
-  #                            beta_occ = beta_occ, alpha_occ = alpha_occ,
-  #                            p_wet = p_wet, t0 = t0, s0 = s0)
-
-  # # 5) Champ final avec zéros
-  # X <- O * Xpos
-
-  # Option: petite censure pour éviter le "drizzle"
-  # X[X < 0.05] <- 0
-
-  return(list(X = X, U = U, Z = Z, s0 = s0, t0 = t0))
-}
-
-get_prob_occurence <- function(data_rain) {
-  # data_rain: data.frame with sites in columns, time in rows
-  n_sites <- ncol(data_rain)
-  P_wet <- numeric(n_sites)
-  for (s in seq_len(n_sites)) {
-    P_wet[s] <- mean(data_rain[[s]] > 0, na.rm = TRUE)
-  }
-  return(P_wet)
-}
-
-sim_occurence <- function(coords, times, adv,
-                          p_wet_sites,
-                          beta_occ = 0.1, alpha_occ = 1.2) {
-  # coords: data.frame avec colonnes x, y (grille régulière)
-  # times: vecteur d'indices t (entiers ou num)
-  # adv: c(vx, vy)
-  # p_wet_sites: vecteur de probabilité d'occurrence par site
-  # beta_occ, alpha_occ: paramètres du RMfbm pour l'occurrence
-
-  lx <- length(unique(coords$x))
-  ly <- length(unique(coords$y))
-  lt <- length(times)
-
-  # Variogramme fract. Brownien pour occurrence
-  modelOcc <- RandomFields::RMfbm(alpha = alpha_occ, var = 2 * beta_occ)
-
-  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = times)
-  grid$shifted_x <- grid$x - grid$t * adv[1]
-  grid$shifted_y <- grid$y - grid$t * adv[2]
-
-  # Simule un seul champ gaussien sur les coords décalées
-  V <- RandomFields::RFsimulate(modelOcc,
-                                x = grid$shifted_x,
-                                y = grid$shifted_y,
-                                grid = FALSE)
-
-  # Prob wet -> seuil probit
-  # p_wet_sites doit être de longueur lx*ly
-  if (length(p_wet_sites) != lx * ly) {
-    stop("p_wet_sites must have length equal to number of spatial sites.")
-  }
-  p_wet_rep <- rep(p_wet_sites, times = lt)
-  q <- stats::qnorm(1 - p_wet_rep)
-
-  O_vec <- as.numeric(V > q)
-  O <- array(O_vec, dim = c(lx, ly, lt))
-
-  return(O)
 }

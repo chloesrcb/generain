@@ -4,7 +4,7 @@ library(lubridate)
 library(fuzzyjoin)
 library(grid)
 
-muse <- TRUE
+muse <- FALSE
 
 if (muse) {
   # Get the muse folder
@@ -289,7 +289,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 df_lags <- list_lags[[10]]
-df_excesses <- list_excesses[[10]]
+df_excesses <- list_excesses[[13]]
 sum(df_excesses$kij)
 
 
@@ -303,7 +303,13 @@ com_results <- read.csv(filename_com_res)
 params_com <- com_results[com_results$q == q*100 &
                            com_results$delta == 30 &
                            com_results$dmin == 5, ]
-init_params_com <- c(0.2593, 0.5494, 0.5181, 0.9604, 1.4247, 4.8454)
+init_params_com <- round(c(0.3239414871669, 0.672726926434784,
+                     0.387825784268738, 0.721880852223606,
+                     1.78129981610925, 5.01315461915031), 4)
+
+init_params_com <- round(c(0.308153284869901, 0.734418815078333, 
+                      0.388850070714932,	0.694475390953746,	1.45355613609783,	
+                      5.42017737398839,	270800.229103946), 4)[1:6]
 
 
 # check for na in adv and wind
@@ -312,15 +318,6 @@ hmax <- max(dist_mat) / 1000
 
 # OPTIMISATION ---------------------------------------------------------------
 # Composite likelihood optimisation with fixed eta1 and eta2
-
-# # try with 0 adv
-# V_episodes_noadv <- V_episodes
-# V_episodes_noadv$vx <- rep(0, nrow(V_episodes_noadv))
-# V_episodes_noadv$vy <- rep(0, nrow(V_episodes_noadv))
-
-# V_episodes_meanadv <- V_episodes
-# V_episodes_meanadv$vx <- rep(mean(V_episodes$vx, na.rm = TRUE), nrow(V_episodes_meanadv))
-# V_episodes_meanadv$vy <- rep(mean(V_episodes$vy, na.rm = TRUE), nrow(V_episodes_meanadv))
 
 
 result <- optim(
@@ -342,26 +339,6 @@ result <- optim(
 )
 
 result
-
-
-# result_full <- optim(
-#   par = init_params_com,
-#   fn = neg_ll_composite,
-#   list_lags = list_lags,
-#   list_episodes = list_episodes,
-#   list_excesses = list_excesses,
-#   hmax = hmax,
-#   wind_df = V_episodes,
-#   latlon = FALSE,
-#   distance = "euclidean",
-#   method = "L-BFGS-B",
-#   lower = c(1e-08, 1e-08, 1e-08, 1e-08, -1e-08, -1e-08),
-#   upper = c(10, 10, 1.999, 1.999, 10, 10),
-#   control = list(maxit = 20000, trace = 1)
-# )
-
-
-# result_full
 
 if (result$convergence != 0) {
   warning("Optimization did not converge")
@@ -429,9 +406,10 @@ jack_estimates_list <- parallel::mclapply(unique_month_years, function(month_yea
       hessian = FALSE)
   }, error = function(e) NULL)
   
-  if (!is.null(res)) {
+  if (!is.null(res) && res$convergence == 0) {
     return(res$par)
   } else {
+    print("Optimization failed or did not converge")
     return(rep(NA, length(init_param_jk)))
   }
 }, mc.cores = ncores)
@@ -452,9 +430,8 @@ write.csv(jack_estimates, filename, row.names = FALSE)
 jack_mean <- colMeans(jack_estimates)
 pseudo_values <- matrix(NA, nrow = n_eff, ncol = length(init_param_jk))
 for (i in 1:n_eff) {
-  pseudo_values[i, ] <- n_eff * result$par - (n_eff - 1) * jack_estimates[i, ]
+  pseudo_values[i, ] <- n_eff * jack_mean - (n_eff - 1) * jack_estimates[i, ]
 }
-
 jack_mean_pseudo <- colMeans(pseudo_values)
 jack_se <- apply(pseudo_values, 2, sd) / sqrt(n_eff)
 

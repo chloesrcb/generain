@@ -128,9 +128,9 @@ df_result <- df_result_all[df_result_all$q_spa == 0.95 & df_result_all$q_temp ==
 
 # Define configurations
 configs <- expand.grid(
-  q = c(0.95, 0.97),
-  min_spatial_dist = c(5, 7),
-  delta = c(30)
+  q = c(0.95, 0.96, 0.97),
+  min_spatial_dist = c(3, 5, 7),
+  delta = c(15, 24, 30)
 )
 
 episode_counts <- data.frame()
@@ -139,7 +139,11 @@ for (i in seq_len(nrow(configs))) {
   q <- configs$q[i]
   min_spatial_dist <- configs$min_spatial_dist[i]
   delta <- configs$delta[i]
-
+  print("----------------------------------------------------------------")
+  print(paste("Quantile:", q,
+              "- Min spatial dist (km):", min_spatial_dist,
+              "- Episode size (h):", delta))
+    
   comephore_subset <- comephore
   set_st_excess <- get_spatiotemp_excess(comephore_subset, quantile = q, remove_zeros = TRUE)
   starting_year <- as.character(year(rownames(comephore_subset)[1]))

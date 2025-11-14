@@ -190,8 +190,15 @@ sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, t,
     R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
     Z[,, i] <- matrix(threshold * R * Y, n_sites, lt, byrow = FALSE)
   }
-  
+
+  dimnames(Z) <- list(Site = rownames(coords), Time = t, Realisation = seq_len(nres))
+  if (!is.null(coords$Site)) {
+    rownames(Z) <- coords$Site
+  }
+
+  # Retour propre et lisible
   return(list(Z = Z, s0_used = s0_used))
+
 }
 
 

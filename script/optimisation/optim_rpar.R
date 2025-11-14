@@ -13,7 +13,7 @@ muse <- TRUE
 adv <- c(0.1, 0.2)
 params <- c(0.1, 0.8, 0.5, 0.7)
 ngrid <- 5
-temp <- 0:29
+temp <- 0:2
 s0 <- c(1, 1)
 t0 <- 0
 random_s0 <- TRUE
