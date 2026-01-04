@@ -143,6 +143,37 @@ test_that("get_chiq returns correct chi value", {
   expect_equal(result6, expected6, tolerance = 1e-6)
 })
 
+test_that("chispatemp_empirical returns chiemp = 1 for identical series", {
+  data_rain <- data.frame(
+    site1 = 1:6,
+    site2 = 1:6
+  )
+  df_lags <- data.frame(
+    s1 = c(1L, 1L),
+    s2 = c(2L, 2L),
+    tau = c(0, 1)
+  )
+  quantile <- 0.5
+
+  res <- chispatemp_empirical(data_rain, df_lags, quantile, remove_zeros = TRUE)
+
+  expect_equal(res$chiemp, c(1, 1))
+
+  chi_expected <- function(tau) {
+    Tmax <- nrow(data_rain)
+    rain_cp <- data_rain[, c(1, 2)]
+    rain_lag <- rain_cp$site1[(tau + 1):Tmax]
+    rain_nolag <- rain_cp$site2[1:(Tmax - tau)]
+    data <- cbind(rain_lag, rain_nolag)
+    Tobs <- nrow(data)
+    data_unif <- cbind(rank(data[, 2]) / (Tobs + 1),
+                       rank(data[, 1]) / (Tobs + 1))
+    get_chiq(data_unif, quantile)
+  }
+
+  expect_equal(res$chiemp2, c(chi_expected(0), chi_expected(1)), tolerance = 1e-12)
+})
+
 
 ### Test the `chispatemp_empirical` function -----------------------------------
 

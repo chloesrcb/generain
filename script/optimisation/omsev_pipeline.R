@@ -60,7 +60,7 @@ df_dist <- reshape_distances(dist_mat)
 rain <- rain[, !(colnames(rain) %in% c("cines", "hydro", "brives"))]
 location_gauges <- location_gauges[location_gauges$Station != "cines" &
                                    location_gauges$Station != "hydro" &
-                                   location_gauges$Station != "brives", ]
+                                   location_gauges$Station != "brives" , ]
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
 
@@ -76,48 +76,10 @@ coords_m <- st_coordinates(sites_coords_sf)
 grid_coords_km <- as.data.frame(coords_m / 1000)
 colnames(grid_coords_km) <- c("Longitude", "Latitude")
 rownames(grid_coords_km) <- rownames(sites_coords)
-# grid_coords_m <- sites_coords
-# grid_coords_m$x_m <- (coords_m[, "X"] - min(coords_m[, "X"]))
-# grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
-# grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
-# grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
 
-# # get distance matrix
-# grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
-# grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
-# colnames(grid_coords_m) <- c("Longitude", "Latitude")
-# colnames(grid_coords_km) <- c("Longitude", "Latitude")
-# dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
-
-# # Spatial chi
-# df_dist <- reshape_distances(dist_mat)
-# df_dist_km <- df_dist
-# df_dist_km$value <- df_dist$value / 1000
-
-################################################################################
-# WLSE results -----------------------------------------------------------------
-################################################################################
-# foldername <- paste0(data_folder, "omsev/WLSE/")
-# df_spa_result <- read.csv(paste0(foldername, "wlse_spa_summary.csv"))
-# df_temp_result <- read.csv(paste0(foldername, "wlse_temp_summary.csv"))
-# df_result_all <- merge(df_spa_result, df_temp_result, by = NULL)
-
-# # select one row
-# df_result <- df_result_all[df_result_all$q_spa == 0.95 &
-#                              df_result_all$q_temp == 0.95, ]
-
-# beta1 <- df_result$beta1
-# beta2 <- df_result$beta2
-# alpha1 <- df_result$alpha1
-# alpha2 <- df_result$alpha2
-
-# # estimates
-# wlse_omsev <- c(beta1, beta2, alpha1, alpha2) # m / 5 min
 
 ################################################################################
 # VARIOGRAM --------------------------------------------------------------------
-################################################################################
-
 ################################################################################
 
 # in rain remove when all data are NA
@@ -143,9 +105,6 @@ length(selected_points$s0)
 selected_points <- selected_points %>%
   mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
-# Make sure rain is in matrix form
-# site names in columns, time in rows
-# column names must match `s0t0_set$s0`
 stopifnot(all(s0t0_set$s0 %in% colnames(rain)))
 
 # For each (s0, t0, u_s0), check if rain[t0, s0] > u_s0
@@ -205,6 +164,20 @@ adv_df <- read.csv(adv_filename, sep = ",")
 
 head(adv_df)
 
+# get index of advection speed below 0.1 km/h
+adv_speed <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
+
+idx_low_adv <- which(adv_speed > 0 & adv_speed < 0.1)
+
+# get index of advection speed below 0.1 km/h and with mean_dx_kmh_comphore and mean_dy_kmh_comephore at 0
+idx_low_speed_adv_comephore <- which(adv_speed > 0 & adv_speed < 0.1 & adv_df$mean_dx_kmh_comephore == 0 & adv_df$mean_dy_kmh_comephore == 0)
+print(paste("Number of episodes with advection speed below 0.1 km/h and comephore advection at 0:", length(idx_low_speed_adv_comephore)))
+total_n_episodes <- nrow(adv_df)
+print(paste("Total number of episodes:", total_n_episodes))
+# put these advections to 0
+adv_df$vx_final[idx_low_speed_adv_comephore] <- 0
+adv_df$vy_final[idx_low_speed_adv_comephore] <- 0
+
 # get only matching episodes from selected_points
 # convert adv_df$t0 to POSIXct
 adv_df$t0_omsev <- as.POSIXct(adv_df$t0_omsev, format="%Y-%m-%d %H:%M:%S", tz="UTC")
@@ -254,9 +227,11 @@ V_episodes <- V_episodes[!is.na(V_episodes$vx) & !is.na(V_episodes$vy), ]
 n_zero_adv <- sum(V_episodes$vx == 0 & V_episodes$vy == 0)
 cat("Number of episodes with zero advection:", n_zero_adv, "\n")
 
-# # put 0 for NA adv values
-# V_episodes$vx[is.na(V_episodes$vx)] <- 0
-# V_episodes$vy[is.na(V_episodes$vy)] <- 0
+n_between_0_and_01 <- sum((sqrt(V_episodes$vx^2 + V_episodes$vy^2) > 0) &
+                           (sqrt(V_episodes$vx^2 + V_episodes$vy^2) < 0.1))
+cat("Number of episodes with advection between 0 and 0.1 km/h:", n_between_0_and_01, "\n")
+
+
 
 tau_vect <- 0:10
 
@@ -298,107 +273,61 @@ filename_com_res <- paste(data_folder,
         "comephore/optim_results/euclidean/free_eta/results_com_classes_q95_delta30_dmin5.csv",
         sep = "")
 com_results <- read.csv(filename_com_res)
-
 # check for na in adv and wind
 hmax <- max(dist_mat) / 1000
 
 
-# Compute speed
+# Basic diagnostics on advection (optional)
 selected_episodes$adv_speed <- sqrt(selected_episodes$adv_x^2 +
                                     selected_episodes$adv_y^2)
-
 selected_episodes$adv_direction <- atan2(selected_episodes$adv_y,
-                                          selected_episodes$adv_x) * (180 / pi)
-# make sure direction is in [0, 360]
+                                         selected_episodes$adv_x) * (180 / pi)
 selected_episodes$adv_direction[selected_episodes$adv_direction < 0] <-
   selected_episodes$adv_direction[selected_episodes$adv_direction < 0] + 360
-summary(selected_episodes$adv_speed)
+hist(selected_episodes$adv_speed, main = "Histogram of advection speed",
+     xlab = "Speed (km/h)", breaks = 30)
 
-speed <- selected_episodes$adv_speed
-angle_deg <- selected_episodes$adv_direction
-is_calm <- speed == 0
+# get advection with speed above 0.2 km/h
 
-hist(speed, main = "Histogram of advection speed",
-         xlab = "Speed (km/h)", breaks = 30)
-abline(v = c(0.6), col = "red", lty = 2)
+speed_threshold <- 0
+adv_speed <- sqrt(selected_episodes$adv_x^2 +
+                      selected_episodes$adv_y^2)
 
-speed_class <- as.character(cut(
-    speed,
-    breaks = c(0, 1, Inf),
-    labels = c("still", "significant"),
-    include.lowest = TRUE
-  ))
+max(adv_speed)
+# put all adv < speed_threshold to 0
+adv_speed[adv_speed < speed_threshold] <- 0
+selected_episodes$adv_speed <- adv_speed
+selected_episodes$adv_x[adv_speed == 0] <- 0
+selected_episodes$adv_y[adv_speed == 0] <- 0
+filtered <- FALSE
+if (filtered) {
+  selected_episodes_filtered <- selected_episodes[adv_speed >= speed_threshold, ]
+    list_episodes_filtered <- list_episodes[adv_speed > speed_threshold]
+    list_lags_filtered <- list_lags[adv_speed > speed_threshold]
+    list_excesses_filtered <- list_excesses[adv_speed > speed_threshold]
+} else {
+  selected_episodes_filtered <- selected_episodes
+    list_episodes_filtered <- list_episodes
+    list_lags_filtered <- list_lags
+    list_excesses_filtered <- list_excesses
 
-table(speed_class)
+}
 
-
-speed_class <- factor(speed_class, levels = c("still", "significant"))
-table(speed_class)
-
-direction_class <- ifelse(
-  is_calm,
-  "none",
-  as.character(cut(
-    angle_deg,
-    breaks = c(0, 90, 180, 270, 360),
-    labels = c("E", "S", "W", "N"),
-    include.lowest = TRUE
-  ))
+V_episodes_filtered <- data.frame(
+    vx = selected_episodes_filtered$adv_x,
+    vy = selected_episodes_filtered$adv_y
 )
-direction_class <- factor(direction_class, levels = c("none","E","S","W","N"))
+number_episode <- length(list_episodes_filtered)
+
+print(paste("Number of episodes after filtering:", number_episode))
 
 
-adv_class <- data.frame(speed_class)
-table(adv_class)
-adv_class$group <- ifelse(
-  speed_class == "calm",
-  "calm",
-  paste(speed_class)
-)
-table(adv_class$group)
-
-
-selected_points$adv_group <- adv_class$group
-selected_episodes$adv_group <- adv_class$group
-head(selected_points)
-
-
-# keep only episodes after 2019 for optimization test
-adv_groups <- unique(selected_points$adv_group)
-adv_group_selected <- "still"  # choose one group to optimize
-selected_indices <- which(selected_points$adv_group == adv_group_selected)
-number_episode <- length(selected_indices)
-selected_episodes_filtered <- selected_episodes[selected_indices, ]
-list_episodes_filtered <- list_episodes[selected_indices]
-list_lags_filtered <- list_lags[selected_indices]
-list_excesses_filtered <- list_excesses[selected_indices]
-# wind_df_filtered <- wind_df[selected_indices, , drop = FALSE]
-V_episodes_filtered <- V_episodes[selected_indices, , drop = FALSE]
 # OPTIMISATION ---------------------------------------------------------------
-# Composite likelihood optimisation with fixed eta1 and eta2
-foldername <- paste0(data_folder, "omsev/WLSE/")
-df_spa_result <- read.csv(paste0(foldername, "wlse_spa_summary.csv"))
-df_temp_result <- read.csv(paste0(foldername, "wlse_temp_summary.csv"))
-df_result_all <- merge(df_spa_result, df_temp_result, by = NULL)
 
-# select one row
-df_result <- df_result_all[df_result_all$q_spa == 0.97 &
-                             df_result_all$q_temp == 0.95, ]
-
-beta1 <- df_result$beta1
-beta2 <- df_result$beta2
-alpha1 <- df_result$alpha1
-alpha2 <- df_result$alpha2
-
-# # estimates
-wlse_omsev <- c(beta1, beta2, alpha1, alpha2) # m / 5 min
-
-# init_com_class <- com_results
-# init_com_class <- c(wlse_omsev, 0, 0)  # fixed eta1 and eta2
-# convert into numeric vector
-init_com_class <- com_results[
-  com_results$adv_group == adv_group_selected, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2") ]
-init_com_class <- as.numeric(init_com_class[1, ])
+# convert into numeric vector (use first row as default)
+# init_com_class <- as.numeric(com_results[2, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")])
+init_com_class <- c(0.354, 0.678, 0.334, 0.724, 1.092, 5.666)
+init_com_class <- c(0.308, 0.602, 0.342, 0.761, 1.621, 5.219)
 eta1_class <- init_com_class[5]
 eta2_class <- init_com_class[6]
 head(V_episodes_filtered)
@@ -419,6 +348,12 @@ result <- optim(
   upper = c(10, 10, 1.999, 1.999),
   control = list(maxit = 20000, trace = 1)
 )
+
+if(result$convergence == 0) {
+  cat("Optimization converged successfully\n")
+} else {
+  warning("Optimization did not converge")
+}
 
 result
 
@@ -632,3 +567,145 @@ param_table_m5min <- data.frame(
                      jackknife_monthyear_results$CI_upper[4])
 )
 print(param_table_m5min)
+
+number_of_episodes <- length(list_episodes_filtered)
+cat("Number of episodes used in optimization:", number_of_episodes, "\n")
+adv_threshold <- speed_threshold
+cat("Advection speed threshold (km/h):", adv_threshold, "\n")
+
+# number of advection put to 0
+n_zero_adv <- sum(V_episodes_filtered$vx == 0 & V_episodes_filtered$vy == 0)
+cat("Number of episodes with zero advection after filtering:", n_zero_adv, "\n")
+
+
+omsev_params <- params_est
+
+dist_mat <- get_dist_mat(location_gauges) / 1000
+df_dist <- reshape_distances(dist_mat)
+n_hbins <- 10
+h_all <- df_dist$value
+
+h_breaks_omsev <- quantile(
+  h_all,
+  probs = seq(0, 1, length.out = n_hbins + 1),
+  na.rm = TRUE
+)
+
+
+h_breaks_omsev <- unique(as.numeric(h_breaks_omsev))
+h_breaks_omsev[length(h_breaks_omsev)] <- 1.6
+
+chi_omsev <- compute_group_chi(
+  list_lags = list_lags_filtered,
+  list_excesses = list_excesses_filtered,
+  wind_df = V_episodes_filtered,
+  params = omsev_params,
+  tau_fixed = 1,
+  h_breaks = h_breaks_omsev,
+  adv_transform = TRUE
+)
+
+corr_omsev <- summary_correlation(chi_omsev$res_cmp)
+message(sprintf("OMSEV chi Spearman correlation: %.3f", corr_omsev))
+
+# plot chi_come emp vs theo
+print(chi_omsev$plots$all)
+
+
+res_om_cmp <- chi_omsev$res_cmp
+ggplot(res_om_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
+  geom_point(alpha = 0.7, color = btfgreen) +
+  geom_abline(linetype = "dashed", color = "red") +
+  theme_bw() +
+  scale_size_continuous(range = c(1, 4)) +
+  labs(x = "Theoretical Chi", y = "Empirical Chi",
+      size = "Number of pairs") +
+  btf_theme
+
+# save plot
+foldername <- paste0(im_folder, "workflows/full_pipeline/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "omsev_chi_th_emp_above01_putat0.png")
+ggsave(filename,
+       width = 7,
+       height = 7)
+
+
+# remove NA hbin 
+res_om_cmp <- res_om_cmp[!is.na(res_om_cmp$hbin), ]
+res_om_cmp |>
+  dplyr::mutate(diff = chi_emp_bar - chi_theo_bar) |>
+  ggplot(aes(x = factor(hbin), y = diff)) +
+  geom_boxplot(fill=btfgreen, alpha=0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_bw() +
+  labs(
+    x = "Spatial lag bin (km)",
+    y = expression(hat(chi) - chi)
+  ) +
+  btf_theme
+
+
+# save plot
+foldername <- paste0(im_folder, "workflows/full_pipeline/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "omsev_chi_diff_boxplot_above01_putat0.png")
+ggsave(filename,
+       width = 7,
+         height = 5)
+
+
+compute_chi_with_ci_jackknife <- function(
+  list_lags,
+  list_excesses,
+  wind_df,
+  jack_estimates,
+  h_breaks,
+  tau_fixed = 1,
+  adv_transform = TRUE
+) {
+  n_jack <- nrow(jack_estimates)
+  res_list <- lapply(1:n_jack, function(i) {
+    params_i <- jack_estimates[i, ]
+    res_i <- compute_group_chi(
+      list_lags = list_lags,
+      list_excesses = list_excesses,
+      wind_df = wind_df,
+      params = params_i,
+      tau_fixed = tau_fixed,
+      h_breaks = h_breaks,
+      adv_transform = adv_transform
+    )
+    res_cmp_i <- res_i$res_cmp
+    res_cmp_i$jack_id <- i
+    return(res_cmp_i)
+  })
+  
+  res_all <- rbindlist(res_list)
+  
+  res_summary <- res_all[, .(
+    chi_emp_bar = mean(chi_emp_bar, na.rm = TRUE),
+    chi_emp_sd = sd(chi_emp_bar, na.rm = TRUE),
+    chi_theo_bar = mean(chi_theo_bar, na.rm = TRUE),
+    n_pairs = mean(n_pairs, na.rm = TRUE)
+  ), by = .(hbin)]
+  
+  return(list(
+    res_cmp = res_summary
+  ))
+}
+
+# do same plot with CI from jackknife
+res_om_cmp_ci <- compute_chi_with_ci_jackknife(
+  list_lags = list_lags_filtered,
+  list_excesses = list_excesses_filtered,
+  wind_df = V_episodes_filtered,
+  jack_estimates = jack_estimates,  
+  h_breaks = h_breaks_omsev,
+  tau_fixed = 1,
+  adv_transform = TRUE
+)

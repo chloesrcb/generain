@@ -6,7 +6,12 @@ cat("\014")
 
 # Load libraries and set theme
 source("./script/load_libraries.R")
-
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
+# load all functions in files
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
+library(latex2exp)
+print("All functions loaded")
 
 ################################################################################
 # LOCATION ---------------------------------------------------------------------
@@ -28,31 +33,21 @@ df_dist <- reshape_distances(dist_mat)
 # get rain measurements
 # load data
 # get rain data from omsev
-filename_omsev <- paste0(data_folder,
-                         "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
 # filename_omsev <- paste0(data_folder,
-#                          "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
+#                          "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+# load(filename_omsev)
+# rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+filename_omsev <- paste0(data_folder,
+                         "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
 
-load(filename_omsev)
-rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+rain <- read.csv(filename_omsev)
+head(rain)
+
 typeof(rain)
 class(rain)
 colnames(rain)
-
-################################################################################
-# QUANTILE ---------------------------------------------------------------------
-################################################################################
-
-# get a matrix of high quantiles for all pair
-q <- 0.99 # quantile
 rownames(rain) <- rain$dates
 rain_new <- rain[-1] # remove dates column
-# list_count_quant <- quantile_matrix(q, rain_new, qlim = TRUE, remove_zeros = FALSE,
-#                                     count_min = 80) # with removing zeros
-# quant_mat <- list_count_quant[1][[1]]
-# count_mat <- list_count_quant[2]
-# quant_mat
-# 0.998 equiv to 0.96 without 0
 
 ################################################################################
 # EXTREMOGRAM ------------------------------------------------------------------
@@ -139,7 +134,7 @@ chitemp_eta_estim
 
 # spatial structure with an almost constant amount of pairs in each intervals
 df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 12
+num_intervals <- 11
 quantiles_rad <- quantile(df_dist_order$value,
                             probs = seq(0, 1, length.out = num_intervals + 1))
 radius_intervals <- unique(quantiles_rad)
@@ -183,7 +178,6 @@ rad_mat[lower.tri(rad_mat)] <- NA
 
 hmax <- max(radius) # distance max in absolute value...
 nb_col <- length(unique(radius)) # we exclude 0 ?
-chimat_dslag <- matrix(1, nrow = n - 1, ncol = nb_col)
 
 # plot chi for each distance
 chispa_df <- spatial_chi(rad_mat, rain_new,
@@ -232,11 +226,12 @@ chispa_eta <- ggplot(etachispa_df, aes(lagspa, chi)) +
 
 chispa_eta
 
-
+# remove lagspa 0
+chispa_df <- chispa_df[chispa_df$lagspa!=0,]
 wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
-alpha1 <- wlse_spa[[2]]
-beta1 <- wlse_spa[[1]]
-c1 <- log(beta1)
+alpha1 <- wlse_spa[[3]]
+beta1 <- wlse_spa[[2]]
+c1 <- wlse_spa[[1]]
 y <- alpha1 * etachispa_df$lagspa + c1  #idem
 
 
@@ -258,9 +253,99 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
 
 chispa_eta_estim
 
-################################################################################
-# VARIOGRAM --------------------------------------------------------------------
-################################################################################
+#####################################################
+# Spatio-temporal chi and variogram
 
-# estimates
-param_ohsm <- c(beta1, beta2, alpha1, alpha2)
+
+# Ex : on veut tous les couples (s1<s2) et taus de 0 à tmax
+build_df_lags <- function(dist_mat, rad_mat, tmax) {
+  n <- ncol(dist_mat)
+  pairs <- which(upper.tri(dist_mat), arr.ind = TRUE)
+  df_pairs <- data.frame(s1 = pairs[,1], s2 = pairs[,2],
+                         dist = dist_mat[upper.tri(dist_mat)],
+                         lagspa = rad_mat[upper.tri(dist_mat)])
+  taus <- 0:tmax
+  # expand pour tous les taus
+  df_lags <- tidyr::crossing(df_pairs, tau = taus)
+  # ordre facultatif
+  df_lags <- df_lags[order(df_lags$lagspa, df_lags$tau), ]
+  rownames(df_lags) <- NULL
+  return(df_lags)
+}
+
+                      
+tmax <- 10    # ou ton choix
+df_lags <- build_df_lags(dist_mat, rad_mat, tmax)
+
+# df_lags <- get_lag_vectors(location_gauges, tau_vect = 0:10, latlon=TRUE)
+# df_lags$hnorm <- df_lags$hnorm * 1000
+q <- 0.95
+chi_st <- chispatemp_empirical(data_rain = rain_new, df_lags = df_lags,
+                               quantile = q, remove_zeros = TRUE)
+
+head(chi_st)
+
+# applique à toute la table
+chi_st$vario_emp2 <- vario_spatemp(chi_st$chiemp2)
+
+
+library(dplyr)
+
+# Agréger par lag spatial et tau
+vario_by_h_tau <- chi_st %>%
+  group_by(lagspa, tau) %>%
+  summarise(vario = mean(vario_emp2, na.rm = TRUE),
+            n_pairs = sum(!is.na(vario_emp2)),
+            .groups = "drop")
+
+# Voir
+head(vario_by_h_tau)
+
+
+library(ggplot2)
+
+taus_plot <- 0:10
+df_plot <- vario_by_h_tau %>% filter(tau %in% taus_plot)
+
+# Tracer tous les variogrammes, un par tau
+ggplot(df_plot, aes(x = lagspa, y = vario, color = factor(tau))) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Distance",
+       y = "Variogram",
+       color = "Temporal lag") +
+  theme_minimal()
+
+
+library(ggplot2)
+library(dplyr)
+
+df_plot <- vario_by_h_tau %>% filter(tau %in% taus_plot)
+
+ggplot(df_plot, aes(x = lagspa, y = vario, color = factor(tau))) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "loess", span = 1) +   # lissage local
+  labs(x = "Distance",
+       y = "Variogram",
+       color = "Temporal lag") +
+  theme_minimal()
+
+
+foldername_fig <- paste0(im_folder, "variogram/empirical/omsev/variogram_separability/")
+ggsave(paste0(foldername_fig, "variogram_spatemp_omsev_loess_q95_alltaus.png"),
+       width = 10, height = 6)
+
+
+ggplot(df_plot, aes(x = lagspa, y = vario, color = factor(tau))) +
+  geom_point() +
+  geom_line() +   # lignes droites entre points
+  labs(x = "Distance",
+       y = "Variogram",
+       color = "Temporal lag") +
+  theme_minimal()
+
+
+foldername_fig <- paste0(im_folder, "variogram/empirical/omsev/variogram_separability/")
+ggsave(paste0(foldername_fig, "variogram_spatemp_omsev_raw_q95.png"),
+       width = 10, height = 6)
+

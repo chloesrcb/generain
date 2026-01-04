@@ -9,12 +9,12 @@ files <- list.files(functions_folder, full.names = TRUE)
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
-params <- c(0.01, 0.4, 1.5, 1) # beta1, beta2, alpha1, alpha2
-adv <- c(5, 2) # advection
-ngrid <- 7
-temp <- 0:24
+params <- c(0.3, 0.8, 0.2, 0.7) # beta1, beta2, alpha1, alpha2
+adv <- c(0.5, 0.2) # advection
+ngrid <- 5
+temp <- 0:29
 s0 <- c(1, 1) # initial condition
-t0 <- 14 # time of the first observation
+t0 <- 0 # time of the first observation
 # Configuration
 true_param <- c(params, adv)
 beta1 <- params[1]
@@ -26,7 +26,7 @@ nsites <- ngrid^2 # if the grid is squared
 
 # Number of realizations
 M <- 100 # number of simulations
-m <- 1000 # number of extreme episodes
+m <- 500 # number of extreme episodes
 nres <- M * m
 
 
@@ -63,13 +63,21 @@ s0_str <- paste(sapply(s0, format_value), collapse = "_")
 t0_str <- format_value(t0)
 
 # save the result
-foldername <- "./data/optim/rpar/"
+result_folder <- paste0(data_folder, "optim_results/rpar/")
+foldername <- file.path(
+  result_folder,
+  paste0("rpar_", param_str),
+  paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
+  s0_type,
+  wind_type,
+  distance_type,
+  eta_type
+)
+# "../phd_extremes/data/optim_results/rpar//rpar_03_08_02_07_05_02/sim_25s_30t_s0_1_1_t0_0/random_s0/wind/euclidean/free_eta"
 
-name_file <- paste0("result_df_", M, "simu_", m, "rep_", ngrid^2,
-                    "s_", length(temp), "t_", param_str,
-                    "_", adv_str, "_t0_", t0_str, ".csv")
+name_file <- paste0("/optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
+                "s_", length(temp), "t_", param_str, ".csv")
 
-# write.csv(df_bplot, paste0(foldername, name_file), row.names = FALSE)
 
 df_bplot <- read.csv(paste0(foldername, name_file), sep = ",")
 indices_wout_adv <- c(1, 2, 3, 4, 5, 6)

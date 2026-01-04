@@ -19,7 +19,7 @@ library(latex2exp)
 ngrid <- 5
 spa <- 1:ngrid
 temp <- 0:29
-m <- 300 # number of episodes
+m <- 100 # number of episodes
 M <- 7 # number of simulations
 n.res <- m * M
 param <- c(0.4, 0.2, 1.5, 1) # true parameters for the variogram

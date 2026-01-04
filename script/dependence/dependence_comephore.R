@@ -22,12 +22,6 @@ df_dist <- reshape_distances(dist_mat)
 # QUANTILE ---------------------------------------------------------------------
 ################################################################################
 
-# get a matrix of high quantiles for all pair
-q <- 0.99 # quantile
-list_count_quant <- quantile_matrix(q, comephore, qlim = TRUE, zeros = TRUE,
-                                    count_min = 50) # with removing zeros
-quant_mat <- list_count_quant[1][[1]]
-count_mat <- list_count_quant[2]
 
 ################################################################################
 # EXTREMOGRAM
@@ -35,12 +29,13 @@ count_mat <- list_count_quant[2]
 
 # Temporal chi with spatial lag fixed at 0 -------------------------------------
 tmax <- 10
+q <- 0.98
 nsites <- length(loc_px$pixel_name)
 # Temporal chi with spatial lag fixed at 0
 # compute chiplot of every site with itself but lagged in time
 start_time <- Sys.time()
-chimat_dtlag <- temporal_chi(comephore, quantile = 0.99, tmax = tmax,
-                             mean = FALSE)
+chimat_dtlag <- temporal_chi(comephore, quantile = q, tmax = tmax,
+                             mean = FALSE, zeros = FALSE)
 end_time <- Sys.time()
 elapsed_time <- end_time - start_time
 print(elapsed_time)
@@ -48,23 +43,16 @@ print(elapsed_time)
 # every chi lagged mean
 par(mfrow = c(1, 1))
 chi_df_dt <- data.frame(chimat_dtlag)
-colnames(chi_df_dt) <- c(1:tmax) # temporal lags from 1 to tmax
+colnames(chi_df_dt) <- c(0:tmax) # temporal lags from 1 to tmax
 rownames(chi_df_dt) <- c(1:nsites) # stations
-
-chimat_dt_mean <- temporal_chi(comephore, tmax, quantile = 0.99, mean = TRUE)
-# get h axis in minutes ie x5 minutes
-df <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-ggplot(df, aes(x = lag, y = chi)) +
-  geom_point(color = btfgreen) +
-  btf_theme +
-  xlab("Temporal lag") +
-  ylab(TeX(r"($\hat{\chi}$)"))
-
+# remove lag 0 ie column 1
+chi_df_dt <- chi_df_dt[-1]
 # boxplot all stations values for chi temp
 # Reshape data using gather function
 df_gathered <- chi_df_dt %>% gather(key = "variable", value = "value")
 df_gathered$group <- factor(as.integer(df_gathered$variable),
-                            levels = seq(1, tmax))
+                            levels = seq(0, tmax))
+
 
 # Plot boxplots
 chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
@@ -82,12 +70,41 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 
 chitemp
 
-wlse_temp <- get_estimate_variotemp(chimat_dt_mean, tmax, nsites,
-                                    weights = "exp", summary = TRUE)
 
-alpha2 <- wlse_temp[[2]]
-beta2 <- wlse_temp[[1]]
-c2 <- log(beta2)
+chimat_dt_mean <- temporal_chi(rain_new, tmax, quantile = q, mean = TRUE, zeros=F)
+# remove lag 0
+chimat_dt_mean <- chimat_dt_mean[-1]
+
+
+# plot mean chi
+df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
+
+c2 <- as.numeric(wlse_temp[[1]])
+beta2 <- as.numeric(wlse_temp[[2]])
+alpha2 <- as.numeric(wlse_temp[[3]])
+
+y <- alpha2 * df$lag + c2  #idem
+
+df <- df_chi
+dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+
+chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
+  geom_point(color = btfgreen, size = 4) +
+  btf_theme +
+  xlab(TeX(r"($\log(\tau)$)")) +
+  ylab(TeX(r"($\eta(\widehat{\chi}(0,\tau))$)")) +
+  geom_line(aes(x = lag, y = alpha2 * lag + c2),
+            alpha = 0.6, color = "darkred", linewidth = 1.5)
+
+chitemp_eta_estim
+
+df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
+
+c2 <- as.numeric(wlse_temp[[1]])
+beta2 <- as.numeric(wlse_temp[[2]])
+alpha2 <- as.numeric(wlse_temp[[3]])
 
 dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
 

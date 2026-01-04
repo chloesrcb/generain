@@ -1082,15 +1082,41 @@ result
 ################################################################################
 
 # Fictive advection vectors for representation
-fictive_adv <- data.frame(
-  adv_x = c(0, -0.1, 5, 1, 10, -2, 1, -3),
-  adv_y = c(0, 0.5, -14, 1, 11, -1, -1, 2)
-)
+# Fictive advection vectors for representation
+# Create a grid of directions (angles) and speeds > 1 km/h
+# Focus on northward directions (angles between -90° and +90° from north)
+angles_deg <- seq(-90, 90, by = 30)  # angles from north (-90° = west, 90° = east)
+speeds_kmh <- c(1, 2, 5, 7)  # speeds > 1 km/h
 
-beta1_hat <- result$par[1]
-beta2_hat <- result$par[2]
-alpha1_hat <- result$par[3]
-alpha2_hat <- result$par[4]
+fictive_adv <- expand.grid(angle = angles_deg, speed = speeds_kmh)
+
+# Convert to Cartesian coordinates
+# North is positive y-axis, East is positive x-axis
+fictive_adv$adv_x <- fictive_adv$speed * sin(fictive_adv$angle * pi / 180)
+fictive_adv$adv_y <- fictive_adv$speed * cos(fictive_adv$angle * pi / 180)
+
+# Keep only adv_x and adv_y columns
+fictive_adv <- fictive_adv[, c("adv_x", "adv_y")]
+
+
+# group strong.N = 47 episodes
+# $par
+#     beta1     beta2    alpha1    alpha2 
+# 1.8281024 4.1616951 0.4804306 0.6912886 
+
+# $value
+# [1] 1839.098
+# $beta1
+#      beta1 
+# 0.06617724 
+
+# $beta2
+#     beta2 
+# 0.7468692 
+beta1_hat <- 1.83
+beta2_hat <- 4.16
+alpha1_hat <- 0.48
+alpha2_hat <- 0.69
 eta1_hat <- result$par[5]
 eta2_hat <- result$par[6]
 params_m5min <- convert_params(beta1_hat, beta2_hat, alpha1_hat, alpha2_hat,
@@ -1102,8 +1128,8 @@ theta_hat_kmh <- result$par[1:4]  # beta1, beta2, alpha1, alpha2
 theta_hat_m5min <- c(params_m5min$beta1, params_m5min$beta2,
                      alpha1_hat, alpha2_hat)
 theta_hat <- theta_hat_kmh
-eta1_hat <- result$par[5]
-eta2_hat <- result$par[6]
+eta1_hat <- 0.6665347
+eta2_hat <- 1.75743
 
 
 # Lag distances (km)
@@ -1128,6 +1154,7 @@ if (!dir.exists(foldername_hnorm)) dir.create(foldername_hnorm, recursive = TRUE
 foldername_hnormV <- paste0(foldername, "hnormV/")
 if (!dir.exists(foldername_hnormV)) dir.create(foldername_hnormV, recursive = TRUE)
 
+
 # Loop over all fictive advection vectors
 for (i in seq_len(nrow(fictive_adv))) {
   fictive_v <- c(fictive_adv$adv_x[i], fictive_adv$adv_y[i])
@@ -1144,8 +1171,9 @@ for (i in seq_len(nrow(fictive_adv))) {
   directions_all <- c(directions_named, list(Advection = dir_adv))
   
   # Loop over all directions
-  for (dname in names(directions_all)) {
-    direction <- directions_all[[dname]]
+  # for (dname in names(directions_all)) {
+  
+    direction <- NULL
     
     # Compute gamma grid with corrected distance for each direction and advection vector
     df_gamma <- compute_gamma_grid(h_vals, tau_vals, direction,
@@ -1155,22 +1183,22 @@ for (i in seq_len(nrow(fictive_adv))) {
     
     # Plot gamma as function of corrected distance (dist_corr)
     subtitle_txt <- paste0("Advection: V = (",
-                           round(fictive_v[1], 3), ", ", round(fictive_v[2], 3), "), direction: ", dname)
+                           round(fictive_v[1], 3), ", ", round(fictive_v[2], 3), ") km/h")
     
-    p <- ggplot(df_gamma, aes(x = h_normV, y = gamma, color = factor(tau_min))) +
-        geom_line(size = 1.2) +
-        labs(
-          subtitle = subtitle_txt,
-          x = expression("||h|| (km)"),
-          y = expression(gamma(h, tau)),
-          color = expression(tau ~ "(min)")
-        ) +
-        theme_minimal()
+    # p <- ggplot(df_gamma, aes(x = h_normV, y = gamma, color = factor(tau_min))) +
+    #     geom_line(size = 1.2) +
+    #     labs(
+    #       subtitle = subtitle_txt,
+    #       x = expression("||h|| (km)"),
+    #       y = expression(gamma(h, tau)),
+    #       color = expression(tau ~ "(min)")
+    #     ) +
+    #     theme_minimal()
 
 
     
-    filename <- paste0(foldername_hnormV, "variogram_fictive", i, "_dir_", dname, ".pdf")
-    ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
+    # filename <- paste0(foldername_hnormV, "variogram_fictive", i, "_dir_", dname, ".pdf")
+    # ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
 
 
     p <- ggplot(df_gamma, aes(x = h_norm, y = gamma, color = factor(tau_min))) +
@@ -1185,7 +1213,15 @@ for (i in seq_len(nrow(fictive_adv))) {
 
 
     
-    filename <- paste0(foldername_hnorm, "variogram_fictive", i, "_dir_", dname, ".pdf")
+    filename <- paste0(foldername_hnorm, "variogram_fictive", i, ".pdf")
     ggsave(filename, plot = p, width = 20, height = 15, units = "cm", dpi = 600)
-  }
+  # }
 }
+
+
+
+# plot without direction
+df_gamma <- compute_gamma_grid_no_direction(h_vals, tau_vals,
+                                       theta_hat,
+                                       eta1 = eta1_hat, eta2 = eta2_hat,
+                                       fictive_v = c(3, 4))

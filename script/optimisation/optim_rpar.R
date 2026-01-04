@@ -8,25 +8,9 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- TRUE
+muse <- FALSE
 # PARAMETERS ###################################################################
-adv <- c(0.1, 0.2)
-params <- c(0.1, 0.8, 0.5, 0.7)
-ngrid <- 5
-temp <- 0:2
-s0 <- c(1, 1)
-t0 <- 0
-random_s0 <- TRUE
-M <- 2
-m <- 500
-is_anisotropic <- TRUE
-s0_radius <- 7
-eta1 <- 1
-eta2 <- 1
-fixed_eta1 <- NA
-fixed_eta2 <- NA
-use_wind_data <- TRUE
-distance_type <- "lalpha" # "euclidean" or "lalpha"
+
 
 if (muse) {
   # Get the muse folder
@@ -43,6 +27,7 @@ if (muse) {
   num_cores <- detectCores() - 1
   source("./script/load_libraries.R")
   source("./script/optimisation/config.R")
+  M <- num_cores
 }
 
 # Get all files in the folder "R"
@@ -54,16 +39,33 @@ library(latex2exp)
 print("All functions loaded")
 
 # SIMULATION ###################################################################
-result_folder <- paste0(data_folder, "simulations_rpar/")
+result_folder <- paste0(data_folder, "optim_results/rpar/")
 if (!dir.exists(result_folder)) {
   dir.create(result_folder, recursive = TRUE)
 }
 
-# Configuration
-wind_data <- adv
-adv_real <- c(eta1 * abs(adv[1])^eta2 * sign(adv[1]),
-              eta1 * abs(adv[2])^eta2 * sign(adv[2]))
-true_param <- c(params, adv_real)
+
+# get random advection for each simulation
+set.seed(123)
+adv_df <- data.frame(
+  adv1 = rnorm(m, mean = 1, sd = 0.5),
+  adv2 = rnorm(m, mean = 1, sd = 0.2)
+)
+
+set.seed(123)
+
+wind_list <- lapply(1:M, function(i) {
+  data.frame(
+    vx = rnorm(m, mean = 1, sd = 0.5),
+    vy = rnorm(m, mean = 1, sd = 0.2)
+  )
+})
+
+
+# params <- c(0.4, 0.7, 0.3, 0.8) # true parameters for the variogram
+# eta1 <- 0.5
+# eta2 <- 1.5
+true_param <- c(params, eta1, eta2)
 beta1 <- params[1]
 beta2 <- params[2]
 alpha1 <- params[3]
@@ -124,7 +126,8 @@ t0_str <- format_value(t0)
 
 # Subfolder names
 s0_type <- if (random_s0) "random_s0" else "fixed_s0"
-
+fixed_eta1 <- eta1
+fixed_eta2 <-eta2
 eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "fixed_eta"
 } else if (!is.na(fixed_eta1)) {
@@ -140,9 +143,11 @@ wind_type <- if (use_wind_data) {
 } else {
   "no_wind"
 }
-
+use_wind_data <- TRUE
 if (use_wind_data) {
-  wind_df <- data.frame(vx = adv[1], vy = adv[2])
+  wind_df <- adv_df
+  fixed_eta1 <- eta1
+  fixed_eta2 <- eta2
 } else {
   wind_df <- NA
   fixed_eta1 <- NA
@@ -152,7 +157,7 @@ if (use_wind_data) {
 
 # Folder name to save the data
 foldername <- file.path(
-  paste0(data_folder, "simulations_rpar"),
+  result_folder,
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
@@ -171,6 +176,15 @@ u <- 1
 sites_coords <- generate_grid_coords(ngrid)
 sites_coords <- as.data.frame(sites_coords)
 
+radial_adv_from_wind <- function(wind_df, eta1, eta2, eps = 1e-12) {
+  vx <- wind_df$vx
+  vy <- wind_df$vy
+  r <- sqrt(vx^2 + vy^2)
+  scale <- eta1 * (pmax(r, eps)^(eta2 - 1))
+  cbind(scale * vx, scale * vy)
+}
+
+
 # Parallel configuration
 print("Starting simulations...")
 
@@ -179,13 +193,14 @@ cl <- makeCluster(num_cores)
 # Export variables and functions to the cluster
 clusterExport(cl, varlist = c(
   "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
-  "spa", "temp", "adv_real", "t0", "m", "random_s0", "s0",
+  "spa", "temp", "adv_df", "t0", "m", "random_s0", "s0",
   "s0_radius", "distance_type",
   "foldername", "generate_grid_coords", "save_simulations",
   "ngrid", "compute_st_gaussian_process",
   "compute_st_variogram", "convert_simulations_to_list",
   "empirical_excesses_rpar", "get_conditional_lag_vectors",
-  "t0", "u", "tau_vect", "sites_coords"
+  "t0", "u", "tau_vect", "sites_coords", "eta1", "eta2",
+  "radial_adv_from_wind", "wind_list"
 ))
 
 # Load libraries in the cluster
@@ -204,15 +219,15 @@ clusterEvalQ(cl, {
 
 # Simulate the process in parallel
 result_list <- parLapply(cl, 1:M, function(i) {
+
+  wind_df_i <- wind_list[[i]]
+  adv_mat_i <- radial_adv_from_wind(wind_df_i, eta1, eta2)  # m x 2
+
   simu <- sim_rpareto(
-    beta1 = beta1,
-    beta2 = beta2,
-    alpha1 = alpha1,
-    alpha2 = alpha2,
-    x = spa,
-    y = spa,
-    t = temp,
-    adv = adv_real,
+    beta1 = beta1, beta2 = beta2,
+    alpha1 = alpha1, alpha2 = alpha2,
+    x = spa, y = spa, t = temp,
+    adv = adv_mat_i,
     t0 = t0,
     nres = m,
     random_s0 = random_s0,
@@ -220,6 +235,7 @@ result_list <- parLapply(cl, 1:M, function(i) {
     s0_radius = s0_radius,
     distance = distance_type
   )
+
 
   list_rpar <- convert_simulations_to_list(simu$Z, sites_coords)
 
@@ -230,13 +246,10 @@ result_list <- parLapply(cl, 1:M, function(i) {
                               sites_coords$Latitude == s0_y, ]
     lags <- get_conditional_lag_vectors(sites_coords, s0_coords, t0,
                                         tau_vect, latlon = FALSE)
-    # c_h   <- median(lags$hnorm[lags$hnorm > 0])     # spatial scale
-    # c_tau <- median(abs(lags$tau)[lags$tau != 0])   # temporal scale
-    # lags$h_scaled <- lags$hnorm / c_h
-    # lags$t_scaled <- abs(lags$tau) / c_tau
     excesses <- empirical_excesses_rpar(list_rpar[[j]],
                                         df_lags = lags,
                                         t0 = t0, threshold = u)
+    lags$tau <- lags$tau
     list(lags = lags, excesses = excesses)
   })
 
@@ -248,7 +261,8 @@ result_list <- parLapply(cl, 1:M, function(i) {
     list_rpar = list_rpar,
     s0_used = simu$s0_used,
     list_excesses = list_excesses,
-    list_lags = list_lags
+    list_lags = list_lags,
+    wind_df = wind_df_i
   ))
 })
 stopCluster(cl) # Stop the cluster
@@ -260,13 +274,22 @@ list_excesses <- do.call(c, lapply(result_list,
                                    function(res) res$list_excesses))
 list_lags <- do.call(c, lapply(result_list, function(res) res$list_lags))
 
+list_wind <- lapply(result_list, function(res) res$wind_df)
+
+
+# check excesses
+sums_kij <- sapply(list_excesses, function(ex) sum(ex$kij, na.rm = TRUE))
+sums_kij
+
 ### Optimization ###############################################################
 
 # Initialization
 if (use_wind_data) { # with eta1 and eta2
   true_param <- c(beta1, beta2, alpha1, alpha2, eta1, eta2)
+  wind_df <- adv_df
 } else { # with adv1 and adv2
   true_param <- c(beta1, beta2, alpha1, alpha2, adv[1], adv[2])
+  wind_df <- NA
 }
 
 init_diff <- FALSE
@@ -281,30 +304,43 @@ if (init_diff) {
 
 init_params <- true_param
 
-result_list <- mclapply(1:M, process_simulation, m = m,
-                        list_simu = list_rpar, u = u,
-                        list_lags = list_lags,
-                        list_excesses = list_excesses,
-                        init_params = init_params,
-                        distance = distance_type,
-                        hmax = 5, wind_df = wind_df,
-                        mc.cores = num_cores)
+result_list_opt <- mclapply(
+  1:M,
+  function(i) {
+    process_simulation(
+      i = i, m = m,
+      list_simu = list_rpar,
+      u = u,
+      list_lags = list_lags,
+      list_excesses = list_excesses,
+      init_params = init_params,
+      distance = distance_type,
+      hmax = 7,
+      wind_df = list_wind[[i]],
+      fixed_eta1 = fixed_eta1,
+      fixed_eta2 = fixed_eta2,
+      normalize = FALSE
+    )
+  },
+  mc.cores = num_cores
+)
+
 
 print("Optimization done")
-# Combine results int a data frame
-df_result_all <- do.call(rbind, result_list)
-df_result_all <- as.data.frame(df_result_all)
+# Combine results_list into a data.frame
+df_result_all <- do.call(rbind, result_list_opt)
+
 # Redefine the column names
 if (use_wind_data) {
   colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                              "alpha2", "eta1", "eta2")
-  # Add adv1 and adv2 with etas estimated
-  df_result_all$adv1 <- df_result_all$eta1 * abs(wind_df$vx)^df_result_all$eta2 * sign(wind_df$vx)
-  df_result_all$adv2 <- df_result_all$eta1 * abs(wind_df$vy)^df_result_all$eta2 * sign(wind_df$vy)
+  
 } else {
   colnames(df_result_all) <- c("beta1", "beta2", "alpha1",
                              "alpha2", "adv1", "adv2")
 }
+
+print(head(df_result_all))
 
 # Eta type (if it has changed in optimization)
 eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
@@ -358,147 +394,9 @@ if (number_no_convergence > 0) {
   print("All simulations converged")
 }
 
-
-# Theoretical variogram
-variogram <- function(lags_df, beta1, beta2, alpha1, alpha2, adv,
-                      distance_type = "euclidean") {
-  df <- as.data.frame(lags_df)
-  tau <- df$tau
-
-  if (distance_type == "lalpha") {
-    df$gamma <- beta1 * abs(df$hxV)^alpha1 +
-                beta1 * abs(df$hyV)^alpha1 +
-                beta2 * abs(tau)^alpha2
-  } else {
-    df$gamma <- beta1 * sqrt(df$hxV^2 + df$hyV^2)^alpha1 +
-                beta2 * abs(tau)^alpha2
-  }
-
-  return(df)
-}
-
-
-lag_all <- do.call(rbind, list_lags)
-df_lags_all <- as.data.frame(lag_all)
-
-# keep only unique rows
-df_lags_all <- unique(df_lags_all)
-
-# Compute hnorm (spatial lag norm) if not present
-df_lags_all$hxV <- df_lags_all$hx - adv_real[1] * df_lags_all$tau
-df_lags_all$hyV <- df_lags_all$hy - adv_real[2] * df_lags_all$tau
-df_lags_all$hnormV <- sqrt(df_lags_all$hxV^2 + df_lags_all$hyV^2)
-
-
-
-# Plot all empirical variogram curves for each tau, with one theoretical curve
-for (tau in tau_vect) {
-  # Filter lags for current tau
-  df_lags_tau <- df_lags_all[df_lags_all$tau == tau, ]
-  vario_th_tau <- variogram(df_lags_tau, beta1, beta2, alpha1, alpha2, adv_real, 
-                            distance_type)
-  vario_th_tau <- vario_th_tau %>%
-    group_by(hnormV) %>%
-    summarise(gamma = mean(gamma), .groups = "drop")
-  
-  # Prepare empirical curves for all simulations
-  vario_emp_all <- lapply(1:nrow(df_result_all), function(j) {
-    beta1_hat <- df_result_all$beta1[j]
-    beta2_hat <- df_result_all$beta2[j]
-    alpha1_hat <- df_result_all$alpha1[j]
-    alpha2_hat <- df_result_all$alpha2[j]
-    if (use_wind_data) {
-      eta1_hat <- df_result_all$eta1[j]
-      eta2_hat <- df_result_all$eta2[j]
-      adv1_hat <- eta1_hat * abs(wind_df$vx)^eta2_hat * sign(wind_df$vx)
-      adv2_hat <- eta1_hat * abs(wind_df$vy)^eta2_hat * sign(wind_df$vy)
-      adv_hat <- c(adv1_hat, adv2_hat)
-    } else {
-      adv_hat <- c(df_result_all$adv1[j], df_result_all$adv2[j])
-    }
-    vario_emp_j <- variogram(df_lags_tau, beta1_hat, beta2_hat, alpha1_hat,
-                              alpha2_hat, adv_hat, distance_type)
-    vario_emp_j$sim <- j
-    vario_emp_j
-  })
-  vario_emp_all_df <- bind_rows(vario_emp_all)
-
-  # get mean empirical value for each hnorm
-  vario_emp_all_df <- vario_emp_all_df %>%
-    group_by(sim, hnormV) %>%
-    summarise(gamma = mean(gamma), .groups = "drop")
-  
-  vario_emp_all_df$type <- "Empirical"
-  vario_th_tau$type <- "Theoretical"
-  vario_plot_df <- bind_rows(vario_emp_all_df, vario_th_tau)
-
-  smooth_loess <- function(x, y, span = 0.3) {
-    fit <- loess(y ~ x, span = span)
-    tibble(hnormV = x, gamma = predict(fit, x))
-  }
-
-  vario_emp_smooth <- vario_plot_df %>%
-    filter(type == "Empirical") %>%
-    group_by(sim) %>%
-    arrange(hnormV) %>%
-    do(smooth_loess(.$hnormV, .$gamma, span = 0.4)) %>%
-    ungroup()
-  
-  vario_th_smooth <- smooth_loess(vario_th_tau$hnormV, vario_th_tau$gamma,
-                                  span = 0.4)
-
-  p <- ggplot() +
-  geom_line(data = subset(vario_plot_df, type == "Empirical"),
-            aes(x = hnormV, y = gamma, group = sim),
-            color = btfgreen, alpha = 0.2) +
-  geom_line(data = vario_emp_smooth,
-            aes(x = hnormV, y = gamma, group = sim),
-            color = btfgreen, alpha = 0.5) +
-  geom_line(data = subset(vario_plot_df, type == "Theoretical"),
-            aes(x = hnormV, y = gamma),
-            color = "#e05e5e", linewidth = 0.5, alpha=0.4) +
-  geom_line(data = vario_th_smooth,
-            aes(x = hnormV, y = gamma),
-            color = "#e05e5e", linewidth = 1.2) +
-  labs(x = "Spatial lag shifted by advection", y = "Variogram") +
-  theme_minimal()
-
-  # save the plot
-  foldername_image <- file.path(
-    im_folder,
-    "/optim_results/rpar",
-    paste0("rpar_", param_str),
-    paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
-    s0_type,
-    wind_type,
-    distance_type,
-    eta_type,
-    init_type
-  )
-  if (!dir.exists(foldername_image)) {
-    print(paste0("Folder created: ", foldername_image))
-    dir.create(foldername_image, recursive = TRUE)
-  }
-  name_file <- paste0("/vario_optim_tau", tau, "_", M, "simu_", m, "rep_",
-                      ngrid^2, "s_", length(temp), "t_", param_str, ".png")
-  ggsave(plot = p, filename = paste0(foldername_image, name_file),
-         width = 6, height = 4)
-}
-
-
-df_result_all <- data.frame(beta1 = c(0.4, 0.45),
-                            beta2 = c(0.2, 0.25),
-                            alpha1 = c(1.5, 1.6),
-                            alpha2 = c(1, 1),
-                            eta1 = c(1, 1.1),
-                            eta2 = c(1, 1),
-                            adv1 = c(0.1, 0.11),
-                            adv2 = c(0.2, 0.21))
-
-# Get data frame with the results for boxplot
-# Convert the data frame to long format
+# PLOTTING RESULTS #############################################################
 df_bplot <- stack(df_result_all)
-write.csv(df_bplot, paste0(foldername_result, name_file), row.names = FALSE)
+# write.csv(df_bplot, paste0(foldername_result, name_file), row.names = FALSE)
 
 # Latex labels for the parameters
 labels_latex <- c(
@@ -507,9 +405,7 @@ labels_latex <- c(
   alpha1 = TeX("$\\alpha_1$"),
   alpha2 = TeX("$\\alpha_2$"),
   eta1 = TeX("$\\eta_1$"),
-  eta2 = TeX("$\\eta_2$"),
-  adv1 = TeX("$v_x$"),
-  adv2 = TeX("$v_y$")
+  eta2 = TeX("$\\eta_2$")
 )
 
 # Get the initial parameters for true values
@@ -519,9 +415,7 @@ initial_param <- c(
   alpha1 = alpha1,
   alpha2 = alpha2,
   eta1 = 1,
-  eta2 = 1,
-  adv1 = adv_real[1],
-  adv2 = adv_real[2]
+  eta2 = 1
 )
 
 # First plot
@@ -529,9 +423,7 @@ params_group1 <- c("beta1", "beta2", "alpha1", "alpha2")
 
 # Second plot
 params_group2 <- if (use_wind_data) {
-  c("eta1", "eta2", "adv1", "adv2")
-} else {
-  c("adv1", "adv2")
+  c("eta1", "eta2")
 }
 
 library(ggplot2)
@@ -543,12 +435,6 @@ bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = valu
   labs(x = "Parameters", y = "Estimated values") +
   theme_minimal()
 
-bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
-  geom_boxplot() +
-  geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
-  scale_x_discrete(labels = labels_latex[params_group2]) +
-  labs(x = "Parameters", y = "Estimated values") +
-  theme_minimal()
 
 # folder to save the plots
 foldername_image <- file.path(
@@ -570,15 +456,7 @@ if (!dir.exists(foldername_image)) {
 
 # Save the plots
 name_file <- paste0("/bp_optim_", M, "simu_", m, "rep_", ngrid^2,
-                "s_", length(temp), "t_", param_str, "_beta_alpha.png")
+                "s_", length(temp), "t_", param_str, "_beta_alpha.pdf")
 
 ggsave(plot = bplot1, filename = paste0(foldername_image, name_file),
-       width = 5, height = 5)
-
-suffix <- if (all(!is.na(wind_df))) "etas" else "adv"
-
-name_file <- paste0( "/bp_optim_", M, "simu_", m, "rep_", ngrid^2,
-              "s_", length(temp), "t_", param_str, "_", suffix, ".png")
-
-ggsave(plot = bplot2, filename = paste0(foldername_image, name_file),
        width = 5, height = 5)

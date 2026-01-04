@@ -453,7 +453,7 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
   X_s1 <- data_rain[, ind_s1]
 
   for (i in seq_len(nrow(excesses))) {
-    s2_name <- excesses$s2[i]
+    # s2_name <- excesses$s2[i]
     tau     <- excesses$tau[i]
     s2_name <- df_lags$s2[i]
     ind_s2 <- which(colnames(data_rain) == s2_name)
@@ -472,7 +472,7 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
     }
 
     # Valid value: evaluate exceedance
-    is_excess <- (X_s2[t_shift] > threshold)
+    is_excess <- (X_s2[t_shift] >= threshold)
     excesses$kij[i] <- sum(is_excess)
   }
 
@@ -586,7 +586,7 @@ theoretical_chi <- function(params, df_lags, latlon = FALSE,
   alpha2 <- params[4]
   adv <- params[5:6]
   
-  chi_df <- df_lags[, c("s1", "s2", "tau", 
+  chi_df <- df_lags[, c("s1", "s2", "tau",
                     "s1x", "s1y", "s2x", "s2y", "hnorm")]
 
   # advected coordinates
@@ -739,13 +739,15 @@ neg_ll <- function(params, df_lags, excesses,
   # Chi already clipped inside theoretical_chi()
   ll_df$chi <- chi$chi
   
-  # Clip p*chi to avoid log(0)
+  # # Clip p*chi to avoid log(0)
   eps <- 1e-12
   ll_df$pchi <- pmax(pmin(1 - p * ll_df$chi, 1 - eps), eps)
 
   ll_df$non_excesses <- ll_df$Tobs - ll_df$kij
   ll_df$ll <- ll_df$kij * log(ll_df$chi) +
               ll_df$non_excesses * log(ll_df$pchi)
+  # lambda <- ll_df$chi  # since Tobs = 1
+  # ll_df$ll <- ll_df$kij * log(ll_df$chi ) - ll_df$chi  - lfactorial(ll_df$kij)
 
   nll <- -sum(ll_df$ll, na.rm = TRUE)
   return(nll)
@@ -801,19 +803,30 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
   } else {
     eta1 <- params[5]
     eta2 <- params[6]
-    adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
-    adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
+
+    vx <- wind_df$vx
+    vy <- wind_df$vy
+
+    r <- sqrt(vx^2 + vy^2)
+    eps <- 1e-12
+
+    scale <- eta1 * (pmax(r, eps)^(eta2 - 1))  # = eta1*r^(eta2)/r
+    adv_x <- scale * vx
+    adv_y <- scale * vy
+
+    # adv_x <- eta1 * sign(wind_df$vx) * abs(wind_df$vx)^eta2
+    # adv_y <- eta1 * sign(wind_df$vy) * abs(wind_df$vy)^eta2
     adv_df <- cbind(adv_x, adv_y)
     if (nrow(adv_df) == 1) adv <- as.vector(adv_df)
   }
 
   m <- length(list_episodes)
   nll_composite <- 0
+  print(params)
 
   for (i in seq_len(m)) {
     excesses <- list_excesses[[i]]
     lags <- list_lags[[i]]
-
     if (!all(is.na(wind_df)) && nrow(adv_df) > 1) {
       adv <- as.vector(adv_df[i, ])
     }
@@ -894,8 +907,8 @@ neg_ll_composite_fixed_eta <- function(params, list_episodes, list_excesses,
     # none fixed
     full_params <- params
   }
-
-  neg_ll_composite(
+  print(full_params)
+  neg_ll <- neg_ll_composite(
     params = full_params,
     list_lags = list_lags,
     list_episodes = list_episodes,
@@ -907,94 +920,10 @@ neg_ll_composite_fixed_eta <- function(params, list_episodes, list_excesses,
     threshold = threshold,
     rpar = rpar
   )
-}
-
-
-
-#' neg_ll_composite_new function
-#'
-#' Calculate the negative log-likelihood for a list of r-Pareto processes
-#' with wind covariates using a new parameterization.
-#'
-#' @param params Vector of variogram parameters (beta1, beta2, alpha1, alpha2,
-#'               omega, eta1, eta2).  
-#' @param list_episodes List of episode data matrices.
-#' @param list_lags List of dataframes with spatial and temporal lag values.
-#' @param list_excesses List of excesses dataframes.  
-#' @param V_episode Matrix of V advection components per episode.
-#' @param W_episode Matrix of W wind components per episode.
-#' @param hmax Maximum spatial lag value (optional).
-#' @param latlon Boolean, TRUE if coordinates are lat/lon.
-#' @param distance Type of spatial norm ("euclidean" or "lalpha").
-#' @param threshold Boolean, TRUE if quantile is a threshold.
-#' @param rpar Boolean, TRUE for r-Pareto process.
-#' @param fixed_omega Optional fixed value for omega.
-#' @param fixed_eta1 Optional fixed value for eta1.
-#' @param fixed_eta2 Optional fixed value for eta2.
-#' @return The negative log-likelihood value.
-#' 
-#' @export
-neg_ll_composite_new <- function(params, list_episodes, list_excesses,
-                                   list_lags, V_episode, W_episode,
-                                   hmax = NA, latlon = TRUE,
-                                   distance = "euclidean", threshold = FALSE,
-                                   rpar = TRUE, fixed_omega = NA, fixed_eta1 = NA,
-                                   fixed_eta2 = NA) {
-  if (length(params) < 5) {
-    stop("params must contain at least 5 elements: beta1,beta2,alpha1,alpha2,phi")
-  }
   
-  beta1 <- params[1]
-  beta2 <- params[2]
-  alpha1 <- params[3]
-  alpha2 <- params[4]
-  if (!is.na(fixed_omega)) {
-    omega <- fixed_omega
-  } else {
-    omega <- params[5]
-  }
-  if(!is.na(fixed_eta1)) {
-    eta1 <- fixed_eta1
-  } else {
-    eta1 <- params[6]
-  }
-  if(!is.na(fixed_eta2)) {
-    eta2 <- fixed_eta2
-  } else {
-    eta2 <- params[7]
-  }
+  print(neg_ll)
 
-  # print(c(params[1:4], omega, eta1, eta2))
-
-
-  m <- length(list_episodes)
-  if (!all(dim(V_episode)[1] == m, dim(W_episode)[1] == m)) {
-    stop("V_episode and W_episode must have same number of rows as episodes")
-  }
-
-  nll_composite <- 0
-  for (i in seq_len(m)) {
-    excesses <- list_excesses[[i]]
-    lags <- list_lags[[i]]
-
-    Vi <- as.numeric(V_episode[i, ]) # c(Vx, Vy)
-    Wi <- as.numeric(W_episode[i, ]) # c(Wx, Wy)
-    # final advection per episode i
-    Vfinal <- omega * Vi + (1 - omega) * Wi
-    Vfinal <- eta1 * sign(Vfinal) * (abs(Vfinal)^eta2) # power transform
-    params_adv <- c(beta1, beta2, alpha1, alpha2, Vfinal)
-
-    # compute nll for episode i
-    nll_i <- neg_ll(params = params_adv,
-                    df_lags = lags,
-                    hmax = hmax, excesses = excesses,
-                    latlon = latlon, distance = distance,
-                    threshold = threshold, rpar = rpar,
-                    data = NA, quantile = NA)
-    nll_composite <- nll_composite + nll_i
-  }
-
-  return(nll_composite)
+  return(neg_ll)
 }
 
 
@@ -1411,57 +1340,93 @@ get_results_optim <- function(filename, data_folder = NA) {
 process_simulation <- function(i, m, list_simu, u, list_lags,
                                list_excesses,
                                init_params, hmax = NA, wind_df = NA,
-                               distance = "euclidean", hessian = FALSE,
-                               normalize = FALSE) {
+                               distance = "euclidean",
+                               normalize = FALSE, fixed_eta1 = NA, fixed_eta2 = NA) {
   
   # Output names: always the same
   if (all(!is.na(wind_df))) {
+    colnames(wind_df) <- c("vx","vy")
+    if (nrow(wind_df) != m) stop("wind_df must have exactly m rows (one per episode).")
     out_names <- c("beta1","beta2","alpha1","alpha2","eta1","eta2")
   } else {
     out_names <- c("beta1","beta2","alpha1","alpha2","adv1","adv2")
   }
-  
+
   # Bounds
   lower_bounds <- c(1e-8, 1e-8, 1e-8, 1e-8, -Inf, -Inf)
   upper_bounds <- c(Inf, Inf, 1.999, 1.999, Inf, Inf)
   if (all(!is.na(wind_df))) {
     lower_bounds[5:6] <- c(1e-8, 1e-8)
+    upper_bounds[5:6] <- c(10, 10)
   }
 
   # Extract episodes
-  list_episodes <- list_simu[((i - 1) * m + 1):(i * m)]
-  lags_episodes <- list_lags[((i - 1) * m + 1):(i * m)]
-  excesses_episodes <- list_excesses[((i - 1) * m + 1):(i * m)]
+  list_episodes_m <- list_simu[((i - 1) * m + 1):(i * m)]
+  list_lags_m <- list_lags[((i - 1) * m + 1):(i * m)]
+  list_excesses_m <- list_excesses[((i - 1) * m + 1):(i * m)]
 
-  # Run optim with tryCatch to avoid breaks
-  opt_res <- tryCatch({
-    optim(
-      par = init_params,
-      fn = neg_ll_composite,
-      list_episodes = list_episodes,
-      list_lags = lags_episodes,
-      list_excesses = excesses_episodes,
-      hmax = hmax,
-      wind_df = wind_df,
-      threshold = TRUE,
-      latlon = FALSE,
-      distance = distance,
-      normalize = normalize,
-      method = "L-BFGS-B",
-      lower = lower_bounds,
-      upper = upper_bounds,
-      control = list(maxit = 10000)
-    )
-  }, error = function(e) return(NULL))
+  if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
+    lower4 <- lower_bounds[1:4]
+    upper4 <- upper_bounds[1:4]
 
-  # If failed or no convergence -> return NA row
-  if (is.null(opt_res) || opt_res$convergence != 0) {
-    return(as.data.frame(as.list(setNames(rep(NA,6), out_names))))
+    opt_res <- tryCatch({
+      optim(
+        par = init_params[1:4],
+        fn = neg_ll_composite_fixed_eta,
+        list_episodes = list_episodes_m,
+        list_lags = list_lags_m,
+        list_excesses = list_excesses_m,
+        hmax = hmax,
+        wind_df = wind_df,          # m×2
+        threshold = TRUE,
+        latlon = FALSE,
+        distance = distance,
+        fixed_eta1 = fixed_eta1,
+        fixed_eta2 = fixed_eta2,
+        method = "L-BFGS-B",
+        lower = lower4,
+        upper = upper4,
+        control = list(maxit = 10000)
+      )
+    }, error = function(e) return(NULL))
+
+    # opt_res$par est longueur 4 : on reconstruit longueur 6
+    if (!is.null(opt_res) && opt_res$convergence == 0) {
+      estimates <- c(opt_res$par, fixed_eta1, fixed_eta2)
+      names(estimates) <- out_names
+      return(as.data.frame(as.list(estimates)))
+    } else {
+      return(as.data.frame(as.list(setNames(rep(NA,6), out_names))))
+    }
+  } else {
+    opt_res <- tryCatch({
+      optim(
+        par = init_params,
+        fn = neg_ll_composite,
+        list_episodes = list_episodes_m,
+        list_lags = list_lags_m,
+        list_excesses = list_excesses_m,
+        hmax = hmax,
+        wind_df = wind_df,
+        threshold = TRUE,
+        latlon = FALSE,
+        distance = distance,
+        normalize = normalize,
+        method = "L-BFGS-B",
+        lower = lower_bounds,
+        upper = upper_bounds,
+        control = list(maxit = 10000)
+      )
+    }, error = function(e) return(NULL))
+
+      # If failed or no convergence -> return NA row
+      if (is.null(opt_res) || opt_res$convergence != 0) {
+        return(as.data.frame(as.list(setNames(rep(NA,6), out_names))))
+      }
   }
-
   # Extract estimates
   estimates <- opt_res$par
-  
+
   # Rename adv->eta if needed
   if (all(!is.na(wind_df))) {
     estimates <- c(estimates[1:4], estimates[5], estimates[6])
@@ -1596,6 +1561,58 @@ compute_gamma_grid <- function(h_vals, tau_vals, direction,
 }
 
 
+
+compute_gamma_grid <- function(h_vals, tau_vals, direction,
+                               theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
+  
+  df_out <- data.frame()
+  
+  # Advection velocity components
+  vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
+  vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
+  
+  for (tau in tau_vals) {
+    for (h in h_vals) {
+      
+      beta1  <- theta_hat[1]
+      beta2  <- theta_hat[2]
+      alpha1 <- theta_hat[3]
+      alpha2 <- theta_hat[4]
+      
+      # --- NEW OPTION: direction = "none" or NULL ---------------------------
+      if (is.null(direction) || identical(direction, "none")) {
+        
+        h_norm <- h
+        hx <- h        # artificial components for consistency
+        hy <- 0
+        
+      } else {
+        # Standard: projection of h along direction
+        hx <- h * direction[1]
+        hy <- h * direction[2]
+        h_norm <- sqrt(hx^2 + hy^2)
+      }
+      # ----------------------------------------------------------------------
+      
+      term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
+              beta1 * abs(hy - vy * tau)^alpha1
+      
+      term2 <- beta2 * tau^alpha2
+      
+      gamma_hat <- term1 + term2
+      
+      df_out <- rbind(df_out, data.frame(
+        h = h,
+        h_norm = h_norm,
+        h_normV = sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2),
+        tau = tau,
+        tau_min = tau * 60,
+        gamma = gamma_hat
+      ))
+    }
+  }
+  return(df_out)
+}
 
 #' compute_gamma_grid function
 #'

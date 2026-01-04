@@ -22,10 +22,10 @@ library(gridExtra)
 # library(generain)
 
 # LOAD DATA ####################################################################
-filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_5km.csv")
+filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_10km.csv")
 comephore_raw <- read.csv(filename_com, sep = ",")
 # filename_loc <- paste0(data_folder, "comephore/coords_pixels_10km.csv")
-filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_5km.csv")
+filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_10km.csv")
 loc_px <- read.csv(filename_loc, sep = ",")
 # colnames(comephore_raw)
 head(comephore_raw)
@@ -89,43 +89,50 @@ grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
 grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
 grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
 
-ncol(df_comephore)
-p1 <- ggplot(grid_coords_km, aes(x = Longitude, y = Latitude)) +
-  geom_point(color = "blue", size = 2) +
-  geom_text(aes(label = rownames(grid_coords_km)), hjust = -0.2, size = 1.5) +
-  coord_fixed() +
-  ggtitle("GPS coordinates WGS84") +
-  theme_minimal()
+sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
+coords_m <- st_coordinates(sites_coords_sf)
+grid_coords_km <- as.data.frame(coords_m / 1000)
+colnames(grid_coords_km) <- c("Longitude", "Latitude")
+rownames(grid_coords_km) <- rownames(sites_coords)
 
-p2 <- ggplot(grid_coords_km, aes(x = x_km, y = y_km)) +
-  geom_point(color = "red") +
-  geom_text(aes(label = rownames(grid_coords_km)), size = 1.5, hjust = -0.2) +
-  coord_fixed() +
-  theme_minimal() +
-  xlab("x in km") +
-  ylab("y in km") +
-  ggtitle("Transformed coordinates in km")
 
-p_coords <- grid.arrange(p1, p2, ncol = 2)
+# ncol(df_comephore)
+# p1 <- ggplot(grid_coords_km, aes(x = Longitude, y = Latitude)) +
+#   geom_point(color = "blue", size = 2) +
+#   geom_text(aes(label = rownames(grid_coords_km)), hjust = -0.2, size = 1.5) +
+#   coord_fixed() +
+#   ggtitle("GPS coordinates WGS84") +
+#   theme_minimal()
+
+# p2 <- ggplot(grid_coords_km, aes(x = x_km, y = y_km)) +
+#   geom_point(color = "red") +
+#   geom_text(aes(label = rownames(grid_coords_km)), size = 1.5, hjust = -0.2) +
+#   coord_fixed() +
+#   theme_minimal() +
+#   xlab("x in km") +
+#   ylab("y in km") +
+#   ggtitle("Transformed coordinates in km")
+
+# p_coords <- grid.arrange(p1, p2, ncol = 2)
 
 # save plot
-filename <- paste(im_folder, "optim/comephore/coords_transformation_5km.png",
-                  sep = "")
-ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
-       units = "cm")
+# filename <- paste(im_folder, "optim/comephore/coords_transformation_5km.png",
+#                   sep = "")
+# ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
+#        units = "cm")
 
 # get distance matrix
-grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
-grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
-colnames(grid_coords_m) <- c("Longitude", "Latitude")
-colnames(grid_coords_km) <- c("Longitude", "Latitude")
-dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
+# grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
+# grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
+# colnames(grid_coords_m) <- c("Longitude", "Latitude")
+# colnames(grid_coords_km) <- c("Longitude", "Latitude")
+dist_mat <- get_dist_mat(grid_coords_km, latlon = FALSE)
 
 # Spatial chi
-df_dist <- reshape_distances(dist_mat)
+df_dist_km <- reshape_distances(dist_mat)
 # df_dist$value <- round(df_dist$value / 1000, 1) * 1000  # / 1000 in km
-df_dist_km <- df_dist
-df_dist_km$value <- round(df_dist$value / 1000, 1)
+# df_dist_km <- df_dist
+df_dist_km$value <- round(df_dist_km$value, 1)
 
 
 # Spatial chi WLSE #############################################################
@@ -136,7 +143,7 @@ library(kableExtra)
 # quantiles
 q_spa_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99)
 q_temp_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97)
-hmax <- 7
+hmax <- 10
 tmax <- 10
 
 foldername <- paste0(data_folder, "/comephore/WLSE/")
@@ -167,17 +174,19 @@ for (q_no0_spa in q_spa_vals) {
   
   ggsave(paste0(im_folder, "WLSE/comephore/full_spatial_chi_", q_no0_spa, ".pdf"),
          plot = chispa_plot, width = 20, height = 15, units = "cm")
-  
+
   # Estimation WLSE
   spa_result <- get_estimate_variospa(chispa_df, weights = "exp", summary = TRUE)
-  
+  alpha <- as.numeric(spa_result[[3]])
+  beta <- as.numeric(spa_result[[2]])
+  c <- as.numeric(spa_result[[1]])
   # Plot zeta(chi)
   chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
     btf_theme +
     geom_point(col = btfgreen) +
     xlab(TeX(r"($\log(h)$)")) +
     ylab(TeX(r"($\zeta(\widehat{\chi}(h, 0))$)")) +
-    geom_line(aes(x = lagspa, y = spa_result$alpha * lagspa + spa_result$c),
+    geom_line(aes(x = lagspa, y = alpha * lagspa + c),
               alpha = 0.6, color = "darkred", linewidth = 0.5)
   
   ggsave(paste0(im_folder, "WLSE/comephore/full_spatial_chi_zeta_estim_", q_no0_spa, ".pdf"),
@@ -186,15 +195,17 @@ for (q_no0_spa in q_spa_vals) {
   # Save results
   spa_results[[length(spa_results) + 1]] <- data.frame(
     q_spa = q_no0_spa,
-    beta1 = spa_result$beta,
-    alpha1 = spa_result$alpha,
-    signif_beta1 = spa_result$signif_beta,
-    signif_alpha1 = spa_result$signif_alpha
+    beta1 = beta,
+    alpha1 = alpha,
+    signif_beta1 = spa_result[[4]],
+    signif_alpha1 = spa_result[[5]]
   )
 }
 
 df_spa_result <- bind_rows(spa_results)
 
+# beta2 <- 0.02717288
+# alpha2 <- 1.065663
 
 # Temporal chi WLSE ============================================================
 for (q_no0_temp in q_temp_vals) {

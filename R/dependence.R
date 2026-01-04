@@ -60,7 +60,7 @@ get_chi_empirical <- function(data, q) {
 #' @import tidyr
 #' 
 #' @export 
-chispatemp_empirical <- function(data_rain, df_lags, quantile) {
+chispatemp_empirical <- function(data_rain, df_lags, quantile, remove_zeros = TRUE) {
   chi_st <- df_lags
   chi_st$chiemp <- NA
   chi_st$chiemp2 <- NA
@@ -70,21 +70,23 @@ chispatemp_empirical <- function(data_rain, df_lags, quantile) {
     for (i in seq_len(nrow(df_h_t))) { # loop over each pair of sites
       # get index pairs
       ind_s1 <- df_h_t$s1[i]
-      ind_s2 <- as.numeric(as.character(df_h_t$s2[i]))
+      ind_s2 <- df_h_t$s2[i]
       rain_cp <- na.omit(data_rain[, c(ind_s1, ind_s2)])
+      if (remove_zeros) {
+        rain_cp <- rain_cp[rowSums(rain_cp != 0, na.rm = TRUE) > 0, ]
+      }
       colnames(rain_cp) <- c("s1", "s2")
       rain_lag <- rain_cp$s1[(t + 1):Tmax]
       rain_nolag <- rain_cp$s2[1:(Tmax - t)]
-      data <- cbind(rain_lag, rain_nolag) # get couple
+      data <- na.omit(cbind(rain_lag, rain_nolag)) # get couple
       Tobs <- nrow(data) # T - tau
       data_unif <- cbind(rank(data[, 2]) / (Tobs + 1),
                           rank(data[, 1]) / (Tobs + 1))
 
       # get the number of marginal excesses
-      n_marg <- sum(data_unif[, 1] > quantile)
-
+      n_marg <- sum(data_unif[, 1] > quantile )
       # get the number of joint excesses
-      cp_cond <- data_unif[data_unif[, 1] > quantile,]
+      cp_cond <- data_unif[data_unif[, 1] > quantile, , drop = FALSE]
       joint_excesses <- sum(cp_cond[, 2] > quantile)
       chi_hat_h_tau <- joint_excesses / n_marg
       chi_st$chiemp[chi_st$s1 == ind_s1 & chi_st$s2 == ind_s2 &
@@ -601,8 +603,8 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
     print(h)
     # get index pairs
     df_dist_h <- df_dist[df_dist$value == h, ]
-    ind_s2 <- as.numeric(as.character(df_dist_h$X)) # get index of s2
-    ind_s1 <- as.numeric(as.character(df_dist_h$Y)) # get index of s1
+    ind_s2 <- match(df_dist_h$X, colnames(data_rain)) # get index of s2
+    ind_s1 <- match(df_dist_h$Y, colnames(data_rain)) # get index of s1
     for (i in seq_along(ind_s1)){ # loop over each pair of sites
       rain_cp <- drop_na(data_rain[, c(ind_s1[i], ind_s2[i])]) # get couple
       colnames(rain_cp) <- c("s1", "s2") # rename columns
@@ -965,7 +967,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   # eta transformation
   etachispa_df <- data.frame(chi = eta(chispa$chi),
-                           lagspa = log(chispa$lagspa /1000)) # in km
+                           lagspa = log(chispa$lagspa / 1000)) # in km
 
   if (weights == "residuals") {
     # LS reg (clasical model)
@@ -1001,28 +1003,3 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   }
   return(c(c_spa, beta_spa, alpha_spa))
 }
-
-
-# get_estimate_variospa <- function (chispa, weights, summary = FALSE) {
-#     etachispa_df <- data.frame(chi = eta(chispa$chi), lagspa = log(chispa$lagspa))
-#     if (weights == "residuals") {
-#         model <- lm(chi ~ lagspa, data = etachispa_df)
-#         ws <- 1/lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
-#     }
-#     else if (weights == "exp") {
-#         ws <- exp(-(etachispa_df$lagspa)^2)
-#     }
-#     else if (weights == "none") {
-#         ws <- rep(1, length(etachispa_df$lagspa))
-#     }
-#     wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
-#     sum_wls_lag <- summary(wls_model_spa)
-#     wls_coef <- data.frame(sum_wls_lag$coefficients)
-#     alpha_spa <- wls_coef$Estimate[2]
-#     c_spa <- wls_coef$Estimate[1]
-#     beta_spa <- exp(c_spa)
-#     if (summary) {
-#         print(sum_wls_lag)
-#     }
-#     return(c(c_spa, beta_spa, alpha_spa))
-# }
