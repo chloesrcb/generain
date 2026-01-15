@@ -62,11 +62,18 @@ btfgreen <- "#69b3a2"
 # HSM --------------------------------------------------------------------------
 ################################################################################
 # get location of each rain gauge
-setwd("./script")
-location_gauges <- read.csv("../data/PluvioMontpellier_1min/pluvio_mtp_loc.csv")
-location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                                 "crbm", "archiw", "archie", "um35", "chu1",
-                                 "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
+# setwd("./script")
+# Load libraries and set theme
+source("./script/load_libraries.R")
+filename_loc <- paste0(data_folder,
+                           "omsev/loc_rain_gauges.csv")
+# get location of each rain gauge
+location_gauges <- read.csv(filename_loc)
+location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
+                             "crbm", "archiw", "archie", "um35", "chu1",
+                             "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
+                             "cines", "brives", "hydro")
+
 
 # Get distances matrix
 dist_mat <- get_dist_mat(location_gauges)
@@ -82,10 +89,15 @@ rain_hsm <- rain.all5[c(1, 6:ncol(rain.all5))]
 # COMEPHORE --------------------------------------------------------------------
 ################################################################################
 # load data
-df_comephore <- read.csv("../data/comephore/comephore_full.csv", sep = ",")
-loc_px <- read.csv("../data/comephore/coords_pixels_wgs84.csv", sep = ",")
+filename_com <- paste0(data_folder, "comephore/comephore_2008_2024_5km.csv")
+# filename_com <- paste0(data_folder, "comephore/zoom_5km.csv")
+comephore_raw <- read.csv(filename_com, sep = ",")
 
-rain_com <- df_comephore
+filename_loc <- paste0(data_folder, "comephore/loc_px_zoom_5km.csv")
+loc_px <- read.csv(filename_loc, sep = ",")
+
+
+rain_com <- comephore_raw
 colnames(rain_com)[1] <- "date"
 
 # Get distances matrix
@@ -97,7 +109,7 @@ df_dist_comephore <- reshape_distances(dist_mat)
 
 ```{r}
 # Plot COMEPHORE time series
-pixel <- rain_com$p1
+pixel <- rain_com[,2]
 
 plot(pixel)
 

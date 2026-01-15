@@ -8,7 +8,7 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- FALSE
+muse <- TRUE
 # PARAMETERS ###################################################################
 
 
@@ -47,24 +47,30 @@ if (!dir.exists(result_folder)) {
 
 # get random advection for each simulation
 set.seed(123)
+speed <- exp(rnorm(m, mean = log(1), sd = 0.7))   # large range of speeds
+angle <- runif(m, 0, 2*pi)
 adv_df <- data.frame(
-  adv1 = rnorm(m, mean = 1, sd = 0.5),
-  adv2 = rnorm(m, mean = 1, sd = 0.2)
+  adv1 = speed * cos(angle),
+  adv2 = speed * sin(angle)
 )
 
 set.seed(123)
 
 wind_list <- lapply(1:M, function(i) {
+  speed <- exp(rnorm(m, mean = log(1), sd = 0.7))   # large range of speeds
+  angle <- runif(m, 0, 2*pi)
   data.frame(
-    vx = rnorm(m, mean = 1, sd = 0.5),
-    vy = rnorm(m, mean = 1, sd = 0.2)
+    vx = speed * cos(angle),
+    vy = speed * sin(angle)
   )
 })
 
 
-# params <- c(0.4, 0.7, 0.3, 0.8) # true parameters for the variogram
+# params <- c(0.3, 0.6, 0.3, 0.8)  # beta1, beta2, alpha1, alpha2
 # eta1 <- 0.5
-# eta2 <- 1.5
+# eta2 <- 1.6
+# fixed_eta1 <- NA  # set to a numeric value to fix eta1
+# fixed_eta2 <- NA  # set to a numeric value to fix eta2
 true_param <- c(params, eta1, eta2)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -120,14 +126,13 @@ format_value <- function(x) {
   return(paste(formatted_values, collapse = "_"))
 }
 param_str <- format_value(true_param)
-# adv_str <- format_value(adv)
+# adv_str <- format_value(adv)result_folder
 s0_str <- format_value(s0)
 t0_str <- format_value(t0)
 
 # Subfolder names
 s0_type <- if (random_s0) "random_s0" else "fixed_s0"
-fixed_eta1 <- eta1
-fixed_eta2 <-eta2
+
 eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "fixed_eta"
 } else if (!is.na(fixed_eta1)) {
@@ -143,11 +148,9 @@ wind_type <- if (use_wind_data) {
 } else {
   "no_wind"
 }
-use_wind_data <- TRUE
+
 if (use_wind_data) {
   wind_df <- adv_df
-  fixed_eta1 <- eta1
-  fixed_eta2 <- eta2
 } else {
   wind_df <- NA
   fixed_eta1 <- NA
@@ -155,6 +158,7 @@ if (use_wind_data) {
   eta_type <- ""
 }
 
+result_folder <- paste0(data_folder, "optim_results/rpar/")
 # Folder name to save the data
 foldername <- file.path(
   result_folder,
@@ -355,7 +359,8 @@ eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
 
 # save data in csv
 foldername_result <- file.path(
-  "./data/optim_results/rpar",
+  data_folder,
+  "optim_results/rpar",
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
@@ -393,6 +398,79 @@ if (number_no_convergence > 0) {
 } else {
   print("All simulations converged")
 }
+# result_filename <- "/home/cserreco/Documents/These/phd_extremes/data/optim_results/rpar/rpar_03_06_03_08_16_52/sim_49s_24t_s0_1_1_t0_0/random_s0/wind/euclidean/free_eta/optim_rpar_50simu_500rep_49s_24t_03_06_03_08_16_52.csv"
+# print(paste0("Results written to: ", result_filename))
+# df_result_all <- read.csv(result_filename)
+# true_param <- c(0.3, 0.6, 0.3, 0.8, 1.6, 5.2)
+# cor(df_result_all$eta1, df_result_all$eta2)
+
+# library(ggplot2)
+# library(dplyr)
+
+# df_plot <- df_result_all %>%
+#   mutate(
+#     eta1_j = jitter(eta1, amount = 0.02),
+#     eta2_j = jitter(eta2, amount = 0.02)
+#   )
+
+# ggplot(df_plot, aes(x = eta1_j, y = eta2_j)) +
+#   geom_point(size = 2, color = btfgreen) +
+#   geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "#797676") +
+#   labs(
+#     x = expression(hat(eta)[1]),
+#     y = expression(hat(eta)[2])
+#   ) +
+#   theme_minimal()
+
+# Save 
+
+# foldername_image <- file.path(
+#   im_folder,
+#   "/optim_results/rpar",
+#   paste0("rpar_", param_str),
+#   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
+#   s0_type,
+#   wind_type,
+#   distance_type,
+#   eta_type,
+#   init_type
+# )
+
+# filename_image <- paste0(
+#   "/scatter_eta1_eta2_",
+#   M, "simu_", m, "rep_", ngrid^2,
+#   "s_", length(temp), "t_",
+#   param_str,
+#   ".pdf"
+# )
+
+# ggsave(
+#   plot = last_plot(),
+#   filename = paste0(foldername_image, filename_image),
+#   width = 5,
+#   height = 5
+# )
+
+# ggplot(df_plot, aes(x = eta1_j, y = eta2_j)) +
+#   geom_point(size = 2, alpha = 0.7) +
+#   geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "black") +
+#   labs(
+#     x = expression(hat(eta)[1]),
+#     y = expression(hat(eta)[2])
+#   ) +
+#   theme_bw()
+
+# df_plot <- df_plot %>%
+#   mutate(eta_eff = sqrt(eta1^2 + eta2^2))
+
+# ggplot(df_plot, aes(x = eta_eff)) +
+#   geom_histogram(bins = 12, fill = "grey70", color = "black") +
+#   labs(
+#     x = expression(sqrt(hat(eta)[1]^2 + hat(eta)[2]^2)),
+#     y = "Frequency"
+#   ) +
+#   theme_bw()
+
 
 # PLOTTING RESULTS #############################################################
 df_bplot <- stack(df_result_all)
@@ -410,12 +488,12 @@ labels_latex <- c(
 
 # Get the initial parameters for true values
 initial_param <- c(
-  beta1 = beta1,
-  beta2 = beta2,
-  alpha1 = alpha1,
-  alpha2 = alpha2,
-  eta1 = 1,
-  eta2 = 1
+  beta1 = true_param[1],
+  beta2 = true_param[2],
+  alpha1 = true_param[3],
+  alpha2 = true_param[4],
+  eta1 = true_param[5],
+  eta2 = true_param[6]
 )
 
 # First plot
@@ -435,6 +513,16 @@ bplot1 <- ggplot(subset(df_bplot, ind %in% params_group1), aes(x = ind, y = valu
   labs(x = "Parameters", y = "Estimated values") +
   theme_minimal()
 
+if (fixed_eta1 && fixed_eta2) {
+  bplot2 <- NULL
+} else {
+  bplot2 <- ggplot(subset(df_bplot, ind %in% params_group2), aes(x = ind, y = values)) +
+    geom_boxplot() +
+    geom_point(aes(y = initial_param[match(ind, names(initial_param))]), color = "red", pch = 4) +
+    scale_x_discrete(labels = labels_latex[params_group2]) +
+    labs(x = "Parameters", y = "Estimated values") +
+    theme_minimal()
+}
 
 # folder to save the plots
 foldername_image <- file.path(
@@ -460,3 +548,10 @@ name_file <- paste0("/bp_optim_", M, "simu_", m, "rep_", ngrid^2,
 
 ggsave(plot = bplot1, filename = paste0(foldername_image, name_file),
        width = 5, height = 5)
+
+if (!is.null(bplot2)) {
+  name_file <- paste0("/bp_optim_", M, "simu_", m, "rep_", ngrid^2,
+                  "s_", length(temp), "t_", param_str, "_eta.pdf")  
+  ggsave(plot = bplot2, filename = paste0(foldername_image, name_file),
+         width = 5, height = 5)
+}

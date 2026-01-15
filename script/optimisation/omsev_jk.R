@@ -29,7 +29,7 @@ files <- list.files(functions_folder, full.names = TRUE)
 # # load all functions in files
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 
-# get rain data from omsev
+# # get rain data from omsev
 # filename_omsev <- paste0(data_folder,
 #                          "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
 
@@ -65,34 +65,35 @@ dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
 
 sites_names <- colnames(rain)
-
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 
 rownames(sites_coords) <- location_gauges$Station
 sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"),
                             crs = 4326)
+
 sites_coords_sf <- st_transform(sites_coords_sf, crs = 2154)
 coords_m <- st_coordinates(sites_coords_sf)
-grid_coords_km <- as.data.frame(coords_m / 1000)
+grid_coords_km <- sites_coords
+grid_coords_m <- sites_coords
+grid_coords_m$x_m <- (coords_m[, "X"] - min(coords_m[, "X"]))
+grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
+grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
+grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
+
+# get distance matrix
+grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
+grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
+colnames(grid_coords_m) <- c("Longitude", "Latitude")
 colnames(grid_coords_km) <- c("Longitude", "Latitude")
-rownames(grid_coords_km) <- rownames(sites_coords)
-# grid_coords_m <- sites_coords
-# grid_coords_m$x_m <- (coords_m[, "X"] - min(coords_m[, "X"]))
-# grid_coords_m$y_m <- (coords_m[, "Y"] - min(coords_m[, "Y"]))
-# grid_coords_km$x_km <- (coords_m[, "X"] - min(coords_m[, "X"])) / 1000
-# grid_coords_km$y_km <- (coords_m[, "Y"] - min(coords_m[, "Y"]))  / 1000
+dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
 
-# # get distance matrix
-# grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
-# grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
-# colnames(grid_coords_m) <- c("Longitude", "Latitude")
-# colnames(grid_coords_km) <- c("Longitude", "Latitude")
-# dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
+# Spatial chi
+df_dist <- reshape_distances(dist_mat)
+df_dist_km <- df_dist
+df_dist_km$value <- df_dist$value / 1000
 
-# # Spatial chi
-# df_dist <- reshape_distances(dist_mat)
-# df_dist_km <- df_dist
-# df_dist_km$value <- df_dist$value / 1000
+stopifnot(nrow(grid_coords_m) == ncol(rain))
+rownames(grid_coords_m) <- colnames(rain)
 
 ################################################################################
 # WLSE results -----------------------------------------------------------------
@@ -131,7 +132,7 @@ list_u <- set_st_excess$list_u
 
 
 # Spatio-temporal neighborhood parameters
-s0t0_set <- get_s0t0_pairs(grid_coords_km, rain,
+s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
@@ -226,19 +227,35 @@ adv_df <- adv_df[matching_indices,]
 tail(adv_df)
 rownames(adv_df) <- NULL  # reset row names
 
-selected_episodes <- selected_points
-selected_episodes$adv_x <- rep(NA, nrow(selected_episodes))
-selected_episodes$adv_y <- rep(NA, nrow(selected_episodes))
 
-# get adv values for each episode according to the t0_date
 
 library(data.table)
+
 setDT(selected_points)
 setDT(adv_df)
-setkey(adv_df, t0_omsev)
-selected_episodes <- adv_df[selected_points, roll = 5*60, on = .(t0_omsev = t0_date)]
-colnames(selected_episodes)[which(names(selected_episodes) == "vx_final")] <- "adv_x"
-colnames(selected_episodes)[which(names(selected_episodes) == "vy_final")] <- "adv_y"
+
+adv_df[, t0_omsev := as.POSIXct(t0_omsev, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
+selected_points[, t0_date := as.POSIXct(t0_date, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
+
+# 1) dédoublonner par t0_omsev (si c'est bien la même advection)
+adv_df_u <- adv_df[, .(
+  vx_final = vx_final[1],
+  vy_final = vy_final[1]
+), by = t0_omsev]
+
+setkey(adv_df_u, t0_omsev)
+
+# 2) rolling join ±5 min, 1 ligne par selected_points
+selected_episodes <- adv_df_u[selected_points,
+  on   = .(t0_omsev = t0_date),
+  roll = 5*60
+]
+
+setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
+
+stopifnot(nrow(selected_episodes) == nrow(selected_points))
+
+
 V_episodes <- data.frame(
   v_x = selected_episodes$adv_x,
   v_y = selected_episodes$adv_y
@@ -324,7 +341,7 @@ abline(v = c(0.6), col = "red", lty = 2)
 
 speed_class <- as.character(cut(
     speed,
-    breaks = c(0, 1, Inf),
+    breaks = c(0, 0.1, Inf),
     labels = c("still", "significant"),
     include.lowest = TRUE
   ))

@@ -93,7 +93,7 @@ list_u <- set_st_excess$list_u
 
 
 # Spatio-temporal neighborhood parameters
-s0t0_set <- get_s0t0_pairs(grid_coords_km, rain,
+s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             min_spatial_dist = min_spatial_dist,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
@@ -205,13 +205,31 @@ selected_episodes$adv_y <- rep(NA, nrow(selected_episodes))
 
 # get adv values for each episode according to the t0_date
 
-library(data.table)
 setDT(selected_points)
 setDT(adv_df)
-setkey(adv_df, t0_omsev)
-selected_episodes <- adv_df[selected_points, roll = 5*60, on = .(t0_omsev = t0_date)]
-colnames(selected_episodes)[which(names(selected_episodes) == "vx_final")] <- "adv_x"
-colnames(selected_episodes)[which(names(selected_episodes) == "vy_final")] <- "adv_y"
+
+adv_df[, t0_omsev := as.POSIXct(t0_omsev, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
+selected_points[, t0_date := as.POSIXct(t0_date, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
+
+# 1) dédoublonner par t0_omsev (si c'est bien la même advection)
+adv_df_u <- adv_df[, .(
+  vx_final = vx_final[1],
+  vy_final = vy_final[1]
+), by = t0_omsev]
+
+setkey(adv_df_u, t0_omsev)
+
+# 2) rolling join ±5 min, 1 ligne par selected_points
+selected_episodes <- adv_df_u[selected_points,
+  on   = .(t0_omsev = t0_date),
+  roll = 5*60
+]
+
+setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
+
+stopifnot(nrow(selected_episodes) == nrow(selected_points))
+
+
 V_episodes <- data.frame(
   v_x = selected_episodes$adv_x,
   v_y = selected_episodes$adv_y
@@ -264,6 +282,7 @@ list_results <- mclapply(1:length(s0_list), function(i) {
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
 df_lags <- list_lags[[10]]
+df_lags$hnorm
 df_excesses <- list_excesses[[13]]
 sum(df_excesses$kij)
 
@@ -273,6 +292,7 @@ filename_com_res <- paste(data_folder,
         "comephore/optim_results/euclidean/free_eta/results_com_classes_q95_delta30_dmin5.csv",
         sep = "")
 com_results <- read.csv(filename_com_res)
+com_results <- c(0.308, 0.602, 0.342, 0.761, 1.621, 5.219)
 # check for na in adv and wind
 hmax <- max(dist_mat) / 1000
 
@@ -288,10 +308,9 @@ hist(selected_episodes$adv_speed, main = "Histogram of advection speed",
      xlab = "Speed (km/h)", breaks = 30)
 
 # get advection with speed above 0.2 km/h
-
 speed_threshold <- 0
 adv_speed <- sqrt(selected_episodes$adv_x^2 +
-                      selected_episodes$adv_y^2)
+                    selected_episodes$adv_y^2)
 
 max(adv_speed)
 # put all adv < speed_threshold to 0
@@ -324,9 +343,8 @@ print(paste("Number of episodes after filtering:", number_episode))
 
 # OPTIMISATION ---------------------------------------------------------------
 
-# convert into numeric vector (use first row as default)
 # init_com_class <- as.numeric(com_results[2, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")])
-init_com_class <- c(0.354, 0.678, 0.334, 0.724, 1.092, 5.666)
+# init_com_class <- c(0.354, 0.678, 0.334, 0.724, 1.092, 5.666)
 init_com_class <- c(0.308, 0.602, 0.342, 0.761, 1.621, 5.219)
 eta1_class <- init_com_class[5]
 eta2_class <- init_com_class[6]
@@ -362,7 +380,6 @@ convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
   beta2_new <- beta2 / (c_t^alpha2)
   list(beta1 = beta1_new, beta2 = beta2_new)
 }
-
 
 par_m5min <- convert_params(result$par[1], result$par[2],
                                result$par[3], result$par[4],
@@ -407,8 +424,6 @@ filename <- paste0(foldername_res, "/results_q",
            q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(result_df, filename, row.names = FALSE)
 
-
-
 params_est <- as.numeric(result_df)
 
 params_est <- c(params_est, eta1_class, eta2_class)
@@ -425,7 +440,7 @@ selected_episodes_filtered$t0_date <- as.POSIXct(
   format = "%Y-%m-%d %H:%M:%S",
   tz = "UTC"
 )
-
+ncores <- detectCores() - 1
 month_vec <- format(selected_episodes_filtered$t0_date, "%m")
 year_vec  <- format(selected_episodes_filtered$t0_date, "%Y")
 month_year_vec <- paste(year_vec, month_vec, sep = "-")
@@ -475,7 +490,7 @@ foldername_jk <- paste0(data_folder, "omsev/optim_results/jackknife_estimates/")
 if (!dir.exists(foldername_jk)) {
   dir.create(foldername_jk, recursive = TRUE)
 }
-filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n", 
+filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jack_estimates, filename, row.names = FALSE)
 
@@ -600,7 +615,7 @@ chi_omsev <- compute_group_chi(
   list_excesses = list_excesses_filtered,
   wind_df = V_episodes_filtered,
   params = omsev_params,
-  tau_fixed = 1,
+  tau_fixed = 0,
   h_breaks = h_breaks_omsev,
   adv_transform = TRUE
 )
@@ -627,10 +642,10 @@ foldername <- paste0(im_folder, "workflows/full_pipeline/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
-filename <- paste0(foldername, "omsev_chi_th_emp_above01_putat0.png")
+filename <- paste0(foldername, "omsev_chi_th_emp.png")
 ggsave(filename,
        width = 7,
-       height = 7)
+       height = 6)
 
 
 # remove NA hbin 
@@ -656,7 +671,7 @@ if (!dir.exists(foldername)) {
 filename <- paste0(foldername, "omsev_chi_diff_boxplot_above01_putat0.png")
 ggsave(filename,
        width = 7,
-         height = 5)
+         height = 7)
 
 
 compute_chi_with_ci_jackknife <- function(
@@ -704,7 +719,7 @@ res_om_cmp_ci <- compute_chi_with_ci_jackknife(
   list_lags = list_lags_filtered,
   list_excesses = list_excesses_filtered,
   wind_df = V_episodes_filtered,
-  jack_estimates = jack_estimates,  
+  jack_estimates = jack_estimates,
   h_breaks = h_breaks_omsev,
   tau_fixed = 1,
   adv_transform = TRUE

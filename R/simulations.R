@@ -322,72 +322,72 @@ compute_W_s_t <- function(grid, W_s, W_t, adv) {
 #' @return The spatio-temporal Gaussian random field.
 #'
 #' @export
-compute_st_gaussian_process <- function(grid, W_s = NULL, 
-                                        W_s_x = NULL, W_s_y = NULL, W_t,
-                                        adv) {
-  lx <- length(unique(grid$x))
-  ly <- length(unique(grid$y))
-  lt <- length(unique(grid$t))
-  coords <- cbind(grid$shifted_x, grid$shifted_y)
+# compute_st_gaussian_process <- function(grid, W_s = NULL, 
+#                                         W_s_x = NULL, W_s_y = NULL, W_t,
+#                                         adv) {
+#   lx <- length(unique(grid$x))
+#   ly <- length(unique(grid$y))
+#   lt <- length(unique(grid$t))
+#   coords <- cbind(grid$shifted_x, grid$shifted_y)
   
 
-  # Determine distance type
-  is_lalpha <- !is.null(W_s_x) && !is.null(W_s_y)
-  is_euclidean <- !is.null(W_s)
+#   # Determine distance type
+#   is_lalpha <- !is.null(W_s_x) && !is.null(W_s_y)
+#   is_euclidean <- !is.null(W_s)
 
-  if (!is_euclidean && !is_lalpha) {
-    stop("Provide either W_s for euclidean or W_s_x and W_s_y for lalpha case.")
-  }
+#   if (!is_euclidean && !is_lalpha) {
+#     stop("Provide either W_s for euclidean or W_s_x and W_s_y for lalpha case.")
+#   }
 
-  # Remove duplicates if no advection
-  if (!any(is.na(adv)) && all(adv == 0)) {
-    duplicates <- duplicated(coords)
-    filtered_coords <- coords[!duplicates, ]
-    coords <- filtered_coords
-  }
+#   # Remove duplicates if no advection
+#   if (!any(is.na(adv)) && all(adv == 0)) {
+#     duplicates <- duplicated(coords)
+#     filtered_coords <- coords[!duplicates, ]
+#     coords <- filtered_coords
+#   }
 
-  if (is.vector(coords)) {
-    coords <- matrix(coords, nrow = 1)
-  }
-  nsites <- nrow(coords)
+#   if (is.vector(coords)) {
+#     coords <- matrix(coords, nrow = 1)
+#   }
+#   nsites <- nrow(coords)
 
-  W_s_t <- array(NA, dim = c(lx, ly, lt))
-  # t_index <- grid$t + 1
-  t_levels <- sort(unique(grid$t))
-  t_index  <- match(grid$t, t_levels)  # 1..lt
+#   W_s_t <- array(NA, dim = c(lx, ly, lt))
+#   # t_index <- grid$t + 1
+#   t_levels <- sort(unique(grid$t))
+#   t_index  <- match(grid$t, t_levels)  # 1..lt
 
-  # Loop over each grid point
-  for (i in seq_along(t_index)) {
-    s_x <- grid$x[i]
-    s_y <- grid$y[i]
-    t_idx <- t_index[i]
+#   # Loop over each grid point
+#   for (i in seq_along(t_index)) {
+#     s_x <- grid$x[i]
+#     s_y <- grid$y[i]
+#     t_idx <- t_index[i]
     
-    # Handle advection: adjust the index based on the grid size
-    if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
-      if (i %% nsites == 0) {
-        ind_W_s <- i - nsites * (i %/% nsites - 1)
-      } else {
-        ind_W_s <- i - nsites * (i %/% nsites)
-      }
-    } else {
-      ind_W_s <- i
-    }
+#     # Handle advection: adjust the index based on the grid size
+#     if (!any(is.na(adv)) && all(adv == 0) && i > nsites) {
+#       if (i %% nsites == 0) {
+#         ind_W_s <- i - nsites * (i %/% nsites - 1)
+#       } else {
+#         ind_W_s <- i - nsites * (i %/% nsites)
+#       }
+#     } else {
+#       ind_W_s <- i
+#     }
 
-    # Check if lalpha or euclidean, and handle accordingly
-    if (is_lalpha) {
-      # lalpha case: Combine W_s_x and W_s_y
-      W_s_t_point <- W_s_x[ind_W_s] + W_s_y[ind_W_s] + W_t[t_index[i]]
-    } else {
-      # euclidean case: Use W_s directly
-      W_s_t_point <- W_s[ind_W_s] + W_t[t_index[i]]
-    }
-    # Store the result in the 3D array
-    W_s_t[s_x, s_y, t_idx] <- W_s_t_point
-  }
+#     # Check if lalpha or euclidean, and handle accordingly
+#     if (is_lalpha) {
+#       # lalpha case: Combine W_s_x and W_s_y
+#       W_s_t_point <- W_s_x[ind_W_s] + W_s_y[ind_W_s] + W_t[t_index[i]]
+#     } else {
+#       # euclidean case: Use W_s directly
+#       W_s_t_point <- W_s[ind_W_s] + W_t[t_index[i]]
+#     }
+#     # Store the result in the 3D array
+#     W_s_t[s_x, s_y, t_idx] <- W_s_t_point
+#   }
 
 
-  return(W_s_t)
-}
+#   return(W_s_t)
+# }
 
 
 compute_st_gaussian_process <- function(grid, W_s = NULL,
@@ -1138,147 +1138,149 @@ sim_BR_aniso <- function(beta1, beta2, alpha1, alpha2, x, y, z, adv = NA,
 #' @return A list with simulated field Z (5D array: x × y × t × nres × n_s0)
 #'         and list of conditioning points s0_used.
 #' @export
-sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
-                        adv = c(0, 0), t0 = 0, nres = 1,
-                        random_s0 = FALSE, s0 = c(1, 1),
-                        s0_radius = Inf,
-                        distance = "euclidean", seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
+# sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
+#                         adv = c(0, 0), t0 = 0, nres = 1,
+#                         random_s0 = FALSE, s0 = c(1, 1),
+#                         s0_radius = Inf,
+#                         distance = "euclidean", seed = NULL) {
+#   if (!is.null(seed)) set.seed(seed)
 
-  # Ensure RandomFields allows duplicate coordinates
-  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
-                          install = "no")
+#   # Ensure RandomFields allows duplicate coordinates
+#   RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
+#                           install = "no")
 
-  if (!(distance %in% c("euclidean", "lalpha"))) {
-    stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
-  }
+#   if (!(distance %in% c("euclidean", "lalpha"))) {
+#     stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+#   }
   
-  # Dimensions of the grid
-  lx <- length(x)
-  ly <- length(y)
-  lt <- length(t)
-  site_names <- paste0("S", seq_len(lx * ly))
+#   # Dimensions of the grid
+#   lx <- length(x)
+#   ly <- length(y)
+#   lt <- length(t)
+#   site_names <- paste0("S", seq_len(lx * ly))
   
-  # Define fractional Brownian motion models
-  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
-  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+#   # Define fractional Brownian motion models
+#   modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+#   modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
   
-  # Create spatio-temporal grid with advection
-  grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = t)
-  grid$shifted_x <- grid$x - grid$t * adv[1]
-  grid$shifted_y <- grid$y - grid$t * adv[2]
-  grid$site <- rep(site_names, times = lt)
-  coords <- grid[, c("shifted_x", "shifted_y")]
+#   # Create spatio-temporal grid with advection
+#   grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = t)
+#   grid$shifted_x <- grid$x - grid$t * adv[1]
+#   grid$shifted_y <- grid$y - grid$t * adv[2]
+#   grid$site <- rep(site_names, times = lt)
+#   coords <- grid[, c("shifted_x", "shifted_y")]
   
-  # Remove duplicates if no advection
-  if (all(adv == 0)) {
-    coords <- coords[!duplicated(coords), ]
-  }
+#   # Remove duplicates if no advection
+#   if (all(adv == 0)) {
+#     coords <- coords[!duplicated(coords), ]
+#   }
   
-  # Normalize s0 input:
-  # - if vector: make a single-row data.frame
-  # - if matrix/data.frame: keep as multiple points
-  if (is.null(dim(s0))) {
-    s0_df <- data.frame(x = s0[1], y = s0[2])
-  } else {
-    s0_df <- as.data.frame(s0)
-    names(s0_df) <- c("x", "y")
-  }
+#   # Normalize s0 input:
+#   # - if vector: make a single-row data.frame
+#   # - if matrix/data.frame: keep as multiple points
+#   if (is.null(dim(s0))) {
+#     s0_df <- data.frame(x = s0[1], y = s0[2])
+#   } else {
+#     s0_df <- as.data.frame(s0)
+#     names(s0_df) <- c("x", "y")
+#   }
   
-  # If random s0, precompute candidate points within radius
-  if (random_s0) {
-    s0_center <- as.numeric(s0_df[1, ]) # use first point as center
-    grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
-    distances <- sqrt((grid_points$x - s0_center[1])^2 + 
-                        (grid_points$y - s0_center[2])^2)
-    candidate_points <- grid_points[distances <= s0_radius, ]
-    if (nrow(candidate_points) == 0) {
-      stop("No grid points found within specified radius of s0_center.")
-    }
-  }
+#   # If random s0, precompute candidate points within radius
+#   if (random_s0) {
+#     s0_center <- as.numeric(s0_df[1, ]) # use first point as center
+#     grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
+#     distances <- sqrt((grid_points$x - s0_center[1])^2 + 
+#                         (grid_points$y - s0_center[2])^2)
+#     candidate_points <- grid_points[distances <= s0_radius, ]
+#     if (nrow(candidate_points) == 0) {
+#       stop("No grid points found within specified radius of s0_center.")
+#     }
+#   }
 
-  # Prepare output containers
-  n_s0 <- nrow(s0_df)
-  s0_list <- vector("list", nres)   # store s0 used for each simulation
-  Z <- array(NA, dim = c(lx, ly, lt, nres, n_s0))  # 5D output array
+#   # Prepare output containers
+#   n_s0 <- nrow(s0_df)
+#   s0_list <- vector("list", nres)   # store s0 used for each simulation
+#   Z <- array(NA, dim = c(lx, ly, lt, nres, n_s0))  # 5D output array
 
-  # Loop over simulations
-  for (i in seq_len(nres)) {
-    s0_list[[i]] <- list()
+#   # Loop over simulations
+#   for (i in seq_len(nres)) {
+#     s0_list[[i]] <- list()
 
-    # Loop over all conditioning points
-    for (j in seq_len(n_s0)) {
-      s0_curr <- s0_df[j, , drop = FALSE]
+#     # Loop over all conditioning points
+#     for (j in seq_len(n_s0)) {
+#       s0_curr <- s0_df[j, , drop = FALSE]
 
-      # If random_s0, select randomly among candidate points
-      if (random_s0) {
-        selected_index <- sample(nrow(candidate_points), 1)
-        s0_curr <- candidate_points[selected_index, , drop = FALSE]
-      }
-      s0_list[[i]][[j]] <- s0_curr
+#       # If random_s0, select randomly among candidate points
+#       if (random_s0) {
+#         selected_index <- sample(nrow(candidate_points), 1)
+#         s0_curr <- candidate_points[selected_index, , drop = FALSE]
+#       }
+#       s0_list[[i]][[j]] <- s0_curr
 
-      # Index in the grid for conditioning point at time t0
-      ind_s0_t0 <- which(grid$x == s0_curr$x & grid$y == s0_curr$y & grid$t == t0)
+#       # Index in the grid for conditioning point at time t0
+#       ind_s0_t0 <- which(grid$x == s0_curr$x & grid$y == s0_curr$y & grid$t == t0)
 
-      # Temporal variogram centered at t0
-      gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+#       # Temporal variogram centered at t0
+#       gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
 
-      if (distance == "lalpha") {
-        # lalpha case: separate space into x and y directions
-        gamma_space_x <- RandomFields::RFvariogram(
-          modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
-        gamma_space_y <- RandomFields::RFvariogram(
-          modelSpace, x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+#       if (distance == "lalpha") {
+#         # lalpha case: separate space into x and y directions
+#         gamma_space_x <- RandomFields::RFvariogram(
+#           modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
+#         gamma_space_y <- RandomFields::RFvariogram(
+#           modelSpace, x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
 
-        gamma_0 <- compute_st_variogram(
-          grid,
-          gamma_space_x = gamma_space_x,
-          gamma_space_y = gamma_space_y,
-          gamma_temp = gamma_temp,
-          adv = adv
-        )
+#         gamma_0 <- compute_st_variogram(
+#           grid,
+#           gamma_space_x = gamma_space_x,
+#           gamma_space_y = gamma_space_y,
+#           gamma_temp = gamma_temp,
+#           adv = adv
+#         )
 
-        # Simulate Gaussian fields in x, y, and time
-        W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
-        W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
-        W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+#         # Simulate Gaussian fields in x, y, and time
+#         W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
+#         W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
+#         W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
 
-        W <- compute_st_gaussian_process(
-          grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
-        )
-      } else {
-        # Euclidean case: single spatial variogram
-        gamma_space <- RandomFields::RFvariogram(
-          modelSpace,
-          x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
-          y = coords$shifted_y - grid$shifted_y[ind_s0_t0]
-        )
+#         W <- compute_st_gaussian_process(
+#           grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
+#         )
+#       } else {
+#         # Euclidean case: single spatial variogram
+#         gamma_space <- RandomFields::RFvariogram(
+#           modelSpace,
+#           x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+#           y = coords$shifted_y - grid$shifted_y[ind_s0_t0]
+#         )
         
-        gamma_0 <- compute_st_variogram(
-          grid,
-          gamma_space = gamma_space,
-          gamma_temp = gamma_temp,
-          adv = adv
-        )
+#         gamma_0 <- compute_st_variogram(
+#           grid,
+#           gamma_space = gamma_space,
+#           gamma_temp = gamma_temp,
+#           adv = adv
+#         )
         
-        # Simulate isotropic Gaussian field
-        W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
-        W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+#         # Simulate isotropic Gaussian field
+#         W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
+#         W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
         
-        W <- compute_st_gaussian_process(
-          grid, W_s = W_s, W_t = W_t, adv = adv
-        )
-      }
+#         W <- compute_st_gaussian_process(
+#           grid, W_s = W_s, W_t = W_t, adv = adv
+#         )
+#       }
       
-      # Construct Pareto process for current conditioning point
-      Y <- exp(W - W[ind_s0_t0] - gamma_0)  # normalize and shift
-      R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)  # radial component
-      Z[,,, i, j] <- R * Y
-    }
-  }
+#       # Construct Pareto process for current conditioning point
+#       Y <- exp(W - W[ind_s0_t0] - gamma_0)  # normalize and shift
+#       # R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)  # radial component
+#       R <- 1 / runif(1)
+
+#       Z[,,, i, j] <- R * Y
+#     }
+#   }
   
-  return(list(Z = Z, s0_used = s0_list))
-}
+#   return(list(Z = Z, s0_used = s0_list))
+# }
 
 sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
                         adv = c(0, 0), t0 = 0, nres = 1,
@@ -1300,7 +1302,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
   modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
   modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
 
-  # ---- adv handling
+  # adv handling
   if (is.null(dim(adv))) {
     # vector length 2
     if (length(adv) != 2) stop("adv must be length-2 vector or nres x 2 matrix/data.frame.")
@@ -1342,7 +1344,7 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 
     adv_i <- adv_mat[i, ]  # (adv1, adv2)
 
-    # ---- grid for this episode (adv_i)
+    # grid for this episode (adv_i)
     grid <- base_grid
     grid$shifted_x <- grid$x - grid$t * adv_i[1]
     grid$shifted_y <- grid$y - grid$t * adv_i[2]
@@ -1408,13 +1410,328 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
       }
 
       Y <- exp(W - W[ind_s0_t0] - gamma_0)
-      R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+      # R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+      R <- 1 / runif(1)
       Z[,,, i, j] <- R * Y
     }
   }
 
   return(list(Z = Z, s0_used = s0_list))
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2, coords, times,
+#                         adv = c(0, 0), t0 = 0, nres = 1,
+#                         random_s0 = FALSE, s0_index = 1,
+#                         t0_index = 1,
+#                         s0_radius = Inf,
+#                         distance = "euclidean", seed = NULL) {
+#   if (!is.null(seed)) set.seed(seed)
+
+#   RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
+#                           install = "no")
+
+#   if (!(distance %in% c("euclidean", "lalpha"))) {
+#     stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+#   }
+
+#   # adv handling
+#   if (is.null(dim(adv))) {
+#     # vector length 2
+#     if (length(adv) != 2) stop("adv must be length-2 vector or nres x 2 matrix/data.frame.")
+#     adv_mat <- matrix(rep(adv, nres), ncol = 2, byrow = TRUE)
+#   } else {
+#     adv_mat <- as.matrix(adv)
+#     if (ncol(adv_mat) != 2) stop("adv must have 2 columns (adv1, adv2).")
+#     if (nrow(adv_mat) != nres) stop("If adv is a matrix/data.frame, it must have nres rows.")
+#   }
+
+#   n_sites <- nrow(coords)
+#   grid <- coords
+#   colnames(grid) <- c("x", "y")
+#   lt <- length(times)
+#   x0 <- coords$Longitude[s0_index]
+#   y0 <- coords$Latitude [s0_index]
+#   s0_coords <- data.frame(x = x0, y = y0)
+#   t0 <- times[t0_index]
+
+#   # modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+#   # modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+#   modelSpace <- suppressWarnings(
+#     RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+#   )
+#   modelTime <- suppressWarnings(
+#     RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+#   )
+
+#   # If random s0, candidates
+#   if (random_s0) {
+#     s0_center <- as.numeric(s0_coords)
+#     distances <- sqrt((grid$x - s0_center[1])^2 +
+#                       (grid$y - s0_center[2])^2)
+#     candidate_points <- grid[distances <= s0_radius, ]
+#     if (nrow(candidate_points) == 0) stop("No grid points found within specified radius.")
+#   }
+
+#   # output
+#   s0_list <- vector("list", nres)
+#   Z <- array(NA_real_, dim = c(n_sites, lt, nres))
+
+#   # Precompute base grid structure (indices only)
+#   base_grid <- expand.grid(x = grid$x, y = grid$y, t = times)
+#   # if names in coords put them else create S1, S2,...
+#   if (!is.null(rownames(coords))) {
+#     site_names <- rownames(coords)
+#   } else {
+#     site_names <- paste0("S", seq_len(n_sites))
+#   }
+#   base_grid$site <- rep(site_names, times = lt)
+
+#   for (i in seq_len(nres)) {
+#     s0_list[[i]] <- list()
+
+#     adv_i <- adv_mat[i, ]  # (adv1, adv2)
+
+#     # grid for this episode (adv_i)
+#     grid <- base_grid
+#     grid$shifted_x <- grid$x - grid$t * adv_i[1]
+#     grid$shifted_y <- grid$y - grid$t * adv_i[2]
+#     coords <- grid[, c("shifted_x", "shifted_y")]
+
+#     if (all(adv_i == 0)) {
+#       coords <- coords[!duplicated(coords), ]
+#     }
+
+#       s0_curr <- s0_coords[j, , drop = FALSE]
+#       if (random_s0) {
+#         s0_curr <- candidate_points[sample(nrow(candidate_points), 1), , drop = FALSE]
+#       }
+#       s0_list[[i]][[j]] <- s0_curr
+
+#       ind_s0_t0 <- which(grid$x == s0_curr$x & grid$y == s0_curr$y & grid$t == t0)
+#       if (length(ind_s0_t0) != 1) stop("Conditioning index ind_s0_t0 not found uniquely.")
+
+#       gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+
+#       if (distance == "lalpha") {
+#         gamma_space_x <- RandomFields::RFvariogram(
+#           modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
+#         gamma_space_y <- RandomFields::RFvariogram(
+#           modelSpace, x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+#         gamma_0 <- compute_st_variogram(
+#           grid,
+#           gamma_space_x = gamma_space_x,
+#           gamma_space_y = gamma_space_y,
+#           gamma_temp = gamma_temp,
+#           adv = adv_i
+#         )
+
+#         W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
+#         W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
+#         W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+#         W <- compute_st_gaussian_process(
+#           grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv_i
+#         )
+#       } else {
+#         gamma_space <- RandomFields::RFvariogram(
+#           modelSpace,
+#           x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+#           y = coords$shifted_y - grid$shifted_y[ind_s0_t0]
+#         )
+
+#         gamma_0 <- compute_st_variogram(
+#           grid,
+#           gamma_space = gamma_space,
+#           gamma_temp = gamma_temp,
+#           adv = adv_i
+#         )
+
+#         W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
+#         W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+#         W <- compute_st_gaussian_process(
+#           grid, W_s = W_s, W_t = W_t, adv = adv_i
+#         )
+#       }
+
+#       Y <- exp(W - W[ind_s0_t0] - gamma_0)
+#       # R <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+#       R <- 1 / runif(1)
+#       Z[,,, i, j] <- R * Y
+#     }
+#   }
+
+#   return(list(Z = Z, s0_used = s0_list))
+# }
+
+
+sim_rpareto_coords <- function(beta1, beta2, alpha1, alpha2,
+                               coords, times,
+                               adv = c(0, 0),
+                               threshold = 1,
+                               nres = 1,
+                               random_s0 = FALSE,
+                               s0_index = 1,
+                               t0_index = 1,
+                               s0_radius = Inf,
+                               distance = "euclidean",
+                               seed = NULL) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  RandomFields::RFoptions(spConform = FALSE,
+                          allow_duplicated_locations = TRUE,
+                          install = "no")
+
+  if (!(distance %in% c("euclidean", "lalpha"))) {
+    stop("distance must be 'euclidean' or 'lalpha'.")
+  }
+
+  coords <- as.data.frame(coords)
+  if (!all(c("Longitude", "Latitude") %in% names(coords))) {
+    stop("coords must have columns Longitude, Latitude (km).")
+  }
+
+  n_sites <- nrow(coords)
+  lt <- length(times)
+  if (s0_index < 1 || s0_index > n_sites) stop("s0_index out of range.")
+  if (t0_index < 1 || t0_index > lt) stop("t0_index out of range.")
+
+  # site names
+  site_names <- rownames(coords)
+  if (is.null(site_names)) site_names <- paste0("S", seq_len(n_sites))
+
+  # adv handling: vector (2) or matrix nres x 2
+  if (is.null(dim(adv))) {
+    if (length(adv) != 2) stop("adv must be length-2 or nres x 2 matrix.")
+    adv_mat <- matrix(rep(adv, nres), ncol = 2, byrow = TRUE)
+  } else {
+    adv_mat <- as.matrix(adv)
+    if (ncol(adv_mat) != 2) stop("adv must have 2 columns.")
+    if (nrow(adv_mat) != nres) stop("adv matrix must have nres rows.")
+  }
+
+  # models
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+
+  # candidates for random s0 (in space only, around the station s0_index)
+  if (random_s0) {
+    x0c <- coords$Longitude[s0_index]
+    y0c <- coords$Latitude [s0_index]
+    d <- sqrt((coords$Longitude - x0c)^2 + (coords$Latitude - y0c)^2)
+    cand_idx <- which(d <= s0_radius)
+    if (length(cand_idx) == 0) stop("No stations found within s0_radius.")
+  } else {
+    cand_idx <- s0_index
+  }
+
+  # [site x time x nres]
+  Z <- array(NA_real_, dim = c(n_sites, lt, nres),
+                 dimnames = list(site_names, NULL, NULL))
+  s0_used <- integer(nres)
+
+  # base grid indices (site, it)
+  grid <- expand.grid(site = seq_len(n_sites), it = seq_len(lt))
+  x <- coords$Longitude[grid$site]
+  y <- coords$Latitude [grid$site]
+  tt <- times[grid$it]
+
+  for (r in seq_len(nres)) {
+
+    # choose s0 for this sim
+    s0r <- if (random_s0) sample(cand_idx, 1) else s0_index
+    s0_used[r] <- s0r
+
+    adv_r <- adv_mat[r, ]
+
+    # shifted coords for this sim
+    x_shift <- x - tt * adv_r[1]
+    y_shift <- y - tt * adv_r[2]
+
+    # index of conditioning point (site=s0r, it=t0_index)
+    ind0 <- which(grid$site == s0r & grid$it == t0_index)
+    stopifnot(length(ind0) == 1)
+
+    x0s <- x_shift[ind0]
+    y0s <- y_shift[ind0]
+    t0  <- tt[ind0]
+
+    # gamma0 (same shape as grid)
+    if (distance == "euclidean") {
+      gamma_space_vec <- RandomFields::RFvariogram(modelSpace,
+                                                   x = x_shift - x0s,
+                                                   y = y_shift - y0s)
+    } else {
+      gamma_space_vec <- RandomFields::RFvariogram(modelSpace, x = x_shift - x0s) +
+                         RandomFields::RFvariogram(modelSpace, x = y_shift - y0s)
+    }
+    gamma_temp_vec <- RandomFields::RFvariogram(modelTime, x = tt - t0)
+    gamma0_vec <- gamma_space_vec + gamma_temp_vec
+    gamma0 <- matrix(gamma0_vec, nrow = n_sites, ncol = lt, byrow = FALSE)
+
+    # --- simulate W_s on UNIQUE shifted coordinates (important when adv != 0)
+    key <- paste0(format(x_shift, digits = 16), "_", format(y_shift, digits = 16))
+    key_u <- unique(key)
+    map_idx <- match(key, key_u)
+
+    xy_u <- do.call(rbind, strsplit(key_u, "_", fixed = TRUE))
+    x_u <- as.numeric(xy_u[, 1])
+    y_u <- as.numeric(xy_u[, 2])
+
+    if (distance == "euclidean") {
+      W_s_u <- RandomFields::RFsimulate(modelSpace, x_u, y_u, grid = FALSE)
+    } else {
+      W_sx_u <- RandomFields::RFsimulate(modelSpace, x_u, grid = FALSE)
+      W_sy_u <- RandomFields::RFsimulate(modelSpace, y_u, grid = FALSE)
+      W_s_u  <- W_sx_u + W_sy_u
+    }
+
+    # temporal part
+    W_t <- RandomFields::RFsimulate(modelTime, times, n = 1, grid = TRUE)
+    if (length(W_t) != lt) W_t <- W_t[seq_len(lt)]
+
+    # rebuild W on full grid then reshape [site x time]
+    W_s <- W_s_u[map_idx]
+    W   <- W_s + W_t[grid$it]
+    W_mat <- matrix(W, nrow = n_sites, ncol = lt, byrow = FALSE)
+
+    W0 <- W_mat[s0r, t0_index]
+
+    # r-Pareto
+    Y <- exp(W_mat - W0 - gamma0)
+    # R ~ Pareto(1)
+    R <- 1 / runif(1)
+
+    Z[ , , r] <- threshold * R * Y
+  }
+
+  return(list(
+    Z = Z,
+    s0_index_used = s0_used,
+    adv = adv_mat
+  ))
+}
+
+
+
+
 
 
 #' save_simulations function

@@ -63,9 +63,9 @@ compute_group_chi <- function(list_lags,
                               latlon = FALSE,
                               adv_transform = TRUE) {
   plot_th_emp_chi(
-    list_lags_filtered = list_lags,
-    list_excesses_filtered = list_excesses,
-    wind_df_filtered = wind_df,
+    list_lags = list_lags,
+    list_excesses = list_excesses,
+    list_adv = wind_df,
     params_estimates = params,
     tau_min = tau_min,
     tau_fixed = tau_fixed,

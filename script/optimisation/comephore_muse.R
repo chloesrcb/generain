@@ -107,6 +107,202 @@ for (i in seq_along(list_s)) {
   }
 }
 
+
+
+
+library(data.table)
+library(dplyr)
+library(ggplot2)
+
+dmins <- c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)  # in km
+
+episode_pair_stats <- function(sel, sites_coords, dmin_km,
+                 delta_steps,
+                 latlon = FALSE, beta = 0) {
+
+  if (nrow(sel) < 2) {
+  return(list(
+    n_episodes = nrow(sel),
+    n_pairs = 0,
+    n_pairs_dtlt_delta = 0,
+    p_close_space_50km = NA_real_,
+    p_close_space_120km = NA_real_,
+    p_close_space_50km_given_dtlt_delta = NA_real_,
+    p_conflict_dmin_delta = NA_real_,
+    spatial_d10 = NA_real_,
+    temporal_d10 = NA_real_
+  ))
+  }
+
+  dist_matrix <- get_dist_mat(sites_coords, latlon = latlon)
+
+  s <- sel$s0
+  t <- sel$t0
+
+  idx <- combn(seq_along(s), 2)
+  s1 <- s[idx[1, ]]; s2 <- s[idx[2, ]]
+  t1 <- t[idx[1, ]]; t2 <- t[idx[2, ]]
+
+  spatial_d <- dist_matrix[cbind(s1, s2)]
+
+  temporal_steps <- abs(t1 - t2)
+  temporal_hours <- temporal_steps
+
+  delta_eff_steps <- delta_steps + 2 * beta
+  is_dt_close <- temporal_steps < delta_eff_steps
+
+  p_close_50_all <- mean(spatial_d < 50, na.rm = TRUE)
+  p_close_120_all <- mean(spatial_d < 120, na.rm = TRUE)
+
+  n_pairs_dt <- sum(is_dt_close, na.rm = TRUE)
+  p_close_50_given_dt <- if (n_pairs_dt == 0) NA_real_ else
+  mean((spatial_d < 50)[is_dt_close], na.rm = TRUE)
+
+  p_conflict <- mean((spatial_d < dmin_km) & is_dt_close, na.rm = TRUE)
+
+  list(
+  n_episodes = nrow(sel),
+  n_pairs = length(spatial_d),
+  n_pairs_dtlt_delta = n_pairs_dt,
+  p_close_space_50km = p_close_50_all,
+  p_close_space_120km = p_close_120_all,
+  p_close_space_50km_given_dtlt_delta = p_close_50_given_dt,
+  p_conflict_dmin_delta = p_conflict,
+  spatial_d10 = as.numeric(quantile(spatial_d, 0.10, na.rm = TRUE)),
+  temporal_d10 = as.numeric(quantile(temporal_hours, 0.10, na.rm = TRUE))
+  )
+}
+
+episode_size <- 24
+set_st_excess <- get_spatiotemp_excess(comephore, quantile = q, 
+                     remove_zeros = TRUE)
+res <- lapply(dmins, function(dm) {
+  sel <- get_s0t0_pairs(
+  sites_coords = grid_coords_km,
+  data = comephore,
+  min_spatial_dist = dm,
+  episode_size = episode_size,
+  set_st_excess = set_st_excess,
+  n_max_episodes = 10000,
+  latlon = FALSE,
+  beta = 0
+  )
+
+  st <- episode_pair_stats(
+  sel = sel,
+  sites_coords = grid_coords_km,
+  dmin_km = dm,
+  delta_steps = episode_size,
+  latlon = FALSE,
+  beta = 0
+  )
+
+  data.frame(
+  dmin_km = dm,
+  n_episodes = st$n_episodes,
+  n_pairs_dtlt_delta = st$n_pairs_dtlt_delta,
+  p_close_space_50km_all = st$p_close_space_50km,
+  p_close_space_50km_given_dtlt_delta = st$p_close_space_50km_given_dtlt_delta,
+  p_conflict_dmin_delta = st$p_conflict_dmin_delta,
+  spatial_d10_km = st$spatial_d10,
+  temporal_d10_hours = st$temporal_d10
+  )
+})
+
+df_tradeoff <- bind_rows(res)
+
+pA <- ggplot(df_tradeoff, aes(x = dmin_km, y = n_episodes)) +
+  geom_line(size = 1.1, color = btfgreen) +
+  geom_point(size = 2, color = btfgreen) +
+  geom_vline(xintercept = 5, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+  x = expression(d[min]~"(km)"),
+  y = "Number of selected episodes"
+  ) 
+
+foldername <- paste0(im_folder, "/optim/comephore/choice_config/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "tradeoff_dmin_episodes.png")
+ggsave(filename, plot = pA, width = 7, height = 5, units = "in", dpi = 300)
+
+dmin_fixed <- 5
+delta_grid <- c(10, 12, 15, 20, 24, 30, 36, 38, 40, 45, 48)  # in "steps" of 5 minutes
+
+set_st_excess <- get_spatiotemp_excess(comephore, quantile = q,
+                     remove_zeros = TRUE)
+
+res_delta <- lapply(delta_grid, function(delta_steps) {
+
+  sel <- get_s0t0_pairs(
+  sites_coords = grid_coords_km,
+  data = comephore,
+  min_spatial_dist = dmin_fixed,
+  episode_size = delta_steps,
+  set_st_excess = set_st_excess,
+  n_max_episodes = 10000,
+  latlon = FALSE,
+  beta = 0
+  )
+
+  st <- episode_pair_stats(
+  sel = sel,
+  sites_coords = grid_coords_km,
+  dmin_km = dmin_fixed,
+  delta_steps = delta_steps,
+  latlon = FALSE,
+  beta = 0
+  )
+
+  data.frame(
+  delta_steps = delta_steps,
+  delta_hours = delta_steps,
+  n_episodes = st$n_episodes,
+  n_pairs_dtlt_delta = st$n_pairs_dtlt_delta,
+  p_close_space_50km_given_dtlt_delta = st$p_close_space_50km_given_dtlt_delta,
+  p_conflict_dmin_delta = st$p_conflict_dmin_delta,
+  spatial_d10_km = st$spatial_d10,
+  temporal_d10_hours = st$temporal_d10
+  )
+})
+
+df_tradeoff_delta <- bind_rows(res_delta)
+
+
+p_deltaA <- ggplot(df_tradeoff_delta, aes(x = delta_steps, y = n_episodes)) +
+  geom_line(size = 1.1, color = btfgreen) +
+  geom_point(size = 2, color = btfgreen) +
+  geom_vline(xintercept = 24, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+  x = expression(delta~"(hours)"),
+  y = "Number of selected episodes"
+  )
+
+print(p_deltaA)
+
+ggsave(paste0(foldername, "tradeoff_delta_episodes_dmin5.png"),
+     plot = p_deltaA, width = 7, height = 5, units = "in", dpi = 300)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 min_spatial_dist <- 5
 s0t0_set <- get_s0t0_pairs(grid_coords_km, comephore,
                             min_spatial_dist = min_spatial_dist,

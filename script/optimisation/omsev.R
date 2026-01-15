@@ -15,10 +15,16 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
 # get rain data from omsev
-filename_omsev <- paste0(data_folder,
-                         "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
+# filename_omsev <- paste0(data_folder,
+#                          "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
 
-load(filename_omsev)
+# load(filename_omsev)
+
+
+# get rain data
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
+rain_omsev <- read.csv(filename_rain)
+head(rain_omsev)
 
 # get location of each rain gauge
 filename_loc <- paste0(data_folder, "omsev/loc_rain_gauges.csv")
@@ -29,32 +35,26 @@ location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                              "cines", "brives", "hydro")
 
 # save rain as csv
-filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
-# write.csv(rain, file = filename_rain, row.names = FALSE)
+# filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
+# # write.csv(rain, file = filename_rain, row.names = FALSE)
 
-rain_omsev <- read.csv(filename_rain)
-head(rain_omsev)
-
-
-rain_test <- rain_omsev
-rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
-date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
-date_3_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 3)[1]]
-date_4_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 4)[1]]
-date_5_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 5)[1]]
-# date_6_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 6)[1]]
-# date_7_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 7)[1]]
+# rain_omsev <- read.csv(filename_rain)
+# head(rain_omsev)
 
 
-# # cat("Première date avec au moins 2 sites non NA :", date_2_sites, "\n")
-# # cat("Première date avec au moins 3 sites non NA :", date_3_sites, "\n")
-# # cat("Première date avec au moins 4 sites non NA :", date_4_sites, "\n")
-# # cat("Première date avec au moins 5 sites non NA :", date_5_sites, "\n")
+# rain_test <- rain_omsev
+# rain_test$nb_sites_non_NA <- apply(rain_test[ , -1], 1, function(x) sum(!is.na(x)))
+# date_2_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 2)[1]]
+# date_3_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 3)[1]]
+# date_4_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 4)[1]]
+# date_5_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 5)[1]]
+# # date_6_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 6)[1]]
+# # date_7_sites <- rain_test$dates[which(rain_test$nb_sites_non_NA >= 7)[1]]
 
 
-# # begin in 2020-01-01
-rain_omsev <- rain_omsev[rain_omsev$dates >= date_5_sites, ]
-head(rain_omsev)
+# # # begin in 2020-01-01
+# rain_omsev <- rain_omsev[rain_omsev$dates >= date_5_sites, ]
+# head(rain_omsev)
 
 
 
@@ -109,29 +109,23 @@ filename <- paste(im_folder, "rain/OMSEV/distance_matrix.png", sep = "")
 ggsave(filename, width = 10, height = 5, units = "in", dpi = 300)
 
 # get only those with distance > 500 m
-# Seuils à tester
 thresholds_dist <- c(500, 600, 750, 1000, 1100, 1200, 1250, 1300, 1400, 1500, 2300)
 
-# Créer un tableau avec le nombre de paires pour chaque seuil
 count_pairs <- sapply(thresholds_dist, function(th) {
   nrow(df_dist %>% filter(value > th))
 })
 
-# Transformer en data frame pour plus de lisibilité
 df_counts <- data.frame(
   threshold_m = thresholds_dist,
   nb_pairs = count_pairs
 )
-# Seuils à tester
 thresholds_dist <- seq(500, 1500, by = 50)
 
-# Nombre de paires avec distance >= seuil
 df_counts <- data.frame(
   threshold_m = thresholds_dist,
   nb_pairs = sapply(thresholds_dist, function(th) nrow(df_dist %>% filter(value >= th)))
 )
 
-# Plot cumulatif
 ggplot(df_counts, aes(x = threshold_m, y = nb_pairs)) +
   geom_line(color = btfgreen, size = 1.2) +
   geom_point(color = "#668167", size = 3) +
@@ -139,7 +133,7 @@ ggplot(df_counts, aes(x = threshold_m, y = nb_pairs)) +
   labs(
     title = "",
     x = "Distance threshold (m)",
-    y = "Number of pairs"
+    y = "Number of possible neighbor pairs"
   ) +
   theme_minimal() +
   # add a line at y = 50
@@ -323,6 +317,8 @@ sites_names <- colnames(rain)
 ################################################################################
 # VARIOGRAM --------------------------------------------------------------------
 ################################################################################
+q <- 0.95 # quantile
+set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 
@@ -352,6 +348,199 @@ dist_mat <- get_dist_mat(grid_coords_m, latlon = FALSE)
 df_dist <- reshape_distances(dist_mat)
 df_dist_km <- df_dist
 df_dist_km$value <- df_dist$value / 1000
+
+stopifnot(nrow(grid_coords_m) == ncol(rain))
+rownames(grid_coords_m) <- colnames(rain)
+
+
+
+library(data.table)
+library(dplyr)
+library(ggplot2)
+
+dmins <- seq(200, 2500, by = 100)
+
+episode_pair_stats <- function(sel, sites_coords, dmin_m,
+                               delta_steps, step_minutes = 5,
+                               latlon = FALSE, beta = 0) {
+
+  if (nrow(sel) < 2) {
+    return(list(
+      n_episodes = nrow(sel),
+      n_pairs = 0,
+      n_pairs_dtlt_delta = 0,
+      p_close_space_500m = NA_real_,
+      p_close_space_1200m = NA_real_,
+      p_close_space_500m_given_dtlt_delta = NA_real_,
+      p_conflict_dmin_delta = NA_real_,
+      spatial_d10 = NA_real_,
+      temporal_d10 = NA_real_
+    ))
+  }
+
+  dist_matrix <- get_dist_mat(sites_coords, latlon = latlon)
+  if (latlon) dist_matrix <- dist_matrix / 1000  # attention unités si latlon
+
+  s <- sel$s0
+  t <- sel$t0
+
+  idx <- combn(seq_along(s), 2)
+  s1 <- s[idx[1,]]; s2 <- s[idx[2,]]
+  t1 <- t[idx[1,]]; t2 <- t[idx[2,]]
+
+  spatial_d <- dist_matrix[cbind(s1, s2)]
+
+  # temporal distance en "steps" et en minutes
+  temporal_steps <- abs(t1 - t2)
+  temporal_min <- temporal_steps
+
+  # même fenêtre que ta règle de sélection
+  delta_eff_steps <- delta_steps + 2 * beta
+  is_dt_close <- temporal_steps < delta_eff_steps
+
+  # indicateurs globaux (toutes paires)
+  p_close_500_all <- mean(spatial_d < 500, na.rm = TRUE)
+  p_close_1200_all <- mean(spatial_d < 1200, na.rm = TRUE)
+
+  # indicateur conditionnel aux paires temporellement proches
+  n_pairs_dt <- sum(is_dt_close, na.rm = TRUE)
+  p_close_500_given_dt <- if (n_pairs_dt == 0) NA_real_ else
+    mean((spatial_d < 500)[is_dt_close], na.rm = TRUE)
+
+  # proportion de paires "conflit" au sens de ta règle (si on ne déclusterait pas)
+  p_conflict <- mean((spatial_d < dmin_m) & is_dt_close, na.rm = TRUE)
+
+  list(
+    n_episodes = nrow(sel),
+    n_pairs = length(spatial_d),
+    n_pairs_dtlt_delta = n_pairs_dt,
+    p_close_space_500m  = p_close_500_all,
+    p_close_space_1200m = p_close_1200_all,
+    p_close_space_500m_given_dtlt_delta = p_close_500_given_dt,
+    p_conflict_dmin_delta = p_conflict,
+    spatial_d10  = as.numeric(quantile(spatial_d, 0.10, na.rm = TRUE)),
+    temporal_d10 = as.numeric(quantile(temporal_min, 0.10, na.rm = TRUE))
+  )
+}
+
+
+episode_size <- 12
+set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
+res <- lapply(dmins, function(dm) {
+  sel <- get_s0t0_pairs(
+    sites_coords = grid_coords_m,      # en mètres + rownames OK
+    data = rain,
+    min_spatial_dist = dm,
+    episode_size = episode_size,
+    set_st_excess = set_st_excess,
+    n_max_episodes = 10000,
+    latlon = FALSE,
+    beta = 0
+  )
+
+  st <- episode_pair_stats(
+    sel = sel,
+    sites_coords = grid_coords_m,
+    dmin_m = dm,
+    delta_steps = episode_size,
+    step_minutes = 5,
+    latlon = FALSE,
+    beta = 0
+  )
+
+  data.frame(
+    dmin_m = dm,
+    n_episodes = st$n_episodes,
+    n_pairs_dtlt_delta = st$n_pairs_dtlt_delta,
+    p_close_space_500m_all = st$p_close_space_500m,
+    p_close_space_500m_given_dtlt_delta = st$p_close_space_500m_given_dtlt_delta,
+    p_conflict_dmin_delta = st$p_conflict_dmin_delta,
+    spatial_d10_m = st$spatial_d10,
+    temporal_d10_min = st$temporal_d10
+  )
+})
+
+df_tradeoff <- bind_rows(res)
+
+pA <- ggplot(df_tradeoff, aes(x = dmin_m, y = n_episodes)) +
+  geom_line(size = 1.1, color = btfgreen) +
+  geom_point(size = 2, color = btfgreen) +
+  geom_vline(xintercept = 1200, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 300, linetype = "dashed", color = "#5a4b4b") +
+  theme_minimal() +
+  labs(
+    x = expression(d[min]~"(m)"),
+    y = "Number of selected episodes"
+  )
+
+foldername <- paste0(im_folder, "optim/omsev/choice_config/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "tradeoff_dmin_episodes.png")
+ggsave(filename, plot = pA, width = 7, height = 5, units = "in", dpi = 300)
+
+
+library(dplyr)
+library(ggplot2)
+
+dmin_fixed <- 1600
+delta_grid <- seq(6, 48, by = 2)   # en "steps" de 5 minutes
+
+set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
+
+res_delta <- lapply(delta_grid, function(delta_steps) {
+
+  sel <- get_s0t0_pairs(
+    sites_coords = grid_coords_m,
+    data = rain,
+    min_spatial_dist = dmin_fixed,
+    episode_size = delta_steps,
+    set_st_excess = set_st_excess,
+    n_max_episodes = 10000,
+    latlon = FALSE,
+    beta = 0
+  )
+
+  st <- episode_pair_stats(
+    sel = sel,
+    sites_coords = grid_coords_m,
+    dmin_m = dmin_fixed,
+    delta_steps = delta_steps,
+    step_minutes = 5,
+    latlon = FALSE,
+    beta = 0
+  )
+
+  data.frame(
+    delta_steps = delta_steps,
+    delta_minutes = 5 * delta_steps,
+    n_episodes = st$n_episodes,
+    n_pairs_dtlt_delta = st$n_pairs_dtlt_delta,
+    p_close_space_500m_given_dtlt_delta = st$p_close_space_500m_given_dtlt_delta,
+    p_conflict_dmin_delta = st$p_conflict_dmin_delta,
+    spatial_d10_m = st$spatial_d10,
+    temporal_d10_min = st$temporal_d10
+  )
+})
+
+df_tradeoff_delta <- bind_rows(res_delta)
+
+p_deltaA <- ggplot(df_tradeoff_delta, aes(x = delta_minutes, y = n_episodes)) +
+  geom_line(size = 1.1, color = btfgreen) +
+  geom_point(size = 2, color = btfgreen) +
+  geom_vline(xintercept = 60, linetype = "dashed", color = "red") +  # 12*5=60
+  theme_minimal() +
+  labs(
+    x = expression(delta~"(minutes)"),
+    y = "Number of selected episodes"
+  )
+
+print(p_deltaA)
+
+ggsave(paste0(foldername, "tradeoff_delta_episodes_dmin1600.png"),
+       plot = p_deltaA, width = 7, height = 5, units = "in", dpi = 300)
+
 ################################################################################
 
 # in rain remove when all data are NA
@@ -368,7 +557,7 @@ min_u <- min(unlist(list_u))
 max_u <- max(unlist(list_u))
 
 # Spatio-temporal neighborhood parameters
-min_spatial_dist <- 1200 # m
+min_spatial_dist <- 1600 # m
 delta <- 12 # in * 5 min
 episode_size <- delta # size of the episode
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
@@ -466,8 +655,7 @@ t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 
 list_episodes_points <- get_extreme_episodes(selected_points, rain,
-                                     episode_size = episode_size, unif = FALSE,
-                                     beta = 0)
+                                     episode_size = episode_size, unif = FALSE)
 
 list_episodes <- list_episodes_points$episodes
 episode <- list_episodes[[1]]
@@ -515,7 +703,7 @@ adv_omsev_filename <- paste(data_folder, "/omsev/adv_estim/bary_omsev/episode_ad
                           ".csv", sep = "")
 adv_omsev_df <- read.csv(adv_omsev_filename, sep = ",")
 head(adv_omsev_df)
-adv_filename <- paste(data_folder, "/omsev/adv_estim/advection_results_q",
+adv_filename <- paste(data_folder, "/omsev/adv_estim/combined_comephore_omsev/episode_advection_q",
                       q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                       ".csv", sep = "")
 adv_df <- read.csv(adv_filename, sep = ",")
@@ -525,18 +713,7 @@ head(adv_df)
 nrow(adv_df[adv_df$mean_dx_kmh == 0 & adv_df$mean_dy_kmh == 0, ])
 nrow(adv_df)
 
-
-# if durations is more than 48 hours, put nan in adv
-adv_df$mean_dx_kmh[adv_df$duration_hours > 24] <- 0
-adv_df$mean_dy_kmh[adv_df$duration_hours > 24] <- 0
-
-# Harmoniser les dates
-adv_df <- adv_df %>% mutate(t0 = ymd_hms(t0))
-adv_omsev_df <- adv_omsev_df %>% mutate(t0 = ymd_hms(t0_omsev))
-# adv_omsev_df$t0_hour <- ceiling_date(adv_omsev_df$t0, unit = "hour")
-# adv_df$t0 <- as.POSIXct(adv_df$t0, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-
-head(adv_omsev_df)
+adv_df <- adv_df %>% mutate(t0 = ymd_hms(t0_omsev))
 
 library(dplyr)
 library(lubridate)
@@ -544,7 +721,7 @@ library(fuzzyjoin)
 
 # Sélection des lignes où advection = 0
 adv_zero <- adv_df %>%
-  filter(mean_dx_kmh == 0 & mean_dy_kmh == 0)
+  filter(vx_final == 0 & vy_final == 0)
 
 # Jointure approx sur ±1h (choisit le plus proche)
 adv_zero_match <- difference_inner_join(
@@ -562,8 +739,8 @@ adv_df <- adv_df %>%
   left_join(
     adv_zero_match %>%
       select(t0 = t0.x,
-             dx_omsev = mean_dx_kmh_omsev,
-             dy_omsev = mean_dy_kmh_omsev),
+             dx_omsev = vx_final,
+             dy_omsev = vy_final),
     by = "t0"
   ) %>%
   mutate(mean_dx_kmh = ifelse(mean_dx_kmh == 0 & !is.na(dx_omsev), dx_omsev, mean_dx_kmh),

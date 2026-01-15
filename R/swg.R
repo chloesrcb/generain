@@ -454,9 +454,9 @@ sim_episode_grid <- function(params_vario, params_margins_common,
 
 
 
-plot_th_emp_chi <- function(list_lags_filtered,
-                            list_excesses_filtered,
-                            wind_df_filtered,
+plot_th_emp_chi <- function(list_lags,
+                            list_excesses,
+                            list_adv,
                             params_estimates,
                             tau_min = 0,
                             tau_fixed = 0,
@@ -464,8 +464,8 @@ plot_th_emp_chi <- function(list_lags_filtered,
                             latlon = FALSE,
                             adv_transform = TRUE) {
   stopifnot(
-    length(list_lags_filtered) == length(list_excesses_filtered),
-    length(list_lags_filtered) <= nrow(wind_df_filtered)
+    length(list_lags) == length(list_excesses),
+    length(list_lags) <= nrow(list_adv)
   )
 
   if (!requireNamespace("data.table", quietly = TRUE)) {
@@ -482,13 +482,13 @@ plot_th_emp_chi <- function(list_lags_filtered,
   eta1 <- params[5]
   eta2 <- params[6]
 
-  res_list <- vector("list", length(list_lags_filtered))
+  res_list <- vector("list", length(list_lags))
 
-  for (i in seq_along(list_lags_filtered)) {
-    lags_i    <- list_lags_filtered[[i]]
-    excess_i  <- list_excesses_filtered[[i]]
-    adv_x     <- wind_df_filtered$vx[i]
-    adv_y     <- wind_df_filtered$vy[i]
+  for (i in seq_along(list_lags)) {
+    lags_i    <- list_lags[[i]]
+    excess_i  <- list_excesses[[i]]
+    adv_x     <- list_adv$vx[i]
+    adv_y     <- list_adv$vy[i]
 
     if (adv_transform) {
       adv_norm <- sqrt(adv_x^2 + adv_y^2)
@@ -659,7 +659,6 @@ sim_rpareto_coords <- function(coords, times,
   lt <- length(times)
 
   # simulate W increments with reference = (s0,t0) to simplify
-  # -> put reference point first by reordering if you want; easiest: just compute gamma0 relative to (s0,t0)
   simW <- sim_W_from_variogram(coords, times, beta1, beta2, alpha1, alpha2, adv, seed = seed)
   W <- simW$W
 
@@ -694,3 +693,4 @@ bootstrap_ci <- function(x, B = 500, probs = c(0.025, 0.975)) {
   )
   quantile(boot_means, probs = probs, na.rm = TRUE)
 }
+
