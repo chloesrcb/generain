@@ -1332,7 +1332,7 @@ files <- list.files(dir_frames, pattern = "frame_\\d+\\.png$", full.names = TRUE
 files <- sort(files)
 
 img <- image_read(files)
-gif <- image_animate(img, fps = 1)  # 4 images/sec (ajuste à ton goût)
+gif <- image_animate(img, fps = 1)
 
 out_gif <- file.path(im_folder, paste0("swg/omsev/simulated_episode_", episode_idx, ".gif"))
 image_write(gif, path = out_gif)
