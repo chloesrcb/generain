@@ -105,8 +105,6 @@ length(selected_points$s0)
 selected_points <- selected_points %>%
   mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
 
-stopifnot(all(s0t0_set$s0 %in% colnames(rain)))
-
 # For each (s0, t0, u_s0), check if rain[t0, s0] > u_s0
 excess_check_s0t0 <- s0t0_set[, {
   rain_val <- rain[t0, s0]
@@ -204,14 +202,12 @@ selected_episodes$adv_x <- rep(NA, nrow(selected_episodes))
 selected_episodes$adv_y <- rep(NA, nrow(selected_episodes))
 
 # get adv values for each episode according to the t0_date
-
 setDT(selected_points)
 setDT(adv_df)
 
 adv_df[, t0_omsev := as.POSIXct(t0_omsev, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
 selected_points[, t0_date := as.POSIXct(t0_date, format="%Y-%m-%d %H:%M:%S", tz="UTC")]
 
-# 1) dédoublonner par t0_omsev (si c'est bien la même advection)
 adv_df_u <- adv_df[, .(
   vx_final = vx_final[1],
   vy_final = vy_final[1]
@@ -219,15 +215,11 @@ adv_df_u <- adv_df[, .(
 
 setkey(adv_df_u, t0_omsev)
 
-# 2) rolling join ±5 min, 1 ligne par selected_points
 selected_episodes <- adv_df_u[selected_points,
-  on   = .(t0_omsev = t0_date),
-  roll = 5*60
+  on   = .(t0_omsev = t0_date)
 ]
 
 setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
-
-stopifnot(nrow(selected_episodes) == nrow(selected_points))
 
 
 V_episodes <- data.frame(
@@ -248,8 +240,6 @@ cat("Number of episodes with zero advection:", n_zero_adv, "\n")
 n_between_0_and_01 <- sum((sqrt(V_episodes$vx^2 + V_episodes$vy^2) > 0) &
                            (sqrt(V_episodes$vx^2 + V_episodes$vy^2) < 0.1))
 cat("Number of episodes with advection between 0 and 0.1 km/h:", n_between_0_and_01, "\n")
-
-
 
 tau_vect <- 0:10
 
@@ -518,7 +508,7 @@ jackknife_monthyear_results <- data.frame(
 filename <- paste0(foldername_jk, "results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jackknife_monthyear_results, filename, row.names = FALSE)
-
+jackknife_monthyear_results <- read.csv(filename)
 convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
   beta1_new <- beta1 / (c_x^alpha1)
   beta2_new <- beta2 / (c_t^alpha2)
@@ -646,81 +636,3 @@ filename <- paste0(foldername, "omsev_chi_th_emp.png")
 ggsave(filename,
        width = 7,
        height = 6)
-
-
-# remove NA hbin 
-res_om_cmp <- res_om_cmp[!is.na(res_om_cmp$hbin), ]
-res_om_cmp |>
-  dplyr::mutate(diff = chi_emp_bar - chi_theo_bar) |>
-  ggplot(aes(x = factor(hbin), y = diff)) +
-  geom_boxplot(fill=btfgreen, alpha=0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  theme_bw() +
-  labs(
-    x = "Spatial lag bin (km)",
-    y = expression(hat(chi) - chi)
-  ) +
-  btf_theme
-
-
-# save plot
-foldername <- paste0(im_folder, "workflows/full_pipeline/")
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
-filename <- paste0(foldername, "omsev_chi_diff_boxplot_above01_putat0.png")
-ggsave(filename,
-       width = 7,
-         height = 7)
-
-
-compute_chi_with_ci_jackknife <- function(
-  list_lags,
-  list_excesses,
-  wind_df,
-  jack_estimates,
-  h_breaks,
-  tau_fixed = 1,
-  adv_transform = TRUE
-) {
-  n_jack <- nrow(jack_estimates)
-  res_list <- lapply(1:n_jack, function(i) {
-    params_i <- jack_estimates[i, ]
-    res_i <- compute_group_chi(
-      list_lags = list_lags,
-      list_excesses = list_excesses,
-      wind_df = wind_df,
-      params = params_i,
-      tau_fixed = tau_fixed,
-      h_breaks = h_breaks,
-      adv_transform = adv_transform
-    )
-    res_cmp_i <- res_i$res_cmp
-    res_cmp_i$jack_id <- i
-    return(res_cmp_i)
-  })
-  
-  res_all <- rbindlist(res_list)
-  
-  res_summary <- res_all[, .(
-    chi_emp_bar = mean(chi_emp_bar, na.rm = TRUE),
-    chi_emp_sd = sd(chi_emp_bar, na.rm = TRUE),
-    chi_theo_bar = mean(chi_theo_bar, na.rm = TRUE),
-    n_pairs = mean(n_pairs, na.rm = TRUE)
-  ), by = .(hbin)]
-  
-  return(list(
-    res_cmp = res_summary
-  ))
-}
-
-# do same plot with CI from jackknife
-res_om_cmp_ci <- compute_chi_with_ci_jackknife(
-  list_lags = list_lags_filtered,
-  list_excesses = list_excesses_filtered,
-  wind_df = V_episodes_filtered,
-  jack_estimates = jack_estimates,
-  h_breaks = h_breaks_omsev,
-  tau_fixed = 1,
-  adv_transform = TRUE
-)

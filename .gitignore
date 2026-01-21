@@ -13,6 +13,11 @@ images
 # Imags files
 images
 
+# script files
+script/raw_script/
+experimenting/
+script/muse/
+
 # model
 model_eGPD*
 checkpoint
@@ -61,6 +66,5 @@ rsconnect/
 
 # VS Code folder
 .vscode/
-
 
 from the environment

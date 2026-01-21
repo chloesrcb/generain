@@ -32,9 +32,6 @@ files <- list.files(functions_folder, full.names = TRUE)
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
-################################################################################
-# FOCUS ON A SINGLE EPISODE
-################################################################################
 
 
 # get rain data
@@ -221,7 +218,6 @@ sum(df_excesses$kij)
 #######################################################################################################
 params_est <- c(1.090, 4.628, 0.225, 0.713, 1.621, 5.219)  # km/h
 # params_est <- c(1.5, 4.4, 0.2, 0.7, 1.621, 5.219)  # km/h
-params_est <- omsev_params
 # [1] 1.0871823 4.6266826 0.2238579 0.7127469 1.6210000 5.2190000
 etas_estimates <- params_est[5:6]
 
@@ -261,7 +257,7 @@ setkey(adv_df_t0, t0_omsev)
 
 selected_episodes <- adv_df_t0[selected_points,
   on   = .(t0_omsev = t0_date),
-  roll = 5*60
+  # roll = 5*60
 ]
 
 setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
@@ -416,17 +412,17 @@ head(selected_points)
 ################################################################################
 grid_omsev <- grid_coords_km
 adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-all_group_names <- unique(selected_points$adv_group)
-all_significant_groups <- all_group_names[grep("significant", all_group_names)]
-group_adv <- all_significant_groups[3]  # choose one group to simulate
+all_group_names <- unique(selected_points$speed_class)
+# all_significant_groups <- all_group_names[grep("significant", all_group_names)]
+group_adv <- all_group_names[3]  # choose one group to simulate
 #get list_episodes and s0_list for this group
-indices_group <- which(selected_points$adv_group == group_adv)
+indices_group <- which(selected_points$speed_class == group_adv)
 list_episodes_group <- list_episodes[indices_group]
 length(list_episodes_group)
 s0_list_group <- s0_list[indices_group]
 u_list_group <- u_list[indices_group]
 adv_group <- adv_matrix[indices_group, ]
-Nsim <- 1000
+Nsim <- 100
 s0_sim <- integer(Nsim)
 sims_group <- vector("list", Nsim)
 adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
@@ -623,9 +619,156 @@ ggsave(
 
 
 
-#################################################################################################################
+# for all groups
+grid_omsev <- grid_coords_km
+adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
+Nsim <- 100
+s0_sim <- integer(Nsim)
+sims_group <- vector("list", Nsim)
+adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
+for (i in seq_len(Nsim)) {
+  idx <- sample(seq_along(list_episodes), 1)
+  s0_i <- s0_list[idx]
+  s0_sim[i] <- s0_i
+  u_i <- u_list[idx]
+  adv_i <- adv_matrix[idx, ]
+  adv_sim[i, ] <- adv_i
+  sims_group[[i]] <- simulate_many_episodes(
+    N = 1,
+    u = 1000,
+    u_emp = u_i,
+    params_vario = params_kmh,
+    params_margins = params_margins,
+    coords = grid_omsev, # km
+    times = times * 5 / 60,  # in hours
+    adv = adv_i,
+    t0 = 0,
+    s0 = s0_i
+  )[[1]]
+}
 
+
+episodes_obs_ref <- list_episodes
+
+sum_over_time_by_site <- function(x) {
+  x <- as.matrix(x)
+  if (!is.null(colnames(x)) && all(colnames(x) %in% colnames(rain))) {
+    s <- colSums(x, na.rm = TRUE)
+  } else if (!is.null(rownames(x)) && all(rownames(x) %in% colnames(rain))) {
+    s <- rowSums(x, na.rm = TRUE)
+  } else {
+    if (ncol(x) == ncol(rain)) s <- colSums(x, na.rm = TRUE) else s <- rowSums(x, na.rm = TRUE)
+    names(s) <- colnames(rain)[seq_along(s)]
+  }
+  s
+}
+
+obs_site_ep <- lapply(seq_along(episodes_obs_ref), function(i) {
+  ep <- episodes_obs_ref[[i]]
+  s_site <- sum_over_time_by_site(ep)
+  data.frame(
+    episode_id = i,
+    site = names(s_site),
+    cum = as.numeric(s_site),
+    data = "obs",
+    stringsAsFactors = FALSE
+  )
+}) |> dplyr::bind_rows()
+
+sim_site_ep <- lapply(seq_along(sims_group), function(i) {
+  X <- sims_group[[i]]$X
+  s_site <- sum_over_time_by_site(X)
+  data.frame(
+    sim_id = i,
+    site = names(s_site),
+    cum = as.numeric(s_site),
+    data = "sim",
+    stringsAsFactors = FALSE
+  )
+}) |> dplyr::bind_rows()
+
+obs_ep <- obs_site_ep |>
+  dplyr::group_by(episode_id) |>
+  dplyr::summarise(
+    cum_total    = sum(cum, na.rm = TRUE),
+    cum_maxsite  = max(cum, na.rm = TRUE),
+    cum_meansite = mean(cum, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(data = "obs")
+
+sim_ep <- sim_site_ep |>
+  dplyr::group_by(sim_id) |>
+  dplyr::summarise(
+    cum_total    = sum(cum, na.rm = TRUE),
+    cum_maxsite  = max(cum, na.rm = TRUE),
+    cum_meansite = mean(cum, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(data = "sim")
+
+
+make_qq_df <- function(x_obs, x_sim) {
+  x_obs <- x_obs[is.finite(x_obs)]
+  x_sim <- x_sim[is.finite(x_sim)]
+  n <- min(length(x_obs), length(x_sim))
+  if (n < 20) return(NULL)
+  p <- (seq_len(n) - 0.5) / n
+  data.frame(
+    q_obs = as.numeric(quantile(x_obs, probs = p, names = FALSE)),
+    q_sim = as.numeric(quantile(x_sim, probs = p, names = FALSE))
+  )
+}
+
+qq_total <- make_qq_df(obs_ep$cum_total, sim_ep$cum_total) |> dplyr::mutate(variable="cum_total")
+qq_max   <- make_qq_df(obs_ep$cum_maxsite, sim_ep$cum_maxsite) |> dplyr::mutate(variable="cum_maxsite")
+qq_mean  <- make_qq_df(obs_ep$cum_meansite, sim_ep$cum_meansite) |> dplyr::mutate(variable="cum_meansite")
+qq_ep <- dplyr::bind_rows(qq_total, qq_max, qq_mean)
+
+p_qq_ep <- ggplot(qq_ep, aes(q_obs, q_sim)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  facet_wrap(~ variable, scales = "free") +
+  labs(
+    x = "Observed quantiles", y = "Simulated quantiles"
+  ) +
+  theme_minimal() + btf_theme
+
+ggsave(
+  file.path(folder_out, paste0("qq_episode_cumuls_", group_adv, ".png")),
+  p_qq_ep, width = 9, height = 4.5, dpi = 300
+)
+
+# plot only qq mean site
+p_qq_mean <- ggplot(qq_mean, aes(q_obs, q_sim)) +
+  geom_point(alpha = 0.6, color = btfgreen) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    x = "Observed quantiles", y = "Simulated quantiles",
+    title = "QQ plot of mean site cumul"
+  ) +
+  theme_minimal() + btf_theme
+
+qq_site <- make_qq_df(obs_site_ep$cum, sim_site_ep$cum)
+
+p_qq_site <- ggplot(qq_site, aes(q_obs, q_sim)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    x = "Observed quantiles", y = "Simulated quantiles"
+  ) +
+  theme_minimal() + btf_theme
+
+
+ggsave(
+  file.path(folder_out, paste0("qq_site_episode_cumuls_", group_adv, ".png")),
+  p_qq_site, width = 6.5, height = 5.5, dpi = 300
+)
+
+
+#################################################################################################################
 # on simulated episodes
+sims_all <- sims_group
 list_results_sim <- lapply(seq_along(sims_all), function(i) {
 
   Z_ep <- sims_all[[i]]$Z
@@ -802,205 +945,8 @@ ggsave(
 )
 
 
-res <- p_sim$res
-res <- res %>%
-  mutate(
-    adv_norm = sqrt(adv_x^2 + adv_y^2),
-    # projection de h sur la direction du vent (km)
-    h_par = ifelse(adv_norm > 0, (hx*adv_x + hy*adv_y)/adv_norm, NA_real_),
-    # composante transverse
-    h_perp = ifelse(adv_norm > 0, sqrt(pmax(h^2 - h_par^2, 0)), NA_real_),
-    flow = case_when(
-      is.na(h_par) ~ "calm",
-      h_par >= 0 ~ "downwind",
-      TRUE ~ "upwind"
-    )
-  )
-
-
-###########################################################################################
-# Check marginals
-###########################################################################################
-grid_omsev <- grid_coords_km
-adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-Nsim <- 1000
-s0_sim <- integer(Nsim)
-sims_all <- vector("list", Nsim)
-adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
-for (i in seq_len(Nsim)) {
-  idx <- sample(seq_along(list_episodes), 1)
-  s0_i <- s0_list[idx]
-  s0_sim[i] <- s0_i
-  u_i <- u_list[idx]
-  adv_i <- adv_matrix[idx, ]
-  adv_sim[i, ] <- adv_i
-  sims_all[[i]] <- simulate_many_episodes(
-    N = 1,
-    u = 1000,
-    u_emp = u_i,
-    params_vario = params_kmh,
-    params_margins = params_margins,
-    coords = grid_omsev, # km
-    times = times * 5 / 60,  # in hours
-    adv = adv_i,
-    t0 = 0,
-    s0 = s0_i
-  )[[1]]
-}
-
-Xsim_all <- do.call(cbind, lapply(sims_all, function(sim) sim$X))
-sites <- rownames(Xsim_all)
-stopifnot(!is.null(sites))
-
-Hgpd <- function(x, sigma, xi) {
-  x <- pmax(x, 0)
-  if (abs(xi) < 1e-10) return(1 - exp(-x / sigma))
-  1 - (1 + xi * x / sigma)^(-1/xi)
-}
-
-Qgpd <- function(p, sigma, xi) {
-  p <- pmin(pmax(p, 1e-12), 1 - 1e-12)
-  if (abs(xi) < 1e-10) return(-sigma * log(1 - p))
-  sigma/xi * ((1 - p)^(-xi) - 1)
-}
-
-r_egpd_pos <- function(n, kappa, sigma, xi) {
-  u <- runif(n)
-  Qgpd(u^(1 / kappa), sigma, xi)
-}
-
-r_hurdle_egpd <- function(n, p0, kappa, sigma, xi, include_zeros = FALSE) {
-  if (!include_zeros) return(r_egpd_pos(n, kappa, sigma, xi))
-  z0 <- runif(n) < p0
-  x <- numeric(n)
-  npos <- sum(!z0)
-  if (npos > 0) x[!z0] <- r_egpd_pos(npos, kappa, sigma, xi)
-  x
-}
-
-
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-
-# Split-violin geom (version sans ggname)
-GeomSplitViolin <- ggproto(
-  "GeomSplitViolin", GeomViolin,
-  draw_group = function(self, data, panel_scales, coord, draw_quantiles = NULL) {
-    data <- transform(data,
-                      xminv = x - violinwidth * (x - xmin),
-                      xmaxv = x + violinwidth * (xmax - x))
-    grp <- data[1, "group"]
-    newdata <- data
-    newdata$x <- if (grp %% 2 == 1) data$xminv else data$xmaxv
-    newdata <- newdata[order(newdata$y), ]
-    newdata <- rbind(newdata[1, ], newdata, newdata[nrow(newdata), ], newdata[1, ])
-    newdata[c(1, nrow(newdata)-1, nrow(newdata)), "x"] <- newdata[1, "x"]
-    GeomPolygon$draw_panel(newdata, panel_scales, coord)
-  }
-)
-
-geom_split_violin <- function(mapping = NULL, data = NULL, stat = "ydensity",
-                              position = "identity", ..., trim = TRUE, scale = "area",
-                              na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
-  layer(
-    data = data, mapping = mapping, stat = stat, geom = GeomSplitViolin,
-    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
-    params = list(trim = trim, scale = scale, na.rm = na.rm, ...)
-  )
-}
-
-site <- rownames(sims_all[[1]]$X)[4]
-lt <- ncol(sims_all[[1]]$X)
-
-Xsim_site <- do.call(rbind, lapply(sims_all, function(sim) as.numeric(sim$X[site, ])))
-
-Xobs_site <- do.call(rbind, lapply(list_episodes, function(ep) as.numeric(ep[, site])))
-
-stopifnot(ncol(Xsim_site) == lt, ncol(Xobs_site) == lt)
-
-df <- data.frame(
-  value = c(Xobs_site, Xsim_site),
-  type = rep(c("Observed episodes", "Simulated episodes"))
-) %>%
-  filter(is.finite(value) & value > 0.2) %>%
-  mutate(yplot = value)
-
-ggplot(df, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 0.7, trim = FALSE, color = NA) +
-  labs(
-       x = "", y = "Rain") +
-  theme_minimal() + btf_theme +
-  theme(legend.position = "none")
-
-df_log <- data.frame(
-  value = c(Xobs_site, Xsim_site),
-  type = rep(c("Observed episodes", "Simulated episodes"))
-) %>%
-  filter(is.finite(value) & value > 0.1) %>%
-  mutate(yplot = log1p(value))
-
-ggplot(df_log, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 0.7, trim = FALSE, color = NA) +
-  labs(x = "", y = "log(1 + rain)") +
-  theme_minimal() + btf_theme +
-  theme(legend.position = "none")
-
-
-sites <- rownames(sims_all[[1]]$X)
-lt <- ncol(sims_all[[1]]$X)
-
-Xsim_all <- lapply(sims_all, function(sim) sim$X)
-
-sites <- rownames(sims_all[[1]]$X)
-sites_plot <- sites_names[13:17]  # choose sites to plot
-
-df_all <- do.call(rbind, lapply(sites_plot, function(site) {
-
-  Xobs_site <- unlist(lapply(list_episodes, function(ep) ep[, site]))
-  Xobs_site <- Xobs_site[is.finite(Xobs_site)]
-
-  Xsim_site <- unlist(lapply(sims_all, function(sim) sim$X[site, ]))
-  Xsim_site <- Xsim_site[is.finite(Xsim_site)]
-
-  data.frame(
-    site  = site,
-    value = c(Xobs_site, Xsim_site),
-    type  = rep(c("Observed", "Simulated"))
-  )
-}))
-
-
-df_all <- df_all %>%
-  filter(is.finite(value) & value > 0.22) %>%
-  mutate(yplot = value)
-
-# Plot
-ggplot(df_all, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 1, trim = FALSE, color = NA) +
-  facet_wrap(~site, scales = "free_y", ncol = 3) +
-  labs(
-    x = "", y = "Rainfall (mm/5min)"
-  ) +
-  theme_minimal() + btf_theme +
-  theme(legend.position = "none")
-
-ggsave(
-  filename = paste0(
-    foldername_plot,
-    "marginal_distributions_observed_vs_simulated_episodes_",
-    "_n", Nsim, "_3",
-    ".png"
-  ),
-  plot = last_plot(),
-  width = 10,
-  height = 8,
-  dpi = 300
-)
-
-
 ################################################################################
-# On grid OMSEV are
+# On grid OMSEV
 ################################################################################
 
 
@@ -1196,13 +1142,6 @@ df_sim_episode <- data.frame(
   rainfall = sim_episode[s0_pixel_id, ]
 )
 
-ggplot(df_sim_episode, aes(x = time, y = rainfall)) +
-  geom_line(color = btfgreen, size = 1) +
-  labs(x = "Time step (5min)", y = "Rainfall (mm/5min)") +
-  theme_minimal() +
-  btf_theme
-
-
 
 
 grid_latlon_poly <- st_transform(grid_latlon_poly, 4326)
@@ -1342,3 +1281,4 @@ out_gif
 
 
 
+##########################################################################################################

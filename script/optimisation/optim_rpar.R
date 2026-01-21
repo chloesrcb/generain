@@ -8,7 +8,7 @@ cat("\014")
 # LOAD LIBRARIES ###############################################################
 library(parallel)
 library(abind)
-muse <- TRUE
+muse <- FALSE
 # PARAMETERS ###################################################################
 
 
@@ -26,7 +26,7 @@ if (muse) {
   # Load libraries and set theme
   num_cores <- detectCores() - 1
   source("./script/load_libraries.R")
-  source("./script/optimisation/config.R")
+  source("./script/optimisation/config_rpar.R")
   M <- num_cores
 }
 

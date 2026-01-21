@@ -1523,46 +1523,6 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
 #' @return Data frame with columns: h, h_norm, h_normV, tau, tau_min, gamma.
 #' @export
 compute_gamma_grid <- function(h_vals, tau_vals, direction,
-              theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
-  df_out <- data.frame()
-  
-  # Advection velocity components
-  vx <- eta1 * abs(fictive_v[1])^eta2 * sign(fictive_v[1])
-  vy <- eta1 * abs(fictive_v[2])^eta2 * sign(fictive_v[2])
-  
-  for (tau in tau_vals) {
-  for (h in h_vals) {
-    # Projection of h along the direction
-    hx <- h * direction[1]
-    hy <- h * direction[2]
-    
-    beta1  <- theta_hat[1]
-    beta2  <- theta_hat[2]
-    alpha1 <- theta_hat[3]
-    alpha2 <- theta_hat[4]
-    
-    term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
-         beta1 * abs(hy - vy * tau)^alpha1
-    term2 <- beta2 * tau^alpha2
-    
-    gamma_hat <- term1 + term2
-    
-    df_out <- rbind(df_out, data.frame(
-    h = h,
-    h_norm = sqrt(hx^2 + hy^2),
-    h_normV = sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2),
-    tau = tau,
-    tau_min = tau * 60,
-    gamma = gamma_hat
-    ))
-  }
-  }
-  return(df_out)
-}
-
-
-
-compute_gamma_grid <- function(h_vals, tau_vals, direction,
                                theta_hat, eta1 = 1, eta2 = 1, fictive_v = c(1, 1)) {
   
   df_out <- data.frame()
@@ -1579,7 +1539,6 @@ compute_gamma_grid <- function(h_vals, tau_vals, direction,
       alpha1 <- theta_hat[3]
       alpha2 <- theta_hat[4]
       
-      # --- NEW OPTION: direction = "none" or NULL ---------------------------
       if (is.null(direction) || identical(direction, "none")) {
         
         h_norm <- h
@@ -1592,7 +1551,6 @@ compute_gamma_grid <- function(h_vals, tau_vals, direction,
         hy <- h * direction[2]
         h_norm <- sqrt(hx^2 + hy^2)
       }
-      # ----------------------------------------------------------------------
       
       term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
               beta1 * abs(hy - vy * tau)^alpha1
@@ -1614,60 +1572,20 @@ compute_gamma_grid <- function(h_vals, tau_vals, direction,
   return(df_out)
 }
 
-#' compute_gamma_grid function
+#' convert_params function
 #'
-#' Computes the theoretical variogram (gamma) grid for given spatial lags, temporal lags,
-#' direction, and variogram/advection parameters.
+#' Convert variogram parameters based on scaling constants for space and time.
 #'
-#' @param h_vals Vector of spatial lag values.
-#' @param tau_vals Vector of temporal lag values.
-#' @param direction Unit vector indicating the direction (length 2).
-#' @param theta_hat Vector of variogram parameters: beta1, beta2, alpha1, alpha2.
-#' @param omega Weighting parameter for combining two advection vectors.
-#' @param eta1 Advection parameter for x direction (default 1).
-#' @param eta2 Advection parameter exponent (default 1).
-#' @param fictive_v Vector of fictive advection velocities (vx, vy).
-#' @param fictive_w Vector of fictive wind velocities (wx, wy).
-#'
-#' @return Data frame with columns: h, h_norm, h_normV, tau, tau_min, gamma.
+#' @param beta1 The spatial scale parameter.
+#' @param beta2 The temporal scale parameter.
+#' @param alpha1 The spatial smoothness parameter.
+#' @param alpha2 The temporal smoothness parameter.
+#' @param c_x The spatial scaling constant. Default is 1.
+#' @param c_t The temporal scaling constant. Default is 1.
+#' @return A list containing the converted parameters beta1 and beta2.
 #' @export
-compute_gamma_grid_omega <- function(h_vals, tau_vals, direction,
-              theta_hat, omega = 1, eta1 = 1, eta2 = 1, fictive_v = c(1, 1),
-              fictive_w = c(1, 1)) {
-  df_out <- data.frame()
-  
-  # Advection velocity components
-  vx_raw <- omega * fictive_v[1] + (1 - omega) * fictive_w[1]
-  vy_raw <- omega * fictive_v[2] + (1 - omega) * fictive_w[2]
-  vx <- eta1 * abs(vx_raw)^eta2 * sign(vx_raw)
-  vy <- eta1 * abs(vy_raw)^eta2 * sign(vy_raw)
-
-  for (tau in tau_vals) {
-  for (h in h_vals) {
-    # Projection of h along the direction
-    hx <- h * direction[1]
-    hy <- h * direction[2]
-    
-    beta1  <- theta_hat[1]
-    beta2  <- theta_hat[2]
-    alpha1 <- theta_hat[3]
-    alpha2 <- theta_hat[4]
-    
-    term1 <- beta1 * abs(hx - vx * tau)^alpha1 +
-         beta1 * abs(hy - vy * tau)^alpha1
-    term2 <- beta2 * tau^alpha2
-    
-    gamma_hat <- term1 + term2
-    
-    df_out <- rbind(df_out, data.frame(
-    h = h,
-    h_norm = sqrt(hx^2 + hy^2),
-    h_normV = sqrt((hx - vx * tau)^2 + (hy - vy * tau)^2),
-    tau = tau,
-    tau_min = tau * 60,
-    gamma = gamma_hat
-    ))
-  }
-  }
-  return(df_out)
+convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
+  beta1_new <- beta1 / (c_x^alpha1)
+  beta2_new <- beta2 / (c_t^alpha2)
+  list(beta1 = beta1_new, beta2 = beta2_new)
 }
