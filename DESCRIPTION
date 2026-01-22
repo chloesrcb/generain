@@ -35,7 +35,13 @@ Imports:
     RandomFields,
     RandomFieldsUtils,
     animation,
-    boot
+    boot,
+    sf,
+    datetime,
+    lubridate,
+    parallel,
+    gridExtra,
+    latex2exp
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

@@ -105,10 +105,6 @@ df_dist_km$value <- round(df_dist_km$value, 1)
 
 
 # Spatial chi WLSE #############################################################
-
-library(knitr)
-library(kableExtra)
-
 # quantiles
 q_spa_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99)
 q_temp_vals <- c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97)
