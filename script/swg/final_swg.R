@@ -32,6 +32,9 @@ files <- list.files(functions_folder, full.names = TRUE)
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
+################################################################################
+# FOCUS ON A SINGLE EPISODE
+################################################################################
 
 
 # get rain data
@@ -257,7 +260,7 @@ setkey(adv_df_t0, t0_omsev)
 
 selected_episodes <- adv_df_t0[selected_points,
   on   = .(t0_omsev = t0_date),
-  # roll = 5*60
+  roll = 5*60
 ]
 
 setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
@@ -422,7 +425,7 @@ length(list_episodes_group)
 s0_list_group <- s0_list[indices_group]
 u_list_group <- u_list[indices_group]
 adv_group <- adv_matrix[indices_group, ]
-Nsim <- 100
+Nsim <- 1000
 s0_sim <- integer(Nsim)
 sims_group <- vector("list", Nsim)
 adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
@@ -451,7 +454,7 @@ for (i in seq_len(Nsim)) {
 # check that we have exceedances at s0, t0 for each episode
 u_sim <- sapply(sims_group, function(sim) sim$u_latent)
 all(sapply(seq_len(Nsim), function(i) {
-  sims_group[[i]]$Z[s0_sim[i], 1] >= u_sim[i]
+  sims_group[[i]]$Z[s0_sim[i], 1, 1] >= u_sim[i]
 }))
 
 
@@ -648,7 +651,7 @@ for (i in seq_len(Nsim)) {
 }
 
 
-episodes_obs_ref <- list_episodes
+episodes_obs_ref <- list_episodes_group
 
 sum_over_time_by_site <- function(x) {
   x <- as.matrix(x)
@@ -771,7 +774,7 @@ ggsave(
 sims_all <- sims_group
 list_results_sim <- lapply(seq_along(sims_all), function(i) {
 
-  Z_ep <- sims_all[[i]]$Z
+  Z_ep <- sims_all[[i]]$Z[,,1]
   s0 <- s0_sim[i]
   row_s0 <- which(rownames(df_coords) == s0)
   s0_coords <- df_coords[row_s0, ]
@@ -946,7 +949,7 @@ ggsave(
 
 
 ################################################################################
-# On grid OMSEV
+# On grid OMSEV are
 ################################################################################
 
 

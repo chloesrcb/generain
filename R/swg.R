@@ -319,7 +319,7 @@ sim_episode_coords <- function(params_vario, params_margins,
     sigma <- params_margins$sigma[k]
     kappa <- params_margins$kappa[k]
 
-    Zk <- Z[k, ] # site k time series
+    Zk <- Z[k, , 1] # site k time series
     
     V[k, ] <- G_std(Zk, p0 = p0, u = u)
 
