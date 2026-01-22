@@ -415,11 +415,11 @@ head(selected_points)
 ################################################################################
 grid_omsev <- grid_coords_km
 adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-all_group_names <- unique(selected_points$speed_class)
+all_group_names <- unique(selected_points$adv_group)
 # all_significant_groups <- all_group_names[grep("significant", all_group_names)]
-group_adv <- all_group_names[3]  # choose one group to simulate
+group_adv <- all_group_names[13]  # choose one group to simulate
 #get list_episodes and s0_list for this group
-indices_group <- which(selected_points$speed_class == group_adv)
+indices_group <- which(selected_points$adv_group == group_adv)
 list_episodes_group <- list_episodes[indices_group]
 length(list_episodes_group)
 s0_list_group <- s0_list[indices_group]
@@ -450,11 +450,10 @@ for (i in seq_len(Nsim)) {
   )[[1]]
 }
 
-
 # check that we have exceedances at s0, t0 for each episode
 u_sim <- sapply(sims_group, function(sim) sim$u_latent)
 all(sapply(seq_len(Nsim), function(i) {
-  sims_group[[i]]$Z[s0_sim[i], 1, 1] >= u_sim[i]
+  sims_group[[i]]$Z[s0_sim[i], 1] >= u_sim[i]
 }))
 
 
@@ -622,151 +621,34 @@ ggsave(
 
 
 
-# for all groups
-grid_omsev <- grid_coords_km
-adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-Nsim <- 100
-s0_sim <- integer(Nsim)
-sims_group <- vector("list", Nsim)
-adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
-for (i in seq_len(Nsim)) {
-  idx <- sample(seq_along(list_episodes), 1)
-  s0_i <- s0_list[idx]
-  s0_sim[i] <- s0_i
-  u_i <- u_list[idx]
-  adv_i <- adv_matrix[idx, ]
-  adv_sim[i, ] <- adv_i
-  sims_group[[i]] <- simulate_many_episodes(
-    N = 1,
-    u = 1000,
-    u_emp = u_i,
-    params_vario = params_kmh,
-    params_margins = params_margins,
-    coords = grid_omsev, # km
-    times = times * 5 / 60,  # in hours
-    adv = adv_i,
-    t0 = 0,
-    s0 = s0_i
-  )[[1]]
-}
+# # for all groups
+# grid_omsev <- grid_coords_km
+# adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
+# Nsim <- 100
+# s0_sim <- integer(Nsim)
+# sims_group <- vector("list", Nsim)
+# adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
+# for (i in seq_len(Nsim)) {
+#   idx <- sample(seq_along(list_episodes), 1)
+#   s0_i <- s0_list[idx]
+#   s0_sim[i] <- s0_i
+#   u_i <- u_list[idx]
+#   adv_i <- adv_matrix[idx, ]
+#   adv_sim[i, ] <- adv_i
+#   sims_group[[i]] <- simulate_many_episodes(
+#     N = 1,
+#     u = 1000,
+#     u_emp = u_i,
+#     params_vario = params_kmh,
+#     params_margins = params_margins,
+#     coords = grid_omsev, # km
+#     times = times * 5 / 60,  # in hours
+#     adv = adv_i,
+#     t0 = 0,
+#     s0 = s0_i
+#   )[[1]]
+# }
 
-
-episodes_obs_ref <- list_episodes_group
-
-sum_over_time_by_site <- function(x) {
-  x <- as.matrix(x)
-  if (!is.null(colnames(x)) && all(colnames(x) %in% colnames(rain))) {
-    s <- colSums(x, na.rm = TRUE)
-  } else if (!is.null(rownames(x)) && all(rownames(x) %in% colnames(rain))) {
-    s <- rowSums(x, na.rm = TRUE)
-  } else {
-    if (ncol(x) == ncol(rain)) s <- colSums(x, na.rm = TRUE) else s <- rowSums(x, na.rm = TRUE)
-    names(s) <- colnames(rain)[seq_along(s)]
-  }
-  s
-}
-
-obs_site_ep <- lapply(seq_along(episodes_obs_ref), function(i) {
-  ep <- episodes_obs_ref[[i]]
-  s_site <- sum_over_time_by_site(ep)
-  data.frame(
-    episode_id = i,
-    site = names(s_site),
-    cum = as.numeric(s_site),
-    data = "obs",
-    stringsAsFactors = FALSE
-  )
-}) |> dplyr::bind_rows()
-
-sim_site_ep <- lapply(seq_along(sims_group), function(i) {
-  X <- sims_group[[i]]$X
-  s_site <- sum_over_time_by_site(X)
-  data.frame(
-    sim_id = i,
-    site = names(s_site),
-    cum = as.numeric(s_site),
-    data = "sim",
-    stringsAsFactors = FALSE
-  )
-}) |> dplyr::bind_rows()
-
-obs_ep <- obs_site_ep |>
-  dplyr::group_by(episode_id) |>
-  dplyr::summarise(
-    cum_total    = sum(cum, na.rm = TRUE),
-    cum_maxsite  = max(cum, na.rm = TRUE),
-    cum_meansite = mean(cum, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  dplyr::mutate(data = "obs")
-
-sim_ep <- sim_site_ep |>
-  dplyr::group_by(sim_id) |>
-  dplyr::summarise(
-    cum_total    = sum(cum, na.rm = TRUE),
-    cum_maxsite  = max(cum, na.rm = TRUE),
-    cum_meansite = mean(cum, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  dplyr::mutate(data = "sim")
-
-
-make_qq_df <- function(x_obs, x_sim) {
-  x_obs <- x_obs[is.finite(x_obs)]
-  x_sim <- x_sim[is.finite(x_sim)]
-  n <- min(length(x_obs), length(x_sim))
-  if (n < 20) return(NULL)
-  p <- (seq_len(n) - 0.5) / n
-  data.frame(
-    q_obs = as.numeric(quantile(x_obs, probs = p, names = FALSE)),
-    q_sim = as.numeric(quantile(x_sim, probs = p, names = FALSE))
-  )
-}
-
-qq_total <- make_qq_df(obs_ep$cum_total, sim_ep$cum_total) |> dplyr::mutate(variable="cum_total")
-qq_max   <- make_qq_df(obs_ep$cum_maxsite, sim_ep$cum_maxsite) |> dplyr::mutate(variable="cum_maxsite")
-qq_mean  <- make_qq_df(obs_ep$cum_meansite, sim_ep$cum_meansite) |> dplyr::mutate(variable="cum_meansite")
-qq_ep <- dplyr::bind_rows(qq_total, qq_max, qq_mean)
-
-p_qq_ep <- ggplot(qq_ep, aes(q_obs, q_sim)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-  facet_wrap(~ variable, scales = "free") +
-  labs(
-    x = "Observed quantiles", y = "Simulated quantiles"
-  ) +
-  theme_minimal() + btf_theme
-
-ggsave(
-  file.path(folder_out, paste0("qq_episode_cumuls_", group_adv, ".png")),
-  p_qq_ep, width = 9, height = 4.5, dpi = 300
-)
-
-# plot only qq mean site
-p_qq_mean <- ggplot(qq_mean, aes(q_obs, q_sim)) +
-  geom_point(alpha = 0.6, color = btfgreen) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-  labs(
-    x = "Observed quantiles", y = "Simulated quantiles",
-    title = "QQ plot of mean site cumul"
-  ) +
-  theme_minimal() + btf_theme
-
-qq_site <- make_qq_df(obs_site_ep$cum, sim_site_ep$cum)
-
-p_qq_site <- ggplot(qq_site, aes(q_obs, q_sim)) +
-  geom_point(alpha = 0.5) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-  labs(
-    x = "Observed quantiles", y = "Simulated quantiles"
-  ) +
-  theme_minimal() + btf_theme
-
-
-ggsave(
-  file.path(folder_out, paste0("qq_site_episode_cumuls_", group_adv, ".png")),
-  p_qq_site, width = 6.5, height = 5.5, dpi = 300
-)
 
 
 #################################################################################################################
@@ -774,7 +656,7 @@ ggsave(
 sims_all <- sims_group
 list_results_sim <- lapply(seq_along(sims_all), function(i) {
 
-  Z_ep <- sims_all[[i]]$Z[,,1]
+  Z_ep <- sims_all[[i]]$Z
   s0 <- s0_sim[i]
   row_s0 <- which(rownames(df_coords) == s0)
   s0_coords <- df_coords[row_s0, ]
