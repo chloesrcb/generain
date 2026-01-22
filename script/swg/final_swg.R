@@ -15,6 +15,7 @@ library(viridis)
 library(magick)
 library(sf)
 library(units)
+library(ggspatial)  
 
 # Get all files in the folder "R"
 functions_folder <- "./R"
@@ -555,39 +556,6 @@ ggsave(
   dpi = 300
 )
 
-
-
-
-# # for all groups
-# grid_omsev <- grid_coords_km
-# adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-# Nsim <- 100
-# s0_sim <- integer(Nsim)
-# sims_group <- vector("list", Nsim)
-# adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
-# for (i in seq_len(Nsim)) {
-#   idx <- sample(seq_along(list_episodes), 1)
-#   s0_i <- s0_list[idx]
-#   s0_sim[i] <- s0_i
-#   u_i <- u_list[idx]
-#   adv_i <- adv_matrix[idx, ]
-#   adv_sim[i, ] <- adv_i
-#   sims_group[[i]] <- simulate_many_episodes(
-#     N = 1,
-#     u = 1000,
-#     u_emp = u_i,
-#     params_vario = params_kmh,
-#     params_margins = params_margins,
-#     coords = grid_omsev, # km
-#     times = times * 5 / 60,  # in hours
-#     adv = adv_i,
-#     t0 = 0,
-#     s0 = s0_i
-#   )[[1]]
-# }
-
-
-
 #################################################################################################################
 # on simulated episodes
 sims_all <- sims_group
@@ -689,11 +657,8 @@ filename_plot <- paste0(
   ".png"
 )
 
-
-
 # plot by tau
 res_cmp_sim <- p_sim$res_cmp
-
 res <- p_sim$res
 # chi theoretical vs chi empirical with y=x line
 ggplot(res_cmp_sim, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
@@ -768,12 +733,10 @@ ggsave(
 
 
 ################################################################################
-# On grid OMSEV are
+# On grid OMSEV
 ################################################################################
 
-
-
-
+# common marginal parameters
 params_margins_common <- list(
   p0    = mean(params_margins$p0),
   xi    = mean(params_margins$xi),
@@ -781,22 +744,13 @@ params_margins_common <- list(
   kappa = mean(params_margins$kappa)
 )
 
-
-
-
-
-# Convertir sites en sf et définir bounding box
+# Create grid over OMSEV area
 sites_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 2154)
 bbox <- st_bbox(sites_sf)
 bbox_sf <- st_as_sfc(st_bbox(c(xmin = 3.848, ymin = 43.628,
                                xmax = 3.870, ymax = 43.639), crs = 4326))
-
-
-# Transformer en projection métrique (Lambert 93)
 bbox_m <- st_transform(bbox_sf, crs = 2154)
 bbox <- st_bbox(bbox_m)
-
-# Créer grille régulière
 x_seq <- seq(bbox$xmin, bbox$xmax, by = 100)  # 100 m
 y_seq <- seq(bbox$ymin, bbox$ymax, by = 100)
 
@@ -807,7 +761,6 @@ grid_df <- as.data.frame(grid_coords)
 rownames(grid_df) <- paste0("pixel_", seq_len(nrow(grid_df)))
 colnames(grid_df) <- c("Longitude", "Latitude")
 
-
 grid_sf <- st_as_sf(grid_df, coords = c("Longitude", "Latitude"), crs = 2154)
 # add pixels id
 grid_sf$pixel_id <- rownames(grid_df)
@@ -817,11 +770,7 @@ grid_latlon_coords <- st_coordinates(grid_latlon)
 grid_df <- as.data.frame(grid_latlon_coords)
 rownames(grid_df) <- grid_sf$pixel_id
 colnames(grid_df) <- c("Longitude", "Latitude")
-
-# plot on a map pixel and rain gauges
-library(ggplot2)
-library(ggspatial)  
-
+# plot grid and rain gauges
 sites_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 4326)
 # add site names
 sites_sf$site_name <- rownames(sites_coords)
@@ -831,15 +780,13 @@ ggplot() +
   geom_sf(data = sites_sf, color = "red", size = 2) +
   geom_sf_text(
     data = sites_sf,
-    aes(label = site_name),  # adapte au nom réel de ta colonne
-    color = "red",
+    aes(label = site_name),
     size = 3,
     nudge_y = 0.00005
   ) +
   theme_minimal() +
   btf_theme
 
-# Transformer en lat/lon pour ggplot
 grid_latlon_poly <- st_transform(grid_l93_poly, crs = 4326)
 
 res <- 100  # 100 m
@@ -852,11 +799,9 @@ grid_l93_pts <- st_centroid(grid_l93_poly)
 coords_l93 <- st_coordinates(grid_l93_pts)
 coords_df <- as.data.frame(coords_l93)
 rownames(coords_df) <- grid_l93_poly$pixel_id
-colnames(coords_df) <- c("Longitude", "Latitude")  # (en L93 ici)
+colnames(coords_df) <- c("Longitude", "Latitude")
 
 grid_latlon_poly <- st_transform(grid_l93_poly, crs = 4326)
-
-# Plot
 ggplot() +
   geom_sf(data = grid_latlon_poly, fill = NA, color = "grey80", size = 0.3) +
   geom_sf(data = sites_sf, color = "red", size = 2) +
@@ -867,30 +812,9 @@ ggplot() +
     panel.grid = element_blank()
   ) 
 
-# ggplot() +
-#   geom_sf(data = grid_latlon_poly, fill = NA, color = "grey80", linewidth = 0.2) +
-#   geom_sf_text(
-#     data = grid_latlon_poly,
-#     aes(label = pixel_id),
-#     size = 2,
-#     color = "blue"
-#   ) +
-#   geom_sf(data = sites_sf, color = "red", size = 2) +
-#   geom_sf_text(
-#     data = sites_sf,
-#     aes(label = site_name),  # adapte au nom réel de ta colonne
-#     color = "red",
-#     size = 3,
-#     nudge_y = 0.00005
-#   ) +
-#   coord_sf(expand = FALSE) +
-#   theme_minimal()
-
-
 # save this plot
 ggsave(paste0(im_folder, "swg/omsev/grid_pixels_rain_gauges.png"),
        width = 8, height = 6, dpi = 300)
-
 
 # choose random conditioning pixel
 pixel_ids <- rownames(grid_df)
@@ -915,21 +839,14 @@ df_sim_episode <- data.frame(
   rainfall = sim_episode[s0_pixel_id, ]
 )
 
-
-
 grid_latlon_poly <- st_transform(grid_latlon_poly, 4326)
 sites_sf <- st_transform(sites_sf, 4326)
-
-stopifnot(all(grid_latlon_poly$pixel_id %in% rownames(sim_episode)))
-
 fill_limits <- range(sim_episode, na.rm = TRUE)
 
-episode_idx <- 1  # adjust if needed
+episode_idx <- 1
 dir_frames <- file.path(im_folder, paste0("swg/omsev/frames_episode_", episode_idx))
 dir.create(dir_frames, recursive = TRUE, showWarnings = FALSE)
 
-
-# Polygones en L93 + centroïdes
 grid_l93_poly <- st_transform(grid_latlon_poly, 2154)
 grid_l93_cent <- st_centroid(grid_l93_poly)
 
@@ -940,16 +857,13 @@ cent_df <- data.frame(
   y = cent_xy[,2]
 )
 
-# Vitesse advection (km/h)
 vx <- adv[1]
 vy <- adv[2]
 
-# longueur de flèche (visuelle) : déplacement sur dt en heures, puis facteur de zoom
-dt_arrow_hours <- 5/60
-scale_extra <- 1   # augmente si encore trop court
+dt_arrow_hours <- 5/60 # 5 minutes in hours
+scale_extra <- 1 # to adjust arrow length
 dx_m <- vx * dt_arrow_hours * 1000 * scale_extra
 dy_m <- vy * dt_arrow_hours * 1000 * scale_extra
-
 
 for (tt in seq_len(nT)) {
 
@@ -961,12 +875,12 @@ for (tt in seq_len(nT)) {
   map_t <- grid_latlon_poly %>%
     left_join(df_t, by = "pixel_id")
 
-  # ---- barycentre de pluie (en L93) ----
+  # compute barycentre of rain field at time tt
   tmp <- df_t %>%
     left_join(cent_df, by = "pixel_id") %>%
-    mutate(w = pmax(rain, 0))  # ou pmax(rain - p, 0) si tu veux enlever le bruit
+    mutate(w = pmax(rain, 0)) # weights = rainfall, set negative to 0
 
-  # Si pluie quasi nulle partout, pas de barycentre -> pas de flèche
+  # If rainfall is almost zero everywhere, no barycentre -> no arrow
   if (sum(tmp$w, na.rm = TRUE) > 0) {
 
     bx <- sum(tmp$x * tmp$w, na.rm = TRUE) / sum(tmp$w, na.rm = TRUE)
@@ -988,7 +902,6 @@ for (tt in seq_len(nT)) {
     bary_pt_4326 <- NULL
   }
 
-  # ---- plot ----
   p <- ggplot() +
     geom_sf(data = map_t, aes(fill = rain), color = NA) +
     geom_sf(data = s0_poly, fill = NA, color = "white", linewidth = 1.2) +
@@ -1011,14 +924,12 @@ for (tt in seq_len(nT)) {
     ) +
     coord_sf(expand = FALSE)
 
-  # ---- ajouter barycentre + flèche si dispo et advection non nulle ----
+  # add barycentre + arrow if available and advection non-zero
   if (!is.null(arrow_line_4326) && sqrt(vx^2 + vy^2) > 0.1) {
 
     p <- p +
-      # barycentre (petit point)
       geom_sf(data = bary_pt_4326, color = "white", size = 3) +
       geom_sf(data = bary_pt_4326, color = "red", size = 2) +
-      # flèche (halo + rouge)
       geom_sf(
         data = arrow_line_4326,
         arrow = arrow(length = unit(0.5, "cm")),
@@ -1037,9 +948,6 @@ for (tt in seq_len(nT)) {
   ggsave(out_png, plot = p, width = 7, height = 6, dpi = 150)
 }
 
-
-library(magick)
-
 files <- list.files(dir_frames, pattern = "frame_\\d+\\.png$", full.names = TRUE)
 files <- sort(files)
 
@@ -1049,9 +957,3 @@ gif <- image_animate(img, fps = 1)
 out_gif <- file.path(im_folder, paste0("swg/omsev/simulated_episode_", episode_idx, ".gif"))
 image_write(gif, path = out_gif)
 out_gif
-
-
-
-
-
-##########################################################################################################

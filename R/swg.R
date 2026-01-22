@@ -589,3 +589,76 @@ plot_transformation_gg <- function(Z, X, u, site_name,
   }
 
 }
+
+
+
+#' sum_over_time_by_site
+#' 
+#' Sum values over time for each site in an episode
+#' @param ep_mat matrix of episode values (time x site) or (site x time)
+#' @param sites_ref vector of site names
+#' @return named numeric vector of summed values by site
+#' @export
+sum_over_time_by_site <- function(ep_mat, sites_ref) { 
+  # ep_mat can be [time x site] or [site x time] 
+  x <- as.matrix(ep_mat) 
+  if (!is.null(colnames(x)) && all(colnames(x) %in% sites_ref)) { 
+    # time x site 
+    s <- colSums(x, na.rm = TRUE) 
+    return(s) 
+  } 
+  if (!is.null(rownames(x)) && all(rownames(x) %in% sites_ref)) { 
+    # site x time 
+    s <- rowSums(x, na.rm = TRUE) 
+    return(s) 
+  } 
+  if (ncol(x) == length(sites_ref)) { 
+      s <- colSums(x, na.rm = TRUE) 
+      names(s) <- sites_ref
+   } else if (nrow(x) == length(sites_ref)) { 
+    s <- rowSums(x, na.rm = TRUE) 
+    names(s) <- sites_ref 
+    } 
+  return(s) 
+} 
+  
+# sum_over_time_by_site <- function(ep_mat, sites_ref) {
+
+#   x <- as.matrix(ep_mat)
+
+#   # ensure orientation: time x site
+#   if (ncol(x) != length(sites_ref) && nrow(x) == length(sites_ref)) {
+#     x <- t(x)
+#   }
+
+#   stopifnot(ncol(x) == length(sites_ref))
+
+#   apply(x, 2, function(v) {
+#     if (all(is.na(v))) {
+#       NA_real_
+#     } else {
+#       sum(v, na.rm = TRUE)
+#     }
+#   }) |> setNames(sites_ref)
+# }
+
+
+#' make_qq_df
+#' 
+#' Create a data frame for QQ plot from observed and simulated values
+#' @param x_obs numeric vector of observed values
+#' @param x_sim numeric vector of simulated values
+#' @param min_n minimum number of values required to create the QQ data frame
+#' @return data frame with quantiles of observed and simulated values
+#' @export
+make_qq_df <- function(x_obs, x_sim, min_n = 50) { 
+  x_obs <- x_obs[is.finite(x_obs)] 
+  x_sim <- x_sim[is.finite(x_sim)] 
+  n <- min(length(x_obs), length(x_sim)) 
+  if (n < min_n) return(NULL) 
+  p <- (seq_len(n) - 0.5) / n 
+  data.frame( 
+    q_obs = as.numeric(quantile(x_obs, probs = p, names = FALSE)), 
+    q_sim = as.numeric(quantile(x_sim, probs = p, names = FALSE)) 
+  ) 
+}
