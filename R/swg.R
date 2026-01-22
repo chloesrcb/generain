@@ -338,14 +338,15 @@ sim_episode_grid <- function(params_vario, params_margins_common,
                         plot_debug = FALSE, filename = NULL) {
 
   s0_coords <- as.numeric(coords[rownames(coords) == s0_pixel_id, ])
-  # value at site s0 corresponding to u_emp
-  x_s0 <- pEGPD_full(u_emp, p0 = params_margins_common$p0,
-                     xi = params_margins_common$xi,
+
+  x_s0 <- pEGPD_full(u_emp,
+                     p0    = params_margins_common$p0,
+                     xi    = params_margins_common$xi,
                      sigma = params_margins_common$sigma,
                      kappa = params_margins_common$kappa)
-  # latent threshold
   u <- G_std_inv(x_s0, p0 = params_margins_common$p0, u = u)
-  # simulate r-Pareto process
+  s0_index <- which(rownames(coords) == s0_pixel_id)
+
   sim <- sim_rpareto_coords(
     beta1 = params_vario$beta1,
     beta2 = params_vario$beta2,
@@ -354,12 +355,12 @@ sim_episode_grid <- function(params_vario, params_margins_common,
     adv    = adv,
     coords = coords,
     t      = times,
-    t0     = t0,
-    s0     = s0_coords,
+    t0_index     = t0 + 1,
+    s0_index     = s0_index,
     threshold = u
   )
 
-  Z <- sim$Z[,,1, drop = TRUE]
+  Z <- sim$Z
   nS <- nrow(coords)
   nT <- length(times)
 
@@ -369,8 +370,9 @@ sim_episode_grid <- function(params_vario, params_margins_common,
   for (k in seq_len(nS)) {
     Zk <- Z[k, ]
     V[k, ] <- G_std(Zk, p0 = params_margins_common$p0, u = u)
-    X[k, ] <- qEGPD_full(V[k, ], p0 = params_margins_common$p0,
-                         xi = params_margins_common$xi,
+    X[k, ] <- qEGPD_full(V[k, ],
+                         p0    = params_margins_common$p0,
+                         xi    = params_margins_common$xi,
                          sigma = params_margins_common$sigma,
                          kappa = params_margins_common$kappa)
   }

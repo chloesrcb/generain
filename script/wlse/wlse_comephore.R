@@ -95,37 +95,6 @@ grid_coords_km <- as.data.frame(coords_m / 1000)
 colnames(grid_coords_km) <- c("Longitude", "Latitude")
 rownames(grid_coords_km) <- rownames(sites_coords)
 
-
-# ncol(df_comephore)
-# p1 <- ggplot(grid_coords_km, aes(x = Longitude, y = Latitude)) +
-#   geom_point(color = "blue", size = 2) +
-#   geom_text(aes(label = rownames(grid_coords_km)), hjust = -0.2, size = 1.5) +
-#   coord_fixed() +
-#   ggtitle("GPS coordinates WGS84") +
-#   theme_minimal()
-
-# p2 <- ggplot(grid_coords_km, aes(x = x_km, y = y_km)) +
-#   geom_point(color = "red") +
-#   geom_text(aes(label = rownames(grid_coords_km)), size = 1.5, hjust = -0.2) +
-#   coord_fixed() +
-#   theme_minimal() +
-#   xlab("x in km") +
-#   ylab("y in km") +
-#   ggtitle("Transformed coordinates in km")
-
-# p_coords <- grid.arrange(p1, p2, ncol = 2)
-
-# save plot
-# filename <- paste(im_folder, "optim/comephore/coords_transformation_5km.png",
-#                   sep = "")
-# ggsave(plot = p_coords, filename = filename, width = 20, height = 15,
-#        units = "cm")
-
-# get distance matrix
-# grid_coords_m <- grid_coords_m[, c("x_m", "y_m")]
-# grid_coords_km <- grid_coords_km[, c("x_km", "y_km")]
-# colnames(grid_coords_m) <- c("Longitude", "Latitude")
-# colnames(grid_coords_km) <- c("Longitude", "Latitude")
 dist_mat <- get_dist_mat(grid_coords_km, latlon = FALSE)
 
 # Spatial chi

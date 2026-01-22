@@ -7,23 +7,14 @@ cat("\014")
 source("./script/load_libraries.R")
 
 # library(generain)
-library(ggplot2)
-library(reshape2)
 library(animation)
-library(RandomFields)
-library(RandomFieldsUtils)
-library(dplyr)
 library(tidyr)
 library(lubridate)
 library(purrr)
 library(viridis)
 library(magick)
 library(sf)
-library(dplyr)
-library(ggplot2)
 library(units)
-
-
 
 # Get all files in the folder "R"
 functions_folder <- "./R"
@@ -836,54 +827,6 @@ ggsave(
 
 
 
-sim_episode_grid <- function(params_vario, params_margins_common,
-                        coords, times, adv, t0, s0_pixel_id,
-                        u, u_emp,
-                        plot_debug = FALSE, filename = NULL) {
-
-  s0_coords <- as.numeric(coords[rownames(coords) == s0_pixel_id, ])
-
-  x_s0 <- pEGPD_full(u_emp,
-                     p0    = params_margins_common$p0,
-                     xi    = params_margins_common$xi,
-                     sigma = params_margins_common$sigma,
-                     kappa = params_margins_common$kappa)
-  u <- G_std_inv(x_s0, p0 = params_margins_common$p0, u = u)
-  s0_index <- which(rownames(coords) == s0_pixel_id)
-
-  sim <- sim_rpareto_coords(
-    beta1 = params_vario$beta1,
-    beta2 = params_vario$beta2,
-    alpha1 = params_vario$alpha1,
-    alpha2 = params_vario$alpha2,
-    adv    = adv,
-    coords = coords,
-    t      = times,
-    t0_index     = t0 + 1,
-    s0_index     = s0_index,
-    threshold = u
-  )
-
-  Z <- sim$Z
-  nS <- nrow(coords)
-  nT <- length(times)
-
-  X <- matrix(NA_real_, nS, nT, dimnames = list(rownames(coords), NULL))
-  V <- matrix(NA_real_, nS, nT, dimnames = list(rownames(coords), NULL))
-
-  for (k in seq_len(nS)) {
-    Zk <- Z[k, ]
-    V[k, ] <- G_std(Zk, p0 = params_margins_common$p0, u = u)
-    X[k, ] <- qEGPD_full(V[k, ],
-                         p0    = params_margins_common$p0,
-                         xi    = params_margins_common$xi,
-                         sigma = params_margins_common$sigma,
-                         kappa = params_margins_common$kappa)
-  }
-
-  return(X)
-}
-
 
 params_margins_common <- list(
   p0    = mean(params_margins$p0),
@@ -895,7 +838,6 @@ params_margins_common <- list(
 
 
 
-library(sf)
 
 # Convertir sites en sf et définir bounding box
 sites_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"), crs = 2154)

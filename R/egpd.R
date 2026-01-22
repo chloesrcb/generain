@@ -167,50 +167,20 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
 }
 
 
-# Get left censoring
-# compute_rmse <- function(y, left_censore) {
-#   inits <- init_values(y, 0)
-#   sigma_0 <- inits[1]
-#   xi_0 <- inits[2]
-#   kappa_0 <- 1
-
-#   fit <- fit.extgp(y, model = 1, method = "mle",
-#                    init = c(kappa_0, sigma_0, xi_0),
-#                    censoring = c(left_censore, Inf),
-#                    plots = FALSE, confint = FALSE, ncpus = 1)
-
-#   param <- fit$fit$mle
-
-#   probs <- ppoints(length(y))
-#   q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
-#   q_emp <- sort(y)
-
-#   rmse <- sqrt(mean((q_emp - q_theo)^2))
-#   return(rmse)
-# }
-
-
-
-boot_fun <- function(data, indices) {
-  y_boot <- data[indices]
-  inits_boot <- init_values(y_boot, 0)
-  fit_boot <- tryCatch({
-    fit <- fit.extgp(y_boot, model = 1, method = "mle",
-                     init = c(kappa_0, inits_boot[1], inits_boot[2]),
-                     censoring = c(0.22, Inf), confint = FALSE, plots = FALSE)
-    return(as.numeric(fit$fit$mle))
-  }, error = function(e) return(rep(NA, 3)))
-
-  return(fit_boot)
-}
-
-
+#' compute_rmse function
+#' This function computes the Root Mean Square Error (RMSE) between empirical
+#' and theoretical quantiles of the Extreme Generalized Pareto Distribution (EGPD)
+#' for a given dataset and left censoring value.
+#' @param y The data to be evaluated.
+#' @param left_censore The left censoring value.
+#' @return The computed RMSE value.
+#' @import mev
+#' @export
 compute_rmse <- function(y, left_censore) {
   inits <- init_values(y, 0)
   sigma_0 <- inits[1]
   xi_0 <- inits[2]
   kappa_0 <- 1
-
   fit <- tryCatch({
     fit.extgp(y, model = 1, method = "mle",
               init = c(kappa_0, sigma_0, xi_0),
@@ -218,7 +188,7 @@ compute_rmse <- function(y, left_censore) {
               plots = FALSE, confint = FALSE, ncpus = 1)
   }, error = function(e) return(NULL))
 
-  if (is.null(fit)) return(10^8)  # Return a large RMSE if fitting fails
+  if (is.null(fit)) return(Inf)
 
   param <- fit$fit$mle
   probs <- ppoints(length(y))
@@ -228,51 +198,34 @@ compute_rmse <- function(y, left_censore) {
   sqrt(mean((q_emp - q_theo)^2))
 }
 
-compute_nrmse <- function(y, left_censore) {
-  inits <- init_values(y, 0)
-  sigma_0 <- inits[1]
-  xi_0 <- inits[2]
-  kappa_0 <- 1
 
-  fit <- tryCatch({
-    fit.extgp(y, model = 1, method = "mle",
-              init = c(kappa_0, sigma_0, xi_0),
-              censoring = c(left_censore, Inf),
-              plots = FALSE, confint = FALSE, ncpus = 1)
-  }, error = function(e) return(NULL))
-
-  if (is.null(fit)) return(10^8)  # Return a large NRMSE if fitting fails
-
-  param <- fit$fit$mle
-  probs <- ppoints(length(y))
-  q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
-  q_emp <- sort(y)
-
-  # RMSE
-  rmse <- sqrt(mean((q_emp - q_theo)^2))
-
-  # Normalization by mean of positive observations → NRMSE
-  nrmse <- rmse / mean(y)
-
-  return(nrmse)
-}
-
-
-
-best_cens_continuous <- function(y, lower, upper, function_obj = "RMSE") {
-  if (function_obj == "RMSE") {
-    opt <- optimize(function(c) compute_rmse(y, c), interval = c(lower, upper), tol = 1e-5)
-  } else if (function_obj == "NRMSE") {
-    opt <- optimize(function(c) compute_nrmse(y, c), interval = c(lower, upper), tol = 1e-5)
-  }
-  c(opt$minimum, opt$objective)
-}
-
-
+#' process_site function
+#' This function fits the Extreme Generalized Pareto Distribution (EGPD)
+#' to the given data for a specific site and generates a QQ plot.
+#' @param y The data to be fitted.
+#' @param site_name The name of the site
+#' @param save_path The path to save the QQ plot. Default is "".
+#' @param R The number of bootstrap samples for confidence intervals. Default is 1000
+#' @param forced_cens The forced censoring value. Default is NULL.
+#' @return A data frame containing the fitted parameters and best censore for the site.
+#' @import mev
+#' @import boot
+#' @import ggplot2
+#' @export
 process_site <- function(y, site_name,
-                        save_path, best_cens, R = 1000) {
+      save_path = "", R = 1000, forced_cens = NULL) {
   y <- y[y > 0]
   if (length(y) < 20) return(NULL)
+
+  
+  if (!is.null(forced_cens)) {
+    censures <- forced_cens
+  } else {
+    possible_values <- sort(unique(y))
+    censures <- unique(round(possible_values, 5))[1:10]
+  }
+  rmse_vals <- sapply(censures, function(c) compute_rmse(y, c))
+  best_cens <- censures[which.min(rmse_vals)]
   # Fit EGPD
   inits <- init_values(y, 0)
   fit <- fit.extgp(y, model = 1, method = "mle",
@@ -303,15 +256,22 @@ process_site <- function(y, site_name,
     return(fit_boot)
   }
 
-  set.seed(123)
   boot_res <- boot(data = y, statistic = boot_fun, R = R)
 
   # Compute quantiles for bootstrap samples
+  set.seed(123)
   probs <- c(1:length(y)) / (length(y) + 1)
 
   # Only keep valid rows (no NA/Inf/NaN)
   valid_rows <- apply(boot_res$t, 1, function(x) all(is.finite(x)))
   boot_t_valid <- boot_res$t[valid_rows, ]
+  boot_ci <- function(param_index) {
+    param_samples <- boot_t_valid[, param_index]
+    quantile(param_samples, probs = c(0.025, 0.975), na.rm = TRUE)
+  }
+  ci_kappa <- boot_ci(1)
+  ci_sigma <- boot_ci(2)
+  ci_xi <- boot_ci(3)
 
   q_mle_boot <- apply(boot_t_valid, 1, function(params) {
     qextgp(p = probs, type = 1, kappa = params[1], sigma = params[2], 
@@ -322,7 +282,6 @@ process_site <- function(y, site_name,
   q_lower <- apply(q_mle_boot, 2, quantile, probs = 0.025, na.rm = TRUE)
   q_upper <- apply(q_mle_boot, 2, quantile, probs = 0.975, na.rm = TRUE)
 
-  # Graphique
   df_plot <- data.frame(empirical = y_sorted, fitted = q_mle, lower = q_lower, 
                         upper = q_upper)
   p <- ggplot(df_plot, aes(x = empirical, y = fitted)) +
@@ -339,6 +298,51 @@ process_site <- function(y, site_name,
   filename <- paste0(save_path, "qqplot_egpd_", site_name, "_lcensoring_", best_cens, ".png")
   ggsave(filename = filename, p, width = 6, height = 6, dpi = 400, device = "png", bg = "transparent")
 
-  return(data.frame(Site = site_name, BestCens = best_cens,
+  return(data.frame(
+    Site = site_name,
+    BestCens = best_cens,
+    RMSE = round(min(rmse_vals), 5),
+    kappa = kappa,
+    kappa_low = ci_kappa[1], kappa_high = ci_kappa[2],
+    sigma = sigma,
+    sigma_low = ci_sigma[1], sigma_high = ci_sigma[2],
+    xi = xi,
+    xi_low = ci_xi[1], xi_high = ci_xi[2]
+  ))
+}
+
+
+#' fit_egpd_site function
+#' This function fits the Extreme Generalized Pareto Distribution (EGPD)
+#' to the given data for a specific site.
+#' @param y The data to be fitted.
+#' @param site_name The name of the site
+#' @param censures The vector of censures to be tested. Default is seq(0.22, 0.26, by = 0.01)
+#' @param R The number of bootstrap samples for confidence intervals. Default is 1000
+#' @return A data frame containing the fitted parameters and best censore for the site.
+#' @import mev
+#' @import boot
+#' @export
+fit_egpd_site <- function(y, site_name, censures = seq(0.22, 0.26, by = 0.01), 
+                         R = 1000) {
+  y <- y[y > 0]
+  if (length(y) < 20) return(NULL) 
+
+  rmse_vals <- sapply(censures, function(c) compute_rmse(y, c))
+  best_cens <- censures[which.min(rmse_vals)]
+
+  inits <- init_values(y, 0)
+  fit <- fit.extgp(y, model = 1, method = "mle",
+                   init = c(1, inits[1], inits[2]),
+                   censoring = c(best_cens, Inf),
+                   plots = FALSE, confint = FALSE, ncpus = 7, R = R)
+
+  param_mle <- fit$fit$mle
+  kappa <- param_mle[1]
+  sigma <- param_mle[2]
+  xi <- param_mle[3]
+
+  return(data.frame(Site = site_name, BestCens = best_cens, RMSE = round(min(rmse_vals), 5),
                     kappa = kappa, sigma = sigma, xi = xi))
 }
+

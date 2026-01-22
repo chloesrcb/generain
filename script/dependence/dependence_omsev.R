@@ -11,7 +11,6 @@ files <- list.files(functions_folder, full.names = TRUE)
 # load all functions in files
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
-print("All functions loaded")
 
 ################################################################################
 # LOCATION ---------------------------------------------------------------------

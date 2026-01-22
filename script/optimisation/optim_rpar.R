@@ -36,7 +36,6 @@ files <- list.files(functions_folder, full.names = TRUE)
 # load all functions in files
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
-print("All functions loaded")
 
 # SIMULATION ###################################################################
 result_folder <- paste0(data_folder, "optim_results/rpar/")
@@ -65,12 +64,6 @@ wind_list <- lapply(1:M, function(i) {
   )
 })
 
-
-# params <- c(0.3, 0.6, 0.3, 0.8)  # beta1, beta2, alpha1, alpha2
-# eta1 <- 0.5
-# eta2 <- 1.6
-# fixed_eta1 <- NA  # set to a numeric value to fix eta1
-# fixed_eta2 <- NA  # set to a numeric value to fix eta2
 true_param <- c(params, eta1, eta2)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -398,79 +391,6 @@ if (number_no_convergence > 0) {
 } else {
   print("All simulations converged")
 }
-# result_filename <- "/home/cserreco/Documents/These/phd_extremes/data/optim_results/rpar/rpar_03_06_03_08_16_52/sim_49s_24t_s0_1_1_t0_0/random_s0/wind/euclidean/free_eta/optim_rpar_50simu_500rep_49s_24t_03_06_03_08_16_52.csv"
-# print(paste0("Results written to: ", result_filename))
-# df_result_all <- read.csv(result_filename)
-# true_param <- c(0.3, 0.6, 0.3, 0.8, 1.6, 5.2)
-# cor(df_result_all$eta1, df_result_all$eta2)
-
-# library(ggplot2)
-# library(dplyr)
-
-# df_plot <- df_result_all %>%
-#   mutate(
-#     eta1_j = jitter(eta1, amount = 0.02),
-#     eta2_j = jitter(eta2, amount = 0.02)
-#   )
-
-# ggplot(df_plot, aes(x = eta1_j, y = eta2_j)) +
-#   geom_point(size = 2, color = btfgreen) +
-#   geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "#797676") +
-#   labs(
-#     x = expression(hat(eta)[1]),
-#     y = expression(hat(eta)[2])
-#   ) +
-#   theme_minimal()
-
-# Save 
-
-# foldername_image <- file.path(
-#   im_folder,
-#   "/optim_results/rpar",
-#   paste0("rpar_", param_str),
-#   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
-#   s0_type,
-#   wind_type,
-#   distance_type,
-#   eta_type,
-#   init_type
-# )
-
-# filename_image <- paste0(
-#   "/scatter_eta1_eta2_",
-#   M, "simu_", m, "rep_", ngrid^2,
-#   "s_", length(temp), "t_",
-#   param_str,
-#   ".pdf"
-# )
-
-# ggsave(
-#   plot = last_plot(),
-#   filename = paste0(foldername_image, filename_image),
-#   width = 5,
-#   height = 5
-# )
-
-# ggplot(df_plot, aes(x = eta1_j, y = eta2_j)) +
-#   geom_point(size = 2, alpha = 0.7) +
-#   geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "black") +
-#   labs(
-#     x = expression(hat(eta)[1]),
-#     y = expression(hat(eta)[2])
-#   ) +
-#   theme_bw()
-
-# df_plot <- df_plot %>%
-#   mutate(eta_eff = sqrt(eta1^2 + eta2^2))
-
-# ggplot(df_plot, aes(x = eta_eff)) +
-#   geom_histogram(bins = 12, fill = "grey70", color = "black") +
-#   labs(
-#     x = expression(sqrt(hat(eta)[1]^2 + hat(eta)[2]^2)),
-#     y = "Frequency"
-#   ) +
-#   theme_bw()
-
 
 # PLOTTING RESULTS #############################################################
 df_bplot <- stack(df_result_all)
