@@ -7,7 +7,7 @@
 # * https://testthat.r-lib.org/reference/test_package.html#special-files
 
 library(testthat)
-source("./script/load_libraries.R")
+source(system.file("script", "load_libraries.R", package = "generain"))
 
 # Get all files in the folder "R"
 functions_folder <- "./R"

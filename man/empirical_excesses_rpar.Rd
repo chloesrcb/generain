@@ -2,33 +2,24 @@
 % Please edit documentation in R/optimization.R
 \name{empirical_excesses_rpar}
 \alias{empirical_excesses_rpar}
-\title{empirical_excesses_rpar function}
+\title{empirical_excesses_rpar function (clean version)}
 \usage{
-empirical_excesses_rpar(
-  data_rain,
-  quantile,
-  df_lags,
-  threshold = FALSE,
-  t0 = 0
-)
+empirical_excesses_rpar(data_rain, df_lags, threshold, t0 = 0)
 }
 \arguments{
-\item{data_rain}{The rainfall data.}
+\item{data_rain}{Matrix or data.frame of rainfall data (rows: time, columns: sites).}
 
-\item{quantile}{The quantile value.}
+\item{df_lags}{Dataframe with columns: s1, s2 (site indices), tau (temporal lags).}
 
-\item{df_lags}{The dataframe with spatial and temporal lag values.}
+\item{t0}{Starting time index (integer). Default = 0.}
 
-\item{threshold}{A boolean value to indicate if the quantile variable is a
-threshold value and not a uniform quantile. Default is FALSE.}
+\item{thresholds}{NULL (uniform quantile, default), or a single threshold (numeric), or a numeric vector of thresholds per site.}
 
-\item{t0}{The starting time. Default is 1.}
+\item{quantile}{Quantile level to use if thresholds is NULL. Default = 0.9.}
 }
 \value{
-The empirical excesses dataframe with the number of excesses kij and
-the number of possible excesses Tobs, with the lag values.
+A data.table with lag values, number of excesses (kij), and number of observed times (Tobs).
 }
 \description{
-This function calculates the empirical excesses based on indicators above a
-quantile threshold for the r-Pareto process.
+Computes empirical excesses for r-Pareto process based on thresholds or quantiles.
 }

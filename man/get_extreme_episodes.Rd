@@ -4,13 +4,7 @@
 \alias{get_extreme_episodes}
 \title{get_extreme_episodes function}
 \usage{
-get_extreme_episodes(
-  selected_points,
-  data,
-  episode_size,
-  beta = 0,
-  unif = FALSE
-)
+get_extreme_episodes(selected_points, data, episode_size, unif = FALSE)
 }
 \arguments{
 \item{selected_points}{The selected points (s0, t0).}
@@ -18,8 +12,6 @@ get_extreme_episodes(
 \item{data}{The rainfall data.}
 
 \item{episode_size}{The temporal window size.}
-
-\item{beta}{The temporal window extension. Default is 0.}
 
 \item{unif}{A boolean value to indicate if we want to get the uniformized
 data episodes. Default is FALSE.}

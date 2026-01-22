@@ -2,7 +2,7 @@
 % Please edit documentation in R/dependence.R
 \name{spatial_chi_alldist}
 \alias{spatial_chi_alldist}
-\title{Calculate spatial chi-squared distances}
+\title{Calculate spatial chi for all lags}
 \usage{
 spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, zeros = FALSE)
 

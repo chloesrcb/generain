@@ -2,8 +2,10 @@
 % Please edit documentation in R/dependence.R
 \name{spatial_chi}
 \alias{spatial_chi}
-\title{Function to estimate the spatial extremogram}
+\title{spatial_chi function}
 \usage{
+spatial_chi(rad_mat, data_rain, quantile, zeros = TRUE, mid = TRUE)
+
 spatial_chi(rad_mat, data_rain, quantile, zeros = TRUE, mid = TRUE)
 }
 \arguments{
@@ -18,11 +20,24 @@ calculation.}
 
 \item{mid}{Logical value indicating whether to return the mean values for
 the plot.}
+
+\item{dist_mat}{The distance matrix.}
+
+\item{q}{The quantile value.}
+
+\item{nb_bins}{The number of bins to use for aggregation.}
+
+\item{bin_method}{The method to use for binning: "fixed" or "quantile".}
 }
 \value{
+A data frame containing the spatial chi values by distance bins.
+
 The spatial extremogram.
 }
 \description{
+Calculate the spatial chi statistic for a given dataset
+and a quantile value.
+
 This function calculates the spatial extremogram for a given lags vector and
 and radius matrix and rainfall data.
 }

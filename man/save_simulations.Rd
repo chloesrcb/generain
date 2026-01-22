@@ -4,20 +4,20 @@
 \alias{save_simulations}
 \title{save_simulations function}
 \usage{
-save_simulations(simu, ngrid, nsimu, folder, file = "rainBR", forcedind = NA)
+save_simulations(simu, ngrid, folder, file = "rainBR", forcedind = NA)
 }
 \arguments{
 \item{simu}{The BR simulationsas array.}
-
-\item{ngrid}{The number of grid points.}
-
-\item{nsimu}{The number of BR simulations.}
 
 \item{folder}{The folder path.}
 
 \item{file}{The filename without extension, default is "rainBR".}
 
 \item{forcedind}{The index of the simulation to save, default is NA.}
+
+\item{sites_coords}{The coordinates of the sites.}
+
+\item{nsimu}{The number of BR simulations.}
 }
 \value{
 None

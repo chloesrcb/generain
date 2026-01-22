@@ -14,7 +14,8 @@ neg_ll(
   latlon = FALSE,
   quantile = NA,
   data = NA,
-  directional = TRUE
+  distance = "euclidean",
+  normalize = FALSE
 )
 }
 \arguments{
@@ -39,6 +40,12 @@ and longitude. Default is FALSE.}
 \item{quantile}{The quantile value. Default is NA.}
 
 \item{data}{The data dataframe (brown-resnick case). Default is NA.}
+
+\item{distance}{The type of spatial norm, "euclidean" or "lalpha".
+Default is "euclidean".}
+
+\item{normalize}{A boolean value to indicate if the lags should be
+normalized. Default is FALSE.}
 }
 \value{
 The negative log-likelihood value.

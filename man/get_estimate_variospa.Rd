@@ -4,7 +4,7 @@
 \alias{get_estimate_variospa}
 \title{Calculate the estimate of the spatial variogram parameters}
 \usage{
-get_estimate_variospa(chispa, weights, summary = FALSE)
+get_estimate_variospa(chispa, weights, summary = FALSE, bw = NULL)
 }
 \arguments{
 \item{chispa}{The spatial chi values.}

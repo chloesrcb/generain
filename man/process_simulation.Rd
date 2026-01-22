@@ -6,35 +6,44 @@
 \usage{
 process_simulation(
   i,
-  M,
   m,
-  list_simuM,
+  list_simu,
   u,
-  df_lags,
-  t0,
+  list_lags,
+  list_excesses,
   init_params,
   hmax = NA,
-  wind_df = NA
+  wind_df = NA,
+  distance = "euclidean",
+  normalize = FALSE,
+  fixed_eta1 = NA,
+  fixed_eta2 = NA
 )
 }
 \arguments{
 \item{i}{The index of the simulation.}
 
-\item{M}{The number of simulations.}
-
 \item{m}{The number of simulations to process.}
 
-\item{list_simuM}{The list of simulations.}
+\item{list_simu}{The list of simulations.}
 
-\item{u}{The quantile value.}
+\item{u}{The quantile threshold.}
 
-\item{df_lags}{The dataframe with spatial and temporal lag values.}
+\item{list_lags}{The list of lags.}
 
-\item{t0}{The starting time.}
+\item{list_excesses}{The list of excesses.}
 
-\item{init_params}{The true variogram parameter (beta1, beta2, alpha1, alpha2)}
+\item{init_params}{The initial parameters for optimization.}
 
 \item{hmax}{The maximum spatial lag value. Default is NA.}
+
+\item{wind_df}{The wind dataframe. Default is NA.}
+
+\item{distance}{The type of spatial norm, "euclidean" or "lalpha". 
+Default is "euclidean".}
+
+\item{hessian}{A boolean value to indicate if the Hessian matrix should be
+computed. Default is FALSE.}
 }
 \value{
 The optimized parameters.

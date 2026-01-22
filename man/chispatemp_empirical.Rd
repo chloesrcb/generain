@@ -4,7 +4,7 @@
 \alias{chispatemp_empirical}
 \title{chispatemp_empirical function}
 \usage{
-chispatemp_empirical(data_rain, df_lags, quantile)
+chispatemp_empirical(data_rain, df_lags, quantile, remove_zeros = TRUE)
 }
 \arguments{
 \item{data_rain}{The data set.}

@@ -314,5 +314,3 @@ test_that("compute_st_variogram handles advection correctly", {
   # For t=1, advection shifts point to (2,1), expect same variogram value
   expect_equal(result[1, 1, 2], 5)
 })
-
-

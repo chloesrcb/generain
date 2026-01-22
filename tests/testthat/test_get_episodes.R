@@ -1,7 +1,3 @@
-# =======================================================================
-# TESTS for get_spatiotemp_excess() and get_s0t0_pairs()
-# =======================================================================
-
 
 # -----------------------------------------------------------------------
 # get_spatiotemp_excess()
@@ -56,7 +52,7 @@ test_that("get_spatiotemp_excess errors properly on invalid args", {
 
 test_that("get_s0t0_pairs selects valid space-time pairs", {
   set.seed(123)
-  data <- matrix(runif(100, 0, 10), nrow = 10, ncol = 5)
+  data <- matrix(runif(50, 0, 10), nrow = 10, ncol = 5)
   colnames(data) <- paste0("P", 1:5)
 
   sites_coords <- data.frame(
@@ -93,7 +89,7 @@ test_that("get_s0t0_pairs selects valid space-time pairs", {
 
 test_that("get_s0t0_pairs respects both spatial and temporal constraints", {
     set.seed(42)
-    data <- matrix(runif(100, 0, 10), nrow = 10, ncol = 5)
+    data <- matrix(runif(50, 0, 10), nrow = 10, ncol = 5)
     colnames(data) <- paste0("P", 1:5)
     sites_coords <- data.frame(Longitude = 1:5, Latitude = rep(0, 5))
     rownames(sites_coords) <- paste0("P", 1:5)
@@ -131,7 +127,7 @@ test_that("get_s0t0_pairs respects both spatial and temporal constraints", {
 
 test_that("get_s0t0_pairs enforces spatial and temporal exclusion", {
   set.seed(456)
-  data <- matrix(runif(100, 0, 10), nrow = 10, ncol = 5)
+  data <- matrix(runif(50, 0, 10), nrow = 10, ncol = 5)
   colnames(data) <- paste0("P", 1:5)
 
   sites_coords <- data.frame(Longitude = 1:5, Latitude = rep(0, 5))

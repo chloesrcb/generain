@@ -10,7 +10,9 @@ create_simu_gif(
   params,
   foldername,
   type = "rpar",
-  forcedtemp = NA
+  forcedtemp = NA,
+  s0 = NULL,
+  threshold = 1
 )
 }
 \arguments{
@@ -25,6 +27,10 @@ create_simu_gif(
 \item{type}{The type of simulation.}
 
 \item{forcedtemp}{The number of time steps to include in the GIF.}
+
+\item{s0}{The conditional site.}
+
+\item{threshold}{The threshold value to indicate on the plot. Default is 1.}
 }
 \value{
 None, but saves the GIF to a file.

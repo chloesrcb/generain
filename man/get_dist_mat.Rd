@@ -2,22 +2,24 @@
 % Please edit documentation in R/distances.R
 \name{get_dist_mat}
 \alias{get_dist_mat}
-\title{This function reshapes a distance matrix into a long dataframe.}
+\title{Compute a spatial distance matrix between sites.}
 \usage{
 get_dist_mat(locations, dmax = NA, latlon = TRUE)
 }
 \arguments{
-\item{locations}{A matrix or data frame containing the coordinates of the
-locations.}
+\item{locations}{A matrix or data frame containing coordinates.
+Must have columns named "Latitude" and "Longitude".}
 
-\item{dmax}{The maximum distance threshold if specified.}
+\item{dmax}{Optional maximum distance threshold (values above set to 0).}
 
-\item{latlon}{Logical indicating whether the coordinates are in latitude and
-longitude format. Default is TRUE.}
+\item{latlon}{Logical; TRUE if coordinates are latitude/longitude,
+FALSE for Cartesian (Euclidean). Default TRUE.}
 }
 \value{
-A distance matrix containing the reshaped distances.
+A square numeric matrix of distances with proper row/column names.
 }
 \description{
-This function reshapes a distance matrix into a long dataframe.
+This function computes a distance matrix (in meters or Euclidean units)
+between spatial coordinates and ensures that row/column names are assigned
+based on site identifiers.
 }

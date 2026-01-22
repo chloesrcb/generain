@@ -4,7 +4,13 @@
 \alias{theoretical_chi}
 \title{Compute the theoretical chi dataframe.}
 \usage{
-theoretical_chi(params, df_lags, latlon = FALSE, directional = FALSE)
+theoretical_chi(
+  params,
+  df_lags,
+  latlon = FALSE,
+  distance = "euclidean",
+  normalize = FALSE
+)
 }
 \arguments{
 \item{params}{A vector of variogram parameters.}
@@ -14,8 +20,11 @@ theoretical_chi(params, df_lags, latlon = FALSE, directional = FALSE)
 \item{latlon}{A boolean value to indicate if the locations are in latitude
 and longitude. Default is FALSE.}
 
-\item{directional}{A boolean value to indicate if the variogram is
-directional. Default is FALSE.}
+\item{distance}{The type of spatial norm, "euclidean" or "lalpha".
+Default is "euclidean".}
+
+\item{normalize}{A boolean value to indicate if we want to normalize the
+spatial and temporal lags. Default is FALSE.}
 }
 \value{
 The theoretical chi

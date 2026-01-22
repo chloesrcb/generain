@@ -1,4 +1,3 @@
-# Description: This script contains tests for the `dependence.R` functions.
 
 ### Test the `get_chiq` function -----------------------------------------------
 test_that("get_chiq works well", {

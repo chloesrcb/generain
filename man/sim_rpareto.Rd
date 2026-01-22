@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulations.R
 \name{sim_rpareto}
 \alias{sim_rpareto}
-\title{sim_rpareto function}
+\title{sim_rpareto function (extended)}
 \usage{
 sim_rpareto(
   beta1,
@@ -17,45 +17,39 @@ sim_rpareto(
   nres = 1,
   random_s0 = FALSE,
   s0 = c(1, 1),
-  s0_radius = NULL,
-  s0_center = NULL
+  s0_radius = Inf,
+  distance = "euclidean",
+  seed = NULL
 )
 }
 \arguments{
-\item{beta1}{The value of beta1.}
+\item{beta1, }{beta2 Variogram scale parameters for space and time.}
 
-\item{beta2}{The value of beta2.}
+\item{alpha1, }{alpha2 Variogram smoothness parameters for space and time.}
 
-\item{alpha1}{The value of alpha1.}
+\item{x, }{y, t Vectors representing spatial (x, y) and temporal (t) grids.}
 
-\item{alpha2}{The value of alpha2.}
+\item{adv}{Advection vector (default = c(0, 0)).}
 
-\item{x}{Vector for the first dimension (spatial x in our case).}
+\item{t0}{Time point at which the process is conditioned.}
 
-\item{y}{Vector for the second dimension (spatial y in our case)}
+\item{nres}{Number of simulations to perform.}
 
-\item{t}{Vector for the third dimension (time in our case).}
+\item{random_s0}{If TRUE, selects conditioning point(s) randomly within radius.}
 
-\item{adv}{The advection coordinates vector. Default is c(0, 0).}
+\item{s0}{Conditioning spatial location(s). 
+Either a vector c(x,y) for one point, or a matrix/data.frame with 2 columns for multiple points.}
 
-\item{t0}{Conditional temporal time. Default is 1.}
+\item{s0_radius}{Radius used if random_s0 is TRUE.}
 
-\item{nres}{The number of simulations to perform. Default is 1.}
-
-\item{random_s0}{Logical value indicating whether to choose a random s0.
-Default is FALSE.}
-
-\item{s0}{Vector of dimension 2 for the spatial conditioning point. 
-Default is c(1, 1).}
-
-\item{s0_radius}{The radius for random s0 selection. Default is NULL.}
-
-\item{s0_center}{The center for random s0 selection. Default is NULL.}
+\item{distance}{Type of distance metric to use ("euclidean" or "lalpha").}
 }
 \value{
-The result of the simulation.
+A list with simulated field Z (5D array: x × y × t × nres × n_s0)
+        and list of conditioning points s0_used.
 }
 \description{
-This function performs a simulation of a spatio-temporal r-Pareto process
-using a fractionnal Brownian motion model and based on the David Leber code.
+This function simulates a spatio-temporal r-Pareto process using either 
+a fractional Brownian motion model.
+It supports conditioning on one or multiple spatial points s0.
 }
