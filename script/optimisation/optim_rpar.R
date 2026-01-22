@@ -9,9 +9,6 @@ cat("\014")
 library(parallel)
 library(abind)
 muse <- FALSE
-# PARAMETERS ###################################################################
-
-
 if (muse) {
   # Get the muse folder
   folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"

@@ -24,9 +24,8 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
 ################################################################################
-# FOCUS ON A SINGLE EPISODE
+# DATA AND COORDS
 ################################################################################
-
 
 # get rain data
 filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
@@ -61,6 +60,7 @@ sites_names <- colnames(rain)
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
 
 rownames(sites_coords) <- location_gauges$Station
+
 sites_coords_sf <- st_as_sf(sites_coords, coords = c("Longitude", "Latitude"),
                             crs = 4326)
 
@@ -107,9 +107,9 @@ params_margins <- list(
   p0    = p0_values
 )
 
-#######################################################################################################
+#################################################################################
 # GET EPISODES
-#######################################################################################################
+#################################################################################
 
 q <- 0.95
 delta <- 12
@@ -119,7 +119,6 @@ times <- 0:(delta - 1)
 # in rain remove when all data are NA
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
-
 # Spatio-temporal neighborhood parameters
 s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             min_spatial_dist = dmin,
@@ -127,7 +126,6 @@ s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             set_st_excess = set_st_excess,
                             n_max_episodes = 10000,
                             latlon = FALSE)
-
 selected_points <- s0t0_set
 selected_points <- selected_points %>%
   mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
@@ -136,46 +134,11 @@ n_episodes <- length(selected_points$s0)
 table(selected_points$s0) # number of episodes per s0
 # number of episodes par t0 date
 n_s0_per_t0 <- table(selected_points$t0_date)
-# see the number of episodes per date in a figure
-
-df_mult <- as.data.frame(n_s0_per_t0) %>%
-    dplyr::filter(Freq > 0) %>%
-    dplyr::rename(n_s0 = Freq)
-
-ggplot(df_mult, aes(x = factor(n_s0))) +
-  geom_bar(fill = btfgreen, alpha = 0.7) +
-  labs(
-    x = TeX("Number of episodes for the same $t_0$"),
-    y = TeX("Number of $t_0$"),
-    title = ""
-  ) +
-  theme_minimal() +
-  btf_theme
-
-# save plot
-foldername_plot <- paste0(
-  im_folder,
-  "swg/omsev/"
-)
-
-filename_plot <- paste0(
-  foldername_plot,
-  "n_episodes_per_t0_",
-  q * 100, "_dmin", dmin,
-    "_delta", delta, ".png"
-)
-
-ggsave(
-  filename = filename_plot,
-  plot = last_plot(),
-  width = 7,
-  height = 5,
-  dpi = 300
-)
 
 t0_list <- selected_points$t0
 s0_list <- selected_points$s0
 u_list <- selected_points$u_s0
+# get extreme episodes
 list_episodes_points <- get_extreme_episodes(selected_points, rain,
                                      episode_size = delta, unif = FALSE)
 list_episodes <- list_episodes_points$episodes
@@ -206,13 +169,11 @@ df_lags <- list_lags[[10]] # km/h
 df_excesses <- list_excesses[[13]]
 sum(df_excesses$kij)
 
-
-#######################################################################################################
+###################################################################################
 # VARIOS PARAMETERS FROM KM/H TO M/5MIN
-#######################################################################################################
+###################################################################################
+# From results
 params_est <- c(1.090, 4.628, 0.225, 0.713, 1.621, 5.219)  # km/h
-# params_est <- c(1.5, 4.4, 0.2, 0.7, 1.621, 5.219)  # km/h
-# [1] 1.0871823 4.6266826 0.2238579 0.7127469 1.6210000 5.2190000
 etas_estimates <- params_est[5:6]
 
 params_kmh <- list(
@@ -226,7 +187,6 @@ beta1 <- params_kmh$beta1
 beta2 <- params_kmh$beta2
 alpha1 <- params_kmh$alpha1
 alpha2 <- params_kmh$alpha2
-
 
 ##################################################################################
 # TRANSFORM ADVECTION SPEEDS
@@ -249,26 +209,20 @@ adv_df_t0 <- adv_df_raw[, .(
 
 setkey(adv_df_t0, t0_omsev)
 
-selected_episodes <- adv_df_t0[selected_points,
-  on   = .(t0_omsev = t0_date),
-  roll = 5*60
-]
-
+# get advections for selected points
+selected_episodes <- adv_df_t0[selected_points, on = .(t0_omsev = t0_date)]
 setnames(selected_episodes, c("vx_final","vy_final"), c("adv_x","adv_y"))
 
-stopifnot(nrow(selected_episodes) == nrow(selected_points))
-
-
+# Advection
 V_episodes <- data.frame(
   v_x = selected_episodes$adv_x,
   v_y = selected_episodes$adv_y
 )
-
-
 adv_df <- V_episodes
-
 colnames(adv_df) <- c("vx_final", "vy_final")
 adv_df_transfo <- adv_df
+
+# Transform advections with etas estimates
 adv_df_transfo$vnorm <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
 adv_df_transfo$vnorm_t <- etas_estimates[1] * adv_df_transfo$vnorm^etas_estimates[2]
 
@@ -284,11 +238,11 @@ adv_df_transfo$vy_t <- ifelse(
   0
 )
 
-plot(adv_df$vx_final, adv_df$vy_final, pch = 19,
-     xlab = "vx", ylab = "vy")
+# plot(adv_df$vx_final, adv_df$vy_final, pch = 19,
+#      xlab = "vx", ylab = "vy")
 
-plot(adv_df_transfo$vx_t, adv_df_transfo$vy_t, pch = 19,
-     xlab = "vx", ylab = "vy")
+# plot(adv_df_transfo$vx_t, adv_df_transfo$vy_t, pch = 19,
+#      xlab = "vx", ylab = "vy")
 
 # Compute speed
 speed_raw <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
@@ -296,7 +250,7 @@ summary(speed_raw)
 speed_transfo <- sqrt(adv_df_transfo$vx_t^2 + adv_df_transfo$vy_t^2)
 summary(speed_transfo)
 
-
+# Compute direction
 direction <- atan2(adv_df$vy_final, adv_df$vx_final) * (180 / pi)
 # make sure direction is in [0, 360]
 direction <- atan2(adv_df$vy_final, adv_df$vx_final) * (180 / pi)
@@ -309,7 +263,6 @@ speed_class <- as.character(cut(
   labels = c("still","weak","significant"),
   include.lowest = TRUE
   ))
-
 speed_class <- factor(speed_class, levels = c("still","weak","significant"))
 table(speed_class)
 
@@ -357,15 +310,9 @@ ggplot(wind_rose_data, aes(x = direction_class, y = count, fill = speed_class)) 
   coord_polar(theta = "x", start = pi/4, direction = 1)
 
 # save plot
-foldername_plot <- paste0(
-  im_folder,
-  "swg/omsev/"
-)
-
+foldername_plot <- paste0(im_folder,"swg/omsev/")
 filename_plot <- paste0(
-  foldername_plot,
-  "adv_wind_rose_95q1200dmin12delta_NSEW.png"
-)
+  foldername_plot, "adv_wind_rose_95q1200dmin12delta_NSEW.png")
 
 ggsave(
   filename = filename_plot,
@@ -376,9 +323,11 @@ ggsave(
 )
 
 table(adv_class$group)
+
 selected_points$speed_class <- adv_class$speed_class
 selected_points$adv_group <- adv_class$group
 
+# if needed, get X_s0_t0 for each episode
 X_s0_t0 <- numeric(length(list_episodes))
 for (i in seq_along(list_episodes)) {
   ep <- list_episodes[[i]]
@@ -387,9 +336,7 @@ for (i in seq_along(list_episodes)) {
 }
 
 selected_points$X_s0_t0 <- X_s0_t0
-
 q_init <- quantile(selected_points$X_s0_t0, probs = c(0.25, 0.75))
-
 
 selected_points$init_class <- cut(
   selected_points$X_s0_t0,
@@ -399,7 +346,6 @@ selected_points$init_class <- cut(
 )
 
 head(selected_points)
-
 
 ################################################################################
 # Simulation for similar episodes advection
