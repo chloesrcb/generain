@@ -115,13 +115,13 @@ alpha2 <- as.numeric(wlse_temp[[3]])
 y <- alpha2 * df$lag + c2  #idem
 
 df <- df_chi
-dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+dftemp <- data.frame(lag = log(df$lag), chi = zeta(df$chi))
 
 chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
   geom_point(color = btfgreen, size = 4) +
   btf_theme +
   xlab(TeX(r"($\log(\tau)$)")) +
-  ylab(TeX(r"($\eta(\widehat{\chi}(0,\tau))$)")) +
+  ylab(TeX(r"($\zeta(\widehat{\chi}(0,\tau))$)")) +
   geom_line(aes(x = lag, y = alpha2 * lag + c2),
             alpha = 0.6, color = "darkred", linewidth = 1.5)
 
@@ -183,7 +183,7 @@ nb_col <- length(unique(radius)) # we exclude 0 ?
 chispa_df <- spatial_chi(rad_mat, rain_new,
                          quantile = 0.95, zeros = F)
 
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
+etachispa_df <- data.frame(chi = zeta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
 
 
@@ -239,7 +239,7 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
   geom_point(col = btfgreen, size = 4) +
   xlab(TeX(r"($\log(h)$)")) +
-  ylab(TeX(r"($\eta(\widehat{\chi}(h, 0))$)")) +
+  ylab(TeX(r"($\zeta(\widehat{\chi}(h, 0))$)")) +
   theme(axis.ticks = element_blank(),
         axis.line = element_blank(),
         panel.border = element_blank(),

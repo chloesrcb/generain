@@ -103,92 +103,6 @@ chispatemp_empirical <- function(data_rain, df_lags, quantile, remove_zeros = TR
 }
 
 
-
-spatial_chi_pair <- function(rain_pair, q, zeros = TRUE) {
-  if (!zeros) {
-    nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
-    rain_pair <- rain_pair[nonzero_idx, , drop = FALSE]
-  }
-  
-  complete_idx <- complete.cases(rain_pair)
-  rain_cp <- rain_pair[complete_idx, , drop = FALSE]
-  
-  if (nrow(rain_cp) == 0) return(NA)
-  
-  # Calculate empirical chi
-  get_chi_empirical(rain_cp, q)
-}
-
-
-compute_all_pairs_chi <- function(data_rain, dist_mat, q = 0.99, zeros = TRUE) {
-  n_sites <- ncol(data_rain)
-  results <- data.frame(s1 = integer(0), s2 = integer(0), distance = numeric(0), chi = numeric(0))
-
-  for (s1 in 1:(n_sites - 1)) {
-    for (s2 in (s1 + 1):n_sites) {
-      dist_val <- dist_mat[s1, s2]
-      rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
-
-      # Filtrage des dates communes
-      valid_idx <- complete.cases(rain_pair)
-      if (!zeros) {
-        valid_idx <- valid_idx & rowSums(rain_pair != 0, na.rm = TRUE) > 0
-      }
-
-      rain_valid <- rain_pair[valid_idx, , drop = FALSE]
-
-      if (nrow(rain_valid) == 0) {
-        chi_val <- NA
-      } else {
-        num_joint_excess <- sum(rain_valid[,1] > q & rain_valid[,2] > q)
-        num_marginal_excess <- sum(rain_valid[,1] > q)
-        chi_val <- if (num_marginal_excess == 0) NA else num_joint_excess / num_marginal_excess
-      }
-
-      results <- rbind(results, data.frame(s1 = s1, s2 = s2, distance = dist_val, chi = chi_val))
-    }
-  }
-
-  return(results)
-}
-
-aggregate_chi_by_distance <- function(chi_table, nb_bins = 10, method = c("fixed", "quantile")) {
-  method <- match.arg(method)
-  
-  dist_vals <- chi_table$distance
-  if (method == "quantile") {
-    breaks <- unique(quantile(dist_vals, probs = seq(0, 1, length.out = nb_bins + 1)))
-  } else {
-    breaks <- seq(min(dist_vals), max(dist_vals), length.out = nb_bins + 1)
-  }
-
-  # Création de la classe pour chaque paire
-  chi_table$bin <- cut(chi_table$distance, breaks = breaks, include.lowest = TRUE, labels = FALSE)
-
-  # Moyenne de chi par bin
-  agg_result <- aggregate(chi ~ bin, data = chi_table, FUN = mean, na.rm = TRUE)
-
-  # Ajouter le centre des classes de distance
-  bin_mids <- (breaks[-1] + breaks[-length(breaks)]) / 2
-  agg_result$distance_mid <- bin_mids[agg_result$bin]
-
-  return(agg_result)
-}
-
-spatial_chi <- function(data_rain, dist_mat, q, zeros = TRUE,
-                        nb_bins = 10, bin_method = "quantile") {
-  bin_method <- match.arg(bin_method)
-
-  chi_by_pair <- compute_all_pairs_chi(data_rain, dist_mat, q = q,
-                                       zeros = zeros)
-
-  agg_chi <- aggregate_chi_by_distance(chi_by_pair, nb_bins = nb_bins, 
-                                        method = bin_method)
-  chispa_df <- data.frame(lagspa = agg_chi$distance_mid,
-                     chi = agg_chi$chi)
-  return(chispa_df)
-}
-
 # TEMPORAL CHI -----------------------------------------------------------------
 
 
@@ -279,7 +193,6 @@ temporal_chi <- function(data_rain, tmax, quantile, zeros = TRUE, mean = TRUE) {
 #' @import tidyr
 #' @import lmtest
 #'
-#'
 #' @export
 temporal_chi_WLSE <- function(dftemp, weights){
     # check if weights is valid
@@ -338,7 +251,7 @@ get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
   lagtemp <- df_chi$lag
 
   # need to add a eta continuous function for the WLSE with log
-  dftemp <- data.frame(tchi = eta(chitemp), lagtemp = log(lagtemp))
+  dftemp <- data.frame(tchi = zeta(chitemp), lagtemp = log(lagtemp))
 
   sum_wls_temp <- temporal_chi_WLSE(dftemp, weights)
 
@@ -365,6 +278,138 @@ get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
 
 # SPATIAL CHI ------------------------------------------------------------------
 
+
+#' Calculate the spatial chi statistic
+#' 
+#' This function calculates the spatial chi statistic for a given dataset
+#' and a quantile value.
+#' @param rain_pair The rainfall data for a pair of sites.
+#' @param q The quantile value.
+#' @param zeros Logical indicating whether to include zero values in the
+#'             calculation.
+#' @return The spatial chi statistic.
+#' @import dplyr
+#' @import tidyr
+#' @export
+spatial_chi_pair <- function(rain_pair, q, zeros = TRUE) {
+  if (!zeros) {
+    nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
+    rain_pair <- rain_pair[nonzero_idx, , drop = FALSE]
+  }
+  
+  complete_idx <- complete.cases(rain_pair)
+  rain_cp <- rain_pair[complete_idx, , drop = FALSE]
+  
+  if (nrow(rain_cp) == 0) return(NA)
+  
+  # Calculate empirical chi
+  get_chi_empirical(rain_cp, q)
+}
+
+
+#' Compute chi for all pairs of sites
+#' This function computes the chi statistic for all pairs of sites
+#' in the dataset.
+#' 
+#' @param data_rain The rainfall data.
+#' @param dist_mat The distance matrix.
+#' @param q The quantile value.
+#' @param zeros Logical indicating whether to include zero values in the
+#'             calculation.
+#' @return A data frame containing the chi values for all pairs of sites.
+#' @import dplyr
+#' @import tidyr
+#' @export
+compute_all_pairs_chi <- function(data_rain, dist_mat, q = 0.99, zeros = TRUE) {
+  n_sites <- ncol(data_rain)
+  results <- data.frame(s1 = integer(0), s2 = integer(0), distance = numeric(0), chi = numeric(0))
+
+  for (s1 in 1:(n_sites - 1)) {
+    for (s2 in (s1 + 1):n_sites) {
+      dist_val <- dist_mat[s1, s2]
+      rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
+
+      # Filtrage des dates communes
+      valid_idx <- complete.cases(rain_pair)
+      if (!zeros) {
+        valid_idx <- valid_idx & rowSums(rain_pair != 0, na.rm = TRUE) > 0
+      }
+
+      rain_valid <- rain_pair[valid_idx, , drop = FALSE]
+
+      if (nrow(rain_valid) == 0) {
+        chi_val <- NA
+      } else {
+        num_joint_excess <- sum(rain_valid[,1] > q & rain_valid[,2] > q)
+        num_marginal_excess <- sum(rain_valid[,1] > q)
+        chi_val <- if (num_marginal_excess == 0) NA else num_joint_excess / num_marginal_excess
+      }
+
+      results <- rbind(results, data.frame(s1 = s1, s2 = s2, distance = dist_val, chi = chi_val))
+    }
+  }
+
+  return(results)
+}
+
+#' Aggregate chi values by distance bins
+#' This function aggregates chi values by distance bins.
+#' 
+#' @param chi_table The data frame containing chi values and distances.
+#' @param nb_bins The number of bins to use for aggregation.
+#' @param method The method to use for binning: "fixed" or "quantile".
+#' @return A data frame containing the aggregated chi values by distance bins.
+#' @import dplyr
+#' @import tidyr
+#' @export
+aggregate_chi_by_distance <- function(chi_table, nb_bins = 10, method = c("fixed", "quantile")) {
+  method <- match.arg(method)
+  
+  dist_vals <- chi_table$distance
+  if (method == "quantile") {
+    breaks <- unique(quantile(dist_vals, probs = seq(0, 1, length.out = nb_bins + 1)))
+  } else {
+    breaks <- seq(min(dist_vals), max(dist_vals), length.out = nb_bins + 1)
+  }
+  chi_table$bin <- cut(chi_table$distance, breaks = breaks, include.lowest = TRUE, labels = FALSE)
+
+  agg_result <- aggregate(chi ~ bin, data = chi_table, FUN = mean, na.rm = TRUE)
+
+  bin_mids <- (breaks[-1] + breaks[-length(breaks)]) / 2
+  agg_result$distance_mid <- bin_mids[agg_result$bin]
+
+  return(agg_result)
+}
+
+#' spatial_chi function
+#' 
+#' Calculate the spatial chi statistic for a given dataset
+#' and a quantile value.
+#' @param data_rain The rainfall data.
+#' @param dist_mat The distance matrix.
+#' @param q The quantile value.
+#' @param zeros Logical indicating whether to include zero values in the
+#'             calculation.
+#' @param nb_bins The number of bins to use for aggregation.
+#' @param bin_method The method to use for binning: "fixed" or "quantile".
+#' @return A data frame containing the spatial chi values by distance bins.
+#' @import dplyr
+#' @import tidyr
+#' @export
+spatial_chi <- function(data_rain, dist_mat, q, zeros = TRUE,
+                        nb_bins = 10, bin_method = "quantile") {
+  bin_method <- match.arg(bin_method)
+
+  chi_by_pair <- compute_all_pairs_chi(data_rain, dist_mat, q = q,
+                                       zeros = zeros)
+
+  agg_chi <- aggregate_chi_by_distance(chi_by_pair, nb_bins = nb_bins, 
+                                        method = bin_method)
+  chispa_df <- data.frame(lagspa = agg_chi$distance_mid,
+                     chi = agg_chi$chi)
+  return(chispa_df)
+}
+
 #' Calculate the spatial mean lags
 #'
 #' This function calculates the spatial mean lags based on a given radius.
@@ -390,7 +435,6 @@ spatial_mean_lags <- function(radius, mid = FALSE) {
   }
   return(h_vect)
 }
-
 
 
 #' Function to estimate the spatial extremogram
@@ -459,54 +503,6 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
   chispa_df <- data.frame(chi = chi_slag, lagspa = h_vect)
   return(chispa_df)
 }
-
-
-# spatial_chi <- function(rad_mat, data_rain, breaks, quantile, zeros = TRUE, mid = TRUE) {
-#   chi_slag <- numeric(0)
-#   q <- quantile
-  
-#   lags_inf <- breaks[-length(breaks)]
-#   lags_sup <- breaks[-1]
-#   h_vect <- if (mid) (lags_inf + lags_sup) / 2 else lags_sup
-
-#   for (i in seq_along(h_vect)) {
-#     cat(sprintf("h = %.2f\n", h_vect[i]))
-#     h_sup <- lags_sup[i]
-#     indices <- which(rad_mat == h_sup, arr.ind = TRUE)
-
-#     nb_pairs <- nrow(indices)
-#     cat(sprintf("nb pairs: %d\n", nb_pairs))
-
-#     if (nb_pairs == 0) {
-#       chi_slag <- c(chi_slag, NA)
-#     } else {
-#       chi_vals <- numeric(nb_pairs)
-
-#       for (j in seq_len(nb_pairs)) {
-#         s1 <- indices[j, 1]
-#         s2 <- indices[j, 2]
-#         rain_pair <- data_rain[, c(s1, s2), drop = FALSE]
-#         complete_idx <- complete.cases(rain_pair)
-
-#         if (!zeros) {
-#           nonzero_idx <- rowSums(rain_pair != 0, na.rm = TRUE) > 0
-#           complete_idx <- complete_idx & nonzero_idx
-#         }
-
-#         rain_cp <- rain_pair[complete_idx, , drop = FALSE]
-
-#         q_val <- if (length(q) > 1) q[s1, s2] else q
-#         chi_vals[j] <- get_chiq(rain_cp, q_val)
-#       }
-
-#       chi_mean <- mean(chi_vals, na.rm = TRUE)
-#       cat(sprintf("chi = %.4f\n", chi_mean))
-#       chi_slag <- c(chi_slag, chi_mean)
-#     }
-#   }
-
-#   data.frame(chi = chi_slag, lagspa = h_vect)
-# }
 
 
 #' Calculate spatial chi for all lags
@@ -655,7 +651,7 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
   # }
 
   # eta transformation
-  etachispa_df <- data.frame(chi = eta(chispa$chi),
+  etachispa_df <- data.frame(chi = zeta(chispa$chi),
                            lagspa = log(chispa$lagspa))
 
   if (weights == "residuals") {
@@ -715,19 +711,12 @@ get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
 #' @import stats
 #'
 #' @export
-eta <- function(chi) {
+zeta <- function(chi) {
   chi[chi <= 0] <- 1e-6 # to avoid log(0)
   stdnorm <- qnorm(1 - 0.5 * chi)
   chi <- 2 * log(stdnorm)
   return(chi)
 }
-
-# eta <- function(chi) {
-#   chi <- pmin(pmax(chi, 1e-6), 1 - 1e-6)  # clamp chi into (0,1)
-#   stdnorm <- qnorm(1 - 0.5 * chi)
-#   transformed <- 2 * log(stdnorm)
-#   return(transformed)
-# }
 
 
 #' Calculate the theorical spatio-temporal variogram
@@ -966,7 +955,7 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 # #' @export
 get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
   # eta transformation
-  etachispa_df <- data.frame(chi = eta(chispa$chi),
+  etachispa_df <- data.frame(chi = zeta(chispa$chi),
                            lagspa = log(chispa$lagspa / 1000)) # in km
 
   if (weights == "residuals") {

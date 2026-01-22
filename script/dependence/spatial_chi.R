@@ -174,7 +174,7 @@ alpha1 <- as.numeric(wlse_spa[[3]])
 signif_beta <- wlse_spa[[4]]
 signif_alpha <- wlse_spa[[5]]
 
-etachispa_df <- data.frame(chi = eta(chispa_df$chi),
+etachispa_df <- data.frame(chi = zeta(chispa_df$chi),
                            lagspa = log(chispa_df$lagspa))
 
 
@@ -182,7 +182,7 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
   btf_theme +
   geom_point(col = btfgreen, size = 4) +
   xlab(TeX(r"($\log(h)$)")) +
-  ylab(TeX(r"($\eta(\widehat{\chi}(h, 0))$)")) +
+  ylab(TeX(r"($\zeta(\widehat{\chi}(h, 0))$)")) +
   theme(axis.ticks = element_blank(),
         axis.line = element_blank(),
         panel.border = element_blank(),
@@ -226,7 +226,7 @@ for (q in quantiles) {
   
   # Add transformation
   etachispa_df <- data.frame(
-    chi = eta(chispa_df$chi),
+    chi = zeta(chispa_df$chi),
     lagspa = log(chispa_df$lagspa)
   )
   

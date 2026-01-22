@@ -152,7 +152,7 @@ for (q in quantiles) {
   df_chi_nz <- df_chi[-1, ]
   dftemp <- data.frame(
     lag = log(df_chi_nz$lag),
-    chi = eta(df_chi_nz$chi),
+    chi = zeta(df_chi_nz$chi),
     q = factor(q)
   )
   points_df <- rbind(points_df, dftemp)
@@ -220,7 +220,7 @@ for (q in quantiles) {
     alpha2 <- as.numeric(wlse_temp[[3]])
 
     df <- df_chi
-    dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+    dftemp <- data.frame(lag = log(df$lag), chi = zeta(df$chi))
 
     p <- ggplot(dftemp, aes(x = lag, y = chi)) +
             geom_point(color = btfgreen, size = 4) +
@@ -377,7 +377,7 @@ for (q in quantiles) {
   df_chi_nz <- df_chi[-1, ]
   dftemp <- data.frame(
     lag = log(df_chi_nz$lag),
-    chi = eta(df_chi_nz$chi),
+    chi = zeta(df_chi_nz$chi),
     q = factor(q)
   )
   points_df <- rbind(points_df, dftemp)
@@ -445,7 +445,7 @@ for (q in quantiles) {
     alpha2 <- as.numeric(wlse_temp[[3]])
 
     df <- df_chi
-    dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+    dftemp <- data.frame(lag = log(df$lag), chi = zeta(df$chi))
 
     p <- ggplot(dftemp, aes(x = lag, y = chi)) +
             geom_point(color = btfgreen, size = 4) +
@@ -599,7 +599,7 @@ for (q in quantiles) {
   df_chi_nz <- df_chi[-1, ]
   dftemp <- data.frame(
     lag = log(df_chi_nz$lag),
-    chi = eta(df_chi_nz$chi),
+    chi = zeta(df_chi_nz$chi),
     q = factor(q)
   )
   points_df <- rbind(points_df, dftemp)
@@ -667,7 +667,7 @@ for (q in quantiles) {
     alpha2 <- as.numeric(wlse_temp[[3]])
 
     df <- df_chi
-    dftemp <- data.frame(lag = log(df$lag), chi = eta(df$chi))
+    dftemp <- data.frame(lag = log(df$lag), chi = zeta(df$chi))
 
     p <- ggplot(dftemp, aes(x = lag, y = chi)) +
             geom_point(color = btfgreen, size = 4) +

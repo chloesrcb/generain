@@ -160,7 +160,7 @@ for (q_no0_spa in q_spa_vals) {
                                    zeros = FALSE)
 
   etachispa_df <- data.frame(
-    chi = eta(chispa_df$chi),
+    chi = zeta(chispa_df$chi),
     lagspa = log(chispa_df$lagspa)
   )
 
@@ -241,7 +241,7 @@ for (q_no0_temp in q_temp_vals) {
   
   dftemp <- data.frame(
     lag = log(df_chi_not0$lag),
-    chi = eta(df_chi_not0$chi)
+    chi = zeta(df_chi_not0$chi)
   )
 
   c2 <- as.numeric(temp_result[[1]])
