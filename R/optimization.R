@@ -742,7 +742,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
 
   m <- length(list_episodes)
   nll_composite <- 0
-  print(params)
+  # print(params)
 
   for (i in seq_len(m)) {
     excesses <- list_excesses[[i]]

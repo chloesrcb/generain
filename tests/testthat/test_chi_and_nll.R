@@ -2,9 +2,6 @@
 # Tests for theoretical_chi, neg_ll, neg_ll_composite, neg_ll_composite_fixed_eta
 # ======================================================================
 
-context("theoretical chi and likelihoods")
-
-# --- Small helper to build a minimal df_lags with columns required
 make_df_lags <- function(tau_vec = c(0, 1, 2),
                          s1x = 0, s1y = 0, s2x = 1, s2y = 0) {
   n <- length(tau_vec)
@@ -260,7 +257,6 @@ test_that("neg_ll_composite validates distance argument", {
 
 
 
-context("Advanced property-based tests for chi and likelihoods")
 
 # ----------------- Helpers -----------------
 make_df_lags <- function(tau_vec, s1x=0, s1y=0, s2x=1, s2y=0) {
@@ -470,8 +466,6 @@ test_that("fixed_eta wrapper reproduces composite when fixing both etas", {
   expect_equal(nll_free, nll_fixed, tolerance=1e-12)
 })
 
-# ================== Stress / edge cases ==================
-
 test_that("handles NAs in df_lags rows gracefully (excluded in sums)", {
   df_lags <- make_df_lags(tau_vec=c(0,1))
   df_lags$hnorm[2] <- NA_real_
@@ -483,7 +477,6 @@ test_that("handles NAs in df_lags rows gracefully (excluded in sums)", {
 })
 
 test_that("very small chi values are clipped -> finite nll", {
-  # Gros betas et lags => chi très petit, mais pas 0 grâce au clipping
   df_lags <- make_df_lags(tau_vec=c(10, 20), s2x=100, s2y=0)
   params <- c(50, 50, 1.5, 1.5, 0,0)
   exc <- make_excesses(2, kij=c(0,0), Tobs=c(10,10))
@@ -492,12 +485,6 @@ test_that("very small chi values are clipped -> finite nll", {
 })
 
 
-
-
-
-context("End-to-end optimization of neg_ll_composite")
-
-# --- Helpers to build synthetic lags and excesses -----------------------------
 
 make_random_df_lags <- function(n_rows, seed=1) {
   set.seed(seed)
@@ -562,7 +549,7 @@ test_that("optim on neg_ll_composite recovers parameters with wind (eta1,eta2)",
   start["eta1"] <- start["eta1"] * runif(1, 0.5, 1.5)
   start["eta2"] <- pmax(0.5, start["eta2"] * runif(1, 0.7, 1.3))
 
-  # NLL au départ
+  # NLL
   nll0 <- neg_ll_composite(start, list_episodes, list_excesses, list_lags,
                            wind_df=wind_df, rpar=TRUE, distance="euclidean")
 
