@@ -1,5 +1,7 @@
 # `generain` package
 
+## Purpose and model
+
 This R package implements a spatio-temporal stochastic model for extreme rainfall using
 EGPD marginals and r-Pareto processes, while incorporating advection effects.
 
@@ -8,6 +10,10 @@ EGPD marginals and r-Pareto processes, while incorporating advection effects.
   <em>Simulated extreme rainfall episode using the proposed spatio-temporal model.</em>
 </p>
 
+The proposed framework combines:
+- **EGPD marginals** for extreme rainfall intensities,
+- **r-Pareto processes** to model extreme spatio-temporal dependence structure,
+- **advection effects** to account for rain storm displacement
 
 ## Installation
 
