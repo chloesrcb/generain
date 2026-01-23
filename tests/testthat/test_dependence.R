@@ -176,7 +176,6 @@ test_that("chispatemp_empirical returns chiemp = 1 for identical series", {
 
 ### Test the `chispatemp_empirical` function -----------------------------------
 
-# Example simple data
 set.seed(123)
 data_rain <- data.frame(
   site1 = rexp(100),
@@ -197,7 +196,6 @@ test_that("Test temporal_chi without lag", {
   chi_nolag <- chi_temp[, 1]
   expect_true(all(chi_nolag == 1 | is.na(chi_nolag)))
 
-  # Petite aide pour reproduire exactement temporal_chi()
   chi_expected <- function(x, q, lag) {
     r <- rank(x) / (length(x) + 1)
     denom <- sum(r > q)
@@ -215,7 +213,7 @@ test_that("Test temporal_chi without lag", {
   chival <- chi_expected(data_rain$site1, quantile, 5)
   expect_equal(chi_temp[1, 6], chival, tolerance = 1e-6)
 
-  # Test 4: site3, lag 5 (utiliser bien site3 pour le dénominateur)
+  # Test 4: site3, lag 5
   chival <- chi_expected(data_rain$site3, quantile, 5)
   expect_equal(chi_temp[3, 6], chival, tolerance = 1e-6)
 })
