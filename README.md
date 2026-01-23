@@ -11,6 +11,7 @@ EGPD marginals and r-Pareto processes, while incorporating advection effects.
 </p>
 
 The proposed framework combines:
+
 - **EGPD marginals** for extreme rainfall intensities,
 - **r-Pareto processes** to model extreme spatio-temporal dependence structure,
 - **advection effects** to account for rain storm displacement
