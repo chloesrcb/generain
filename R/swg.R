@@ -64,42 +64,20 @@ qEGPD_full <- function(v, p0, xi, sigma, kappa) {
 #' @param u threshold in the latent space
 #' @return numeric vector of transformed variables
 #' @export
-G_std <- function(z, p0, u) {
-  v <- numeric(length(z))
-  v[] <- NA_real_
+G_std <- function(z, p0) {
   z <- as.numeric(z)
+  v <- numeric(length(z))
   x0 <- 2 / (1 - p0)
-  
-  # z < 0
-  idx_neg <- which(z < 0)
-  if (length(idx_neg)) v[idx_neg] <- 0
-  
-  # 0 <= z <= x0 : G(z) = p0 + a*z
-  a <- (1 - p0)^2 / 4
-  idx1 <- which(z >= 0 & z <= x0)
-  if (length(idx1)) v[idx1] <- p0 + a * z[idx1]
-  
-  # x0 < z <= u : linear interpolation between v_x0 and 1 - 1/u
-  idx2 <- which(z > x0 & z <= u)
-  if (length(idx2)) {
-    v_x0 <- p0 + a * x0   # = (1 + p0)/2
-    v_u  <- 1 - 1 / u
-    # if u == x0 then no interval; treat numerically
-    if (abs(u - x0) < .Machine$double.eps) {
-      v[idx2] <- v_u
-    } else {
-      slope2 <- (v_u - v_x0) / (u - x0)
-      v[idx2] <- v_x0 + slope2 * (z[idx2] - x0)
-    }
-  }
-  
-  # region z > u : tail
-  idx3 <- which(z > u)
-  if (length(idx3)) v[idx3] <- 1 - 1 / z[idx3]
-  
-  # clamps numeriques
-  v <- pmin(pmax(v, 1e-12), 1 - 1e-12)
-  return(v)
+  a  <- (1 - p0)^2 / 4
+
+  v[z < 0]  <- 0
+  v[z == 0] <- p0
+  idx1 <- (z > 0 & z < x0)
+  v[idx1] <- p0 + a * z[idx1]
+  idx2 <- (z >= x0)
+  v[idx2] <- 1 - 1 / z[idx2]
+
+  pmin(pmax(v, 1e-12), 1 - 1e-12)
 }
 
 
@@ -112,36 +90,20 @@ G_std <- function(z, p0, u) {
 #' @param u threshold in the latent space
 #' @return numeric vector of latent variables
 #' @export
-G_std_inv <- function(v, p0, u) {
+G_std_inv <- function(v, p0) {
   v <- pmin(pmax(v, 1e-12), 1 - 1e-12)
   z <- numeric(length(v))
   x0 <- 2 / (1 - p0)
-  a <- (1 - p0)^2 / 4
-  v_x0 <- p0 + a * x0  # = (1 + p0)/2
-  v_switch <- 1 - 1 / u
-  
-  z[v <= 0] <- -Inf
-  
-  idx_mass0 <- which(v > 0 & v <= p0)
-  if (length(idx_mass0)) z[idx_mass0] <- 0
-  
-  idx_low <- which(v > p0 & v <= v_x0)
-  if (length(idx_low)) z[idx_low] <- (v[idx_low] - p0) / a
-  
-  idx_mid <- which(v > v_x0 & v <= v_switch)
-  if (length(idx_mid)) {
-    if (abs(u - x0) < .Machine$double.eps) {
-      z[idx_mid] <- u
-    } else {
-      slope2 <- (v_switch - v_x0) / (u - x0)
-      z[idx_mid] <- x0 + (v[idx_mid] - v_x0) / slope2
-    }
-  }
-  
-  idx_high <- which(v > v_switch)
-  if (length(idx_high)) z[idx_high] <- 1 / (1 - v[idx_high])
-  
-  return(z)
+  a  <- (1 - p0)^2 / 4
+  v_x0 <- p0 + a * x0  # = (1+p0)/2
+
+  z[v <= 0]       <- -Inf
+  z[v <= p0]      <- 0
+  idx1 <- (v > p0 & v <= v_x0)
+  z[idx1] <- (v[idx1] - p0) / a
+  idx2 <- (v > v_x0)
+  z[idx2] <- 1 / (1 - v[idx2])
+  z
 }
 
 
@@ -164,7 +126,7 @@ G_std_inv <- function(v, p0, u) {
 #' @export
 sim_episode_coords <- function(params_vario, params_margins,
                                coords, times, adv, t0, s0,
-                               u, u_emp,
+                               u_emp,
                                plot_debug = FALSE, filename = NULL) {
   idx_s0 <- which(names(params_margins$p0) == s0)
   p0_s0 <- params_margins$p0[idx_s0]
@@ -178,8 +140,24 @@ sim_episode_coords <- function(params_vario, params_margins,
                       sigma = sigma_s0,
                       kappa = kappa_s0)
   # latent threshold
-  u <- G_std_inv(x_s0, p0 = p0_s0, u = u)
+  u <- G_std_inv(x_s0, p0 = p0_s0) # large u
   s0_index <- which(rownames(coords) == s0)
+
+  site_names <- rownames(coords)
+
+  u_latent_by_site <- setNames(numeric(length(site_names)), site_names)
+
+  for (s in site_names) {
+    idx_site <- which(names(params_margins$p0) == s)
+    p0    <- params_margins$p0[idx_site]
+    xi    <- params_margins$xi[idx_site]
+    sigma <- params_margins$sigma[idx_site]
+    kappa <- params_margins$kappa[idx_site]
+    u_emp_site <- u_emp
+    v_u <- pEGPD_full(u_emp_site, p0, xi, sigma, kappa)
+    u_latent_by_site[s] <- G_std_inv(v_u, p0 = p0)
+  }
+
   # simulate r-Pareto process
   sim <- sim_rpareto_coords(
     beta1 = params_vario$beta1,
@@ -195,6 +173,11 @@ sim_episode_coords <- function(params_vario, params_margins,
   )
   
   Z <- sim$Z # latent r-Pareto processs
+
+  # check excess Z at s0
+  # Z_s0 <- Z[s0_index, t0 + 1]
+  # Z_s0 > u  # should be TRUE
+
   nS <- nrow(coords)
   nT <- length(times)
   
@@ -202,18 +185,21 @@ sim_episode_coords <- function(params_vario, params_margins,
   V <- matrix(NA_real_, nS, nT, dimnames = list(rownames(coords), NULL))
   for (k in seq_len(nS)) {
     # marginal parameters for site k
-    p0    <- params_margins$p0[k]
-    xi    <- params_margins$xi[k]
-    sigma <- params_margins$sigma[k]
-    kappa <- params_margins$kappa[k]
+    id_k  <- which(names(params_margins$p0) == rownames(coords)[k])
+    p0    <- params_margins$p0[id_k]
+    xi    <- params_margins$xi[id_k]
+    sigma <- params_margins$sigma[id_k]
+    kappa <- params_margins$kappa[id_k]
 
     Zk <- Z[k, ] # site k time series
-    
-    # transformed to uniform scale
-    V[k, ] <- G_std(Zk, p0 = p0, u = u)
-
-    # Final rainfall values
+    V[k, ] <- G_std(Zk, p0 = p0)
     X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
+
+    # # transformed to uniform scale
+    # V[k, ] <- G_std(Zk, p0 = p0, u = u)
+
+    # # Final rainfall values
+    # X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
 
   }
 
@@ -222,14 +208,14 @@ sim_episode_coords <- function(params_vario, params_margins,
       if(is.null(filename)) {
         filename <- "plot_transformation_"
       } 
-      plot_transformation_gg(Z, X, u, site_name = s, save_plot = TRUE,
+      plot_transformation_gg(Z, X, u_latent_by_site, site_name = s, save_plot = TRUE,
               filename = paste0(im_folder, "swg/omsev/", filename, s, ".png"))
     }
   }
   
-  return(list(Z = Z, X = X, u_latent = u))
-}
+  return(list(Z = t(Z), X = t(X), u_latent = u_latent_by_site, R = sim$R))
 
+}
 
 
 #' compute_p0_episode
@@ -255,6 +241,8 @@ compute_p0_episode <- function(episode) {
 
   return(out)
 }
+
+
 
 #' compute_p0_all_episodes
 #' 
@@ -291,7 +279,7 @@ compute_p0_all_episodes <- function(list_episodes) {
 #' @param plot_debug whether to plot debug information
 #' @return list of simulated episodes
 #' @export
-simulate_many_episodes <- function(N, u, u_emp, params_vario, params_margins,
+simulate_many_episodes <- function(N, u_emp, params_vario, params_margins,
                                    coords, times, adv, t0, s0, plot_debug = FALSE) {
   sims <- vector("list", N)
   for (i in seq_len(N)) {
@@ -305,11 +293,11 @@ simulate_many_episodes <- function(N, u, u_emp, params_vario, params_margins,
       adv            = adv,
       t0             = t0,
       s0             = s0,
-      u              = u,
       u_emp           = u_emp,
       plot_debug     = FALSE
     )
     sims[[i]] <- Xsim
+
   }
   return(sims)
 }
@@ -334,7 +322,7 @@ simulate_many_episodes <- function(N, u, u_emp, params_vario, params_margins,
 #' @export
 sim_episode_grid <- function(params_vario, params_margins_common,
                         coords, times, adv, t0, s0_pixel_id,
-                        u, u_emp,
+                         u_emp,
                         plot_debug = FALSE, filename = NULL) {
 
   s0_coords <- as.numeric(coords[rownames(coords) == s0_pixel_id, ])
@@ -344,7 +332,7 @@ sim_episode_grid <- function(params_vario, params_margins_common,
                      xi    = params_margins_common$xi,
                      sigma = params_margins_common$sigma,
                      kappa = params_margins_common$kappa)
-  u <- G_std_inv(x_s0, p0 = params_margins_common$p0, u = u)
+  u <- G_std_inv(x_s0, p0 = params_margins_common$p0) # large u
   s0_index <- which(rownames(coords) == s0_pixel_id)
 
   sim <- sim_rpareto_coords(
@@ -369,7 +357,7 @@ sim_episode_grid <- function(params_vario, params_margins_common,
 
   for (k in seq_len(nS)) {
     Zk <- Z[k, ]
-    V[k, ] <- G_std(Zk, p0 = params_margins_common$p0, u = u)
+    V[k, ] <- G_std(Zk, p0 = params_margins_common$p0)
     X[k, ] <- qEGPD_full(V[k, ],
                          p0    = params_margins_common$p0,
                          xi    = params_margins_common$xi,
@@ -529,6 +517,35 @@ plot_th_emp_chi <- function(list_lags,
 }
 
 
+
+compute_group_chi <- function(list_lags,
+                              list_excesses,
+                              wind_df,
+                              params,
+                              tau_min = 0,
+                              tau_fixed = 0,
+                              h_breaks = seq(0, 10, by = 1),
+                              latlon = FALSE,
+                              adv_transform = TRUE) {
+  plot_th_emp_chi(
+    list_lags = list_lags,
+    list_excesses = list_excesses,
+    list_adv = wind_df,
+    params_estimates = params,
+    tau_min = tau_min,
+    tau_fixed = tau_fixed,
+    h_breaks = h_breaks,
+    latlon = latlon,
+    adv_transform = adv_transform
+  )
+}
+
+summary_correlation <- function(res_cmp) {
+  cor(res_cmp$chi_emp_bar, res_cmp$chi_theo_bar,
+      use = "complete.obs", method = "spearman")
+}
+
+
 #' plot_transformation_gg
 #' 
 #' Plot the transformation from latent Z to observed X for a given site
@@ -604,43 +621,23 @@ sum_over_time_by_site <- function(ep_mat, sites_ref) {
   x <- as.matrix(ep_mat) 
   if (!is.null(colnames(x)) && all(colnames(x) %in% sites_ref)) { 
     # time x site 
-    s <- colSums(x, na.rm = TRUE) 
+    s <- colSums(x, na.rm = FALSE) 
     return(s) 
   } 
   if (!is.null(rownames(x)) && all(rownames(x) %in% sites_ref)) { 
     # site x time 
-    s <- rowSums(x, na.rm = TRUE) 
+    s <- rowSums(x, na.rm = FALSE) 
     return(s) 
   } 
   if (ncol(x) == length(sites_ref)) { 
-      s <- colSums(x, na.rm = TRUE) 
+      s <- colSums(x, na.rm = FALSE) 
       names(s) <- sites_ref
    } else if (nrow(x) == length(sites_ref)) { 
-    s <- rowSums(x, na.rm = TRUE) 
+    s <- rowSums(x, na.rm = FALSE) 
     names(s) <- sites_ref 
     } 
   return(s) 
 } 
-  
-# sum_over_time_by_site <- function(ep_mat, sites_ref) {
-
-#   x <- as.matrix(ep_mat)
-
-#   # ensure orientation: time x site
-#   if (ncol(x) != length(sites_ref) && nrow(x) == length(sites_ref)) {
-#     x <- t(x)
-#   }
-
-#   stopifnot(ncol(x) == length(sites_ref))
-
-#   apply(x, 2, function(v) {
-#     if (all(is.na(v))) {
-#       NA_real_
-#     } else {
-#       sum(v, na.rm = TRUE)
-#     }
-#   }) |> setNames(sites_ref)
-# }
 
 
 #' make_qq_df
@@ -651,7 +648,7 @@ sum_over_time_by_site <- function(ep_mat, sites_ref) {
 #' @param min_n minimum number of values required to create the QQ data frame
 #' @return data frame with quantiles of observed and simulated values
 #' @export
-make_qq_df <- function(x_obs, x_sim, min_n = 50) { 
+make_qq_df <- function(x_obs, x_sim, min_n = 10) { 
   x_obs <- x_obs[is.finite(x_obs)] 
   x_sim <- x_sim[is.finite(x_sim)] 
   n <- min(length(x_obs), length(x_sim)) 

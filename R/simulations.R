@@ -665,8 +665,6 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
 }
 
 
-
-
 #' sim_rpareto_coords function
 #' This function simulates a spatio-temporal r-Pareto process using a
 #' fractional Brownian motion model on given coordinates grid, regular or not.
@@ -711,7 +709,6 @@ sim_rpareto_coords <- function(coords, times,
 
   # Conditioning point
   ind0 <- which(grid$site == s0_index & grid$it == t0_index)
-  stopifnot(length(ind0) == 1)
 
   x0s <- x_shift[ind0]
   y0s <- y_shift[ind0]
@@ -748,12 +745,12 @@ sim_rpareto_coords <- function(coords, times,
   # r-Pareto transform
   W0 <- W_mat[s0_index, t0_index]
   Y  <- exp(W_mat - W0 - gamma0)
-  R  <- 1 / runif(1) # Pareto(1)
-
+  # R  <- 1 / runif(1) # Pareto(1)
+  R = evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
   Z <- threshold * R * Y
   rownames(Z) <- rownames(coords)
 
-  list(Z = Z, W = W_mat, gamma0 = gamma0)
+  list(Z = Z, W = W_mat, gamma0 = gamma0, R = R)
 }
 
 
