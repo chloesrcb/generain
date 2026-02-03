@@ -60,7 +60,7 @@ df_dist <- reshape_distances(dist_mat)
 rain <- rain[, !(colnames(rain) %in% c("cines", "hydro", "brives"))]
 location_gauges <- location_gauges[location_gauges$Station != "cines" &
                                    location_gauges$Station != "hydro" &
-                                   location_gauges$Station != "brives" , ]
+                                   location_gauges$Station != "brives", ]
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
 
@@ -82,6 +82,10 @@ rownames(grid_coords_km) <- rownames(sites_coords)
 # VARIOGRAM --------------------------------------------------------------------
 ################################################################################
 
+# keep rain rows with at least 50% non NA
+rain_complete <- rain[rowSums(is.na(rain)) <= (ncol(rain) / 2), ]
+head(rain_complete)
+rain <- rain_complete
 # in rain remove when all data are NA
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
 
@@ -233,6 +237,8 @@ colnames(V_episodes) <- c("vx", "vy")
 # remove NA
 V_episodes <- V_episodes[!is.na(V_episodes$vx) & !is.na(V_episodes$vy), ]
 
+# max of advection
+max_adv <- max(sqrt(V_episodes$vx^2 + V_episodes$vy^2))
 # number of 0 adv
 n_zero_adv <- sum(V_episodes$vx == 0 & V_episodes$vy == 0)
 cat("Number of episodes with zero advection:", n_zero_adv, "\n")
