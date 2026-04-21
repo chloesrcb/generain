@@ -116,7 +116,7 @@ G_std_inv <- function(v, p0) {
 #' @param coords matrix of coordinates (sites x 2)
 #' @param times vector of times
 #' @param adv vector of advection (vx, vy)
-#' @param t0 time index of the event origin
+#' @param t0 time of the event origin
 #' @param s0 site name of the event origin
 #' @param u threshold in the latent space
 #' @param u_emp empirical threshold in the observed space
@@ -128,6 +128,9 @@ sim_episode_coords <- function(params_vario, params_margins,
                                coords, times, adv, t0, s0,
                                u_emp,
                                plot_debug = FALSE, filename = NULL) {
+  site_names <- rownames(coords)
+
+  # get marginal parameters for s0
   idx_s0 <- which(names(params_margins$p0) == s0)
   p0_s0 <- params_margins$p0[idx_s0]
   xi_s0 <- params_margins$xi[idx_s0]
@@ -142,8 +145,8 @@ sim_episode_coords <- function(params_vario, params_margins,
   # latent threshold
   u <- G_std_inv(x_s0, p0 = p0_s0) # large u
   s0_index <- which(rownames(coords) == s0)
-
-  site_names <- rownames(coords)
+  s0_name <- rownames(coords)[s0_index]
+  # site_names <- rownames(coords)
 
   u_latent_by_site <- setNames(numeric(length(site_names)), site_names)
 
@@ -158,6 +161,8 @@ sim_episode_coords <- function(params_vario, params_margins,
     u_latent_by_site[s] <- G_std_inv(v_u, p0 = p0)
   }
 
+  # coords_df <- as.data.frame(coords)
+  # coords_df$site <- rownames(coords_df)
   # simulate r-Pareto process
   sim <- sim_rpareto_coords(
     beta1 = params_vario$beta1,
@@ -165,18 +170,19 @@ sim_episode_coords <- function(params_vario, params_margins,
     alpha1 = params_vario$alpha1,
     alpha2 = params_vario$alpha2,
     adv    = adv,
-    coords = coords,
-    times      = times,
+    coords =  coords,
+    t      = times, # in hours
     t0_index     = t0 + 1,
-    s0_index     = s0_index,
+    s0_index    = s0_index,
     threshold = u
   )
   
+  # number of Z >u
   Z <- sim$Z # latent r-Pareto processs
 
   # check excess Z at s0
-  # Z_s0 <- Z[s0_index, t0 + 1]
-  # Z_s0 > u  # should be TRUE
+  Z_s0 <- Z[s0_index, t0 + 1]
+  Z_s0 > u  # should be TRUE
 
   nS <- nrow(coords)
   nT <- length(times)
@@ -195,28 +201,16 @@ sim_episode_coords <- function(params_vario, params_margins,
     V[k, ] <- G_std(Zk, p0 = p0)
     X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
 
-    # # transformed to uniform scale
-    # V[k, ] <- G_std(Zk, p0 = p0, u = u)
-
-    # # Final rainfall values
-    # X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
-
   }
-
-  if (plot_debug) {
-    for (s in rownames(Z)) {
-      if(is.null(filename)) {
-        filename <- "plot_transformation_"
-      } 
-      plot_transformation_gg(Z, X, u_latent_by_site, site_name = s, save_plot = TRUE,
-              filename = paste0(im_folder, "swg/omsev/", filename, s, ".png"))
-    }
-  }
-  
   return(list(Z = t(Z), X = t(X), u_latent = u_latent_by_site, R = sim$R))
 
 }
 
+  # # transformed to uniform scale
+    # V[k, ] <- G_std(Zk, p0 = p0, u = u)
+
+    # # Final rainfall values
+    # X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
 
 #' compute_p0_episode
 #' 

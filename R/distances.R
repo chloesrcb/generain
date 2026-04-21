@@ -132,7 +132,7 @@ get_h_vect <- function(dist, hmax = NA, intervals = FALSE) {
   # get unique distances
   if (intervals) {
     dist_int <- na.omit(as.vector(dist))
-    h_vect <- unique(dist_int)
+    h_vect <- sort(unique(dist_int))
   } else {
     h_vect <- sort(dist$value)
     h_vect <- unique(h_vect)

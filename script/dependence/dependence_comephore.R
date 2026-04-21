@@ -1,6 +1,6 @@
 
 # load libraries
-source("load_libraries.R")
+source("./script/load_libraries.R")
 library(units)
 
 # load global functions
@@ -78,7 +78,7 @@ chimat_dt_mean <- chimat_dt_mean[-1]
 
 # plot mean chi
 df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "residuals")
 
 c2 <- as.numeric(wlse_temp[[1]])
 beta2 <- as.numeric(wlse_temp[[2]])
@@ -100,7 +100,7 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
 chitemp_eta_estim
 
 df_chi <- data.frame(lag = c(1:tmax), chi = chimat_dt_mean)
-wlse_temp <- get_estimate_variotemp(df_chi, weights = "exp", summary = TRUE)
+wlse_temp <- get_estimate_variotemp(df_chi, weights = "residuals")
 
 c2 <- as.numeric(wlse_temp[[1]])
 beta2 <- as.numeric(wlse_temp[[2]])

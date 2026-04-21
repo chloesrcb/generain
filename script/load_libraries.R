@@ -65,7 +65,9 @@ btf_theme <- theme_minimal() +
         axis.text = element_blank(),  # Remove axis text
         axis.ticks = element_blank(),  # Remove axis ticks
         plot.background = element_rect(fill = "transparent", color = NA),
-        panel.grid = element_line(color = "#5c595943"))
+        panel.grid = element_line(color = "#5c595943"),
+        legend.text = element_text(size = 13),
+        legend.title = element_text(size = 15)) # legend size
 
 btf_boxplot_theme <- btf_theme +
   theme(

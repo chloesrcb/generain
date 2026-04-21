@@ -34,14 +34,15 @@ geom_split_violin <- function(mapping = NULL, data = NULL, stat = "ydensity",
 ################################################################################
 # Simulations
 ################################################################################
-grid_omsev <- grid_coords_km
+grid_omsev <- grid_coords_m
 adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
-Nsim <- 100
+Nsim <- length(list_episodes)
 s0_sim <- integer(Nsim)
 sims_all <- vector("list", Nsim)
 adv_sim <- matrix(0, nrow = Nsim, ncol = 2)
 for (i in seq_len(Nsim)) {
-  idx <- sample(seq_along(list_episodes), 1)
+  # idx <- sample(seq_along(list_episodes), 1)
+  idx <- i
   s0_i <- s0_list[idx]
   s0_sim[i] <- s0_i
   u_i <- u_list[idx]
@@ -49,100 +50,145 @@ for (i in seq_len(Nsim)) {
   adv_sim[i, ] <- adv_i
   sims_all[[i]] <- simulate_many_episodes(
     N = 1,
-    u = 1000,
     u_emp = u_i,
-    params_vario = params_kmh,
+    params_vario = params_m5min,
     params_margins = params_margins,
     coords = grid_omsev, # km
-    times = times * 5 / 60,  # in hours
+    times = times,  # in hours
     adv = adv_i,
     t0 = 0,
     s0 = s0_i
   )[[1]]
 }
 
+
+
+
 Xsim_all <- do.call(cbind, lapply(sims_all, function(sim) sim$X))
-site <- rownames(sims_all[[1]]$X)[4]
-lt <- ncol(sims_all[[1]]$X)
+# q <- c(0.1,0.25,0.5,0.75,0.9,0.95,0.99)
+# apply_measurement <- function(x, p) {
+#   x[x < 1e-4] <- 0
+#   x[x > 0 & x < p] <- p
+#   x
+# }
 
-Xsim_site <- do.call(rbind, lapply(sims_all, function(sim) as.numeric(sim$X[site, ])))
+# Qobs <- quantile(Xobs_site[Xobs_site>0], q, na.rm=TRUE)
+# Qsim <- quantile(Xsim_site[Xsim_site>0.06], q, na.rm=TRUE)
+# Xsim_meas <- apply_measurement(Xsim_site, p = 0.2152)
+# Xsim_pos <-  Xsim_meas[Xsim_meas > 0.001]
+# Qsim_m <- quantile(Xsim_pos, q, na.rm=TRUE)
 
-Xobs_site <- do.call(rbind, lapply(list_episodes, function(ep) as.numeric(ep[, site])))
+# cbind(q=q, obs=Qobs, sim=Qsim, sim_measured=Qsim_m,
+#       diff_before=Qsim-Qobs, diff_after=Qsim_m-Qobs)
+apply_measurement <- function(x, p) {
+  # x[x < 1e-4] <- 0
+  x[x > 0 & x < p] <- p
+  x
+}
 
-df <- data.frame(
-  value = c(Xobs_site, Xsim_site),
-  type = rep(c("Observed episodes", "Simulated episodes"))
-) %>%
-  filter(is.finite(value) & value > 0.2) %>%
-  mutate(yplot = value)
+apply_disc <- function(x, p) {
+  x[x < 1e-4] <- 0
+  x[x > 0 & x < p] <- p
+  x[x > p & x < 2*p] <- 2*p
+  x
+}
 
-ggplot(df, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 0.7, trim = FALSE, color = NA) +
-  labs(x = "", y = "Rain") +
-  theme_minimal() + btf_theme +
-  theme(legend.position = "none")
+site_names <- colnames(sims_all[[1]]$X)
 
-df_log <- data.frame(
-  value = c(Xobs_site, Xsim_site),
-  type = rep(c("Observed episodes", "Simulated episodes"))
-) %>%
-  filter(is.finite(value) & value > 0.1) %>%
-  mutate(yplot = log1p(value))
+for (site in site_names) {
+  # sim <- sims_all[[1]]
+  Xsim_site <- unlist(lapply(sims_all, function(sim) as.numeric(sim$X[, site])))
+  Xobs_site <- unlist(lapply(list_episodes, function(ep) as.numeric(ep[, site])))
+  Xobs_site <- Xobs_site[!is.na(Xobs_site)]
+  xr <- range(c(Xobs_site, Xsim_site), finite = TRUE)
+  dens     <- density(Xobs_site, from = xr[1], to = xr[2], na.rm = TRUE)
+  dens_sim <- density(Xsim_site, from = xr[1], to = xr[2], na.rm = TRUE)
 
-ggplot(df_log, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 0.7, trim = FALSE, color = NA) +
-  labs(x = "", y = "log(1 + rain)") +
-  theme_minimal() + btf_theme +
-  theme(legend.position = "none")
+  Xobs_site <- Xobs_site[Xobs_site > 0]
+  p <- min(Xobs_site[Xobs_site > 0])
+  # # put all values between 0 and 0.001 to 0 
+  # Xsim_site[Xsim_site < 0.1] <- 0
+  # and all values between 0.001 and 0.2 to 0.2
+  # Xsim_site[Xsim_site >= 0.001 & Xsim_site < p] <- p
+  Xsim_site <- Xsim_site[Xsim_site >  1e-3]
+
+  Xsim_meas <- apply_disc(Xsim_site, p = 0.2152)
+  Xsim_meas <- Xsim_site
+  Xobs_meas <- Xobs_site
+
+  # éventuellement retirer les 0 pour comparer les positives
+  Xsim_site <- Xsim_meas[Xsim_meas > 0]
+  Xobs_site <- Xobs_meas[Xobs_meas > 0]
 
 
-sites <- rownames(sims_all[[1]]$X)
-lt <- ncol(sims_all[[1]]$X)
-
-Xsim_all <- lapply(sims_all, function(sim) sim$X)
-
-sites <- rownames(sims_all[[1]]$X)
-sites_plot <- sites_names[13:17]  # sites to plot
-
-df_all <- do.call(rbind, lapply(sites_plot, function(site) {
-
-  Xobs_site <- unlist(lapply(list_episodes, function(ep) ep[, site]))
-  Xobs_site <- Xobs_site[is.finite(Xobs_site)]
-
-  Xsim_site <- unlist(lapply(sims_all, function(sim) sim$X[site, ]))
-  Xsim_site <- Xsim_site[is.finite(Xsim_site)]
-
-  data.frame(
-    site  = site,
-    value = c(Xobs_site, Xsim_site),
-    type  = rep(c("Observed", "Simulated"))
+  config <- "above0_simdisc_p02152"
+  df <- rbind(
+    data.frame(type = "Observed episodes", value = Xobs_site),
+    data.frame(type = "Simulated episodes", value = Xsim_site)
   )
-}))
+  bw_common <- bw.nrd0(df$value)
+
+  # psite <- ggplot(df, aes(x = type, y = value, fill = type)) +
+  #   geom_violin(alpha = 0.7, trim = F, scale = "width",
+  #               bw = bw_common) +
+  #   labs(x = "", y = "Rainfall (mm/5min)") +
+  #   theme_minimal() + btf_theme +
+  #   theme(legend.position = "none") 
+
+  # # save plot
+  # ggsave(paste0(im_folder, "swg/omsev/margins/violin_all", site, ".png"), psite, width = 6, height = 4)
+  df_log <- df %>% mutate(yplot = log1p(value))
+  # df_log <- df_log[df_log$yplot > 0,]
+  psite_log <- ggplot(df_log, aes(x = type, y = yplot, fill = type)) +
+    geom_violin(alpha = 0.7, trim = F, color = NA, bw = bw_common, scale = "width", bounds= c(0, Inf)) +
+    labs(x = "", y = "log(1 + X)") +
+    # scale_y_log10() +
+    theme_minimal() + btf_theme +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme(legend.position = "none")
+  
+  # save plot
+  folder_site <- paste0(im_folder, "swg/omsev/margins/", config, "/")
+  if (!dir.exists(folder_site)) {
+    dir.create(folder_site, recursive = TRUE)
+  }
+  ggsave(paste0(folder_site, "violin_log_", config, "_", site, ".png"), psite_log, width = 6, height = 4)
+}
 
 
-df_all <- df_all %>%
-  filter(is.finite(value) & value > 0.22) %>%
-  mutate(yplot = value)
 
-# Plot
-ggplot(df_all, aes(x = type, y = yplot, fill = type)) +
-  geom_violin(alpha = 1, trim = FALSE, color = NA) +
-  facet_wrap(~site, scales = "free_y", ncol = 3) +
-  labs(
-    x = "", y = "Rainfall (mm/5min)"
-  ) +
+# remove episode with more than 80% of active sites ie less than 20% of NA
+list_episodes_filtered <- list_episodes[sapply(list_episodes, function(ep) mean(is.na(ep)) < 0.8)]
+length(list_episodes_filtered) # 17 episodes left
+
+
+cum_obs <- sapply(list_episodes_filtered, function(ep) sum(ep, na.rm = TRUE))
+cum_sim <- sapply(sims_all, function(sim) sum(sim$X, na.rm = TRUE))
+
+dens_cum_obs <- density(cum_obs, from = 0, to = max(cum_obs), na.rm = TRUE)
+dens_cum_sim <- density(cum_sim, from = 0, to = max(cum_sim), na.rm = TRUE)
+plot(dens_cum_obs, main = "Cumulative rainfall distribution", xlab = "Cumulative rainfall (mm)", ylab = "Density", col = "blue")
+lines(dens_cum_sim, add = TRUE, col = "red")
+
+
+dens_cum_obs$y <- dens_cum_obs$y / max(dens_cum_obs$y)
+dens_cum_sim$y <- dens_cum_sim$y / max(dens_cum_sim$y)
+
+plot(dens_cum_obs, col = "blue",
+     main = "Normalized cumulative rainfall distribution",
+     xlab = "Cumulative rainfall (mm)", ylab = "Relative density")
+lines(dens_cum_sim, col = "red")
+legend("topright", legend = c("Observed", "Simulated"),
+       col = c("blue", "red"), lwd = 2)
+
+# plot cumulative distribution
+df_cum <- rbind(
+  data.frame(type = "Observed episodes", cumul = cum_obs),
+  data.frame(type = "Simulated episodes", cumul = cum_sim)
+)
+
+ggplot(df_cum, aes(x = type, y = cumul, fill = type)) +
+  geom_violin(alpha = 0.7, trim = FALSE) +
+  labs(x = "", y = "Total cumulative rainfall (mm)") +
   theme_minimal() + btf_theme +
   theme(legend.position = "none")
-
-ggsave(
-  filename = paste0(
-    foldername_plot,
-    "marginal_distributions_observed_vs_simulated_episodes_",
-    "_n", Nsim, "_3",
-    ".png"
-  ),
-  plot = last_plot(),
-  width = 10,
-  height = 8,
-  dpi = 300
-)

@@ -176,7 +176,7 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
 #' @return The computed RMSE value.
 #' @import mev
 #' @export
-compute_rmse <- function(y, left_censore) {
+compute_rmse <- function(y, left_censore, bound_kappa = c(0, 5), bound_sigma = c(0.001, Inf)) {
   inits <- init_values(y, 0)
   sigma_0 <- inits[1]
   xi_0 <- inits[2]
@@ -191,13 +191,16 @@ compute_rmse <- function(y, left_censore) {
   if (is.null(fit)) return(Inf)
 
   param <- fit$fit$mle
+  # bound for param if there are above penalized the RMSE
+  if (param[1] < bound_kappa[1] || param[1] > bound_kappa[2] || param[2] < bound_sigma[1] || param[2] > bound_sigma[2]) {
+    return(Inf)
+  }
   probs <- ppoints(length(y))
   q_theo <- qextgp(probs, type = 1, kappa = param[1], sigma = param[2], xi = param[3])
   q_emp <- sort(y)
 
   sqrt(mean((q_emp - q_theo)^2))
 }
-
 
 #' process_site function
 #' This function fits the Extreme Generalized Pareto Distribution (EGPD)
@@ -231,7 +234,7 @@ process_site <- function(y, site_name,
   fit <- fit.extgp(y, model = 1, method = "mle",
                    init = c(1, inits[1], inits[2]),
                    censoring = c(best_cens, Inf),
-                   plots = FALSE, confint = FALSE, ncpus = 7, R = R)
+                   plots = F, confint = F, ncpus = 7, R = R)
 
   param_mle <- fit$fit$mle
   kappa <- param_mle[1]
@@ -293,7 +296,8 @@ process_site <- function(y, site_name,
     theme(
         panel.grid.major = element_line(color = "#d6d1d1"),
         panel.grid.minor = element_line(color = "#d6d1d1")
-    )
+    ) +
+    btf_theme
   p
   filename <- paste0(save_path, "qqplot_egpd_", site_name, "_lcensoring_", best_cens, ".png")
   ggsave(filename = filename, p, width = 6, height = 6, dpi = 400, device = "png", bg = "transparent")

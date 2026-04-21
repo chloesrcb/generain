@@ -205,9 +205,17 @@ compute_st_variogram <- function(grid,
                                  gamma_space_y = NULL,
                                  gamma_temp,
                                  adv) {
-  lx <- length(unique(grid$x))
-  ly <- length(unique(grid$y))
-  lt <- length(unique(grid$t))
+
+  if ("x" %in% names(grid) && "y" %in% names(grid) && "t" %in% names(grid)) {
+      lx <- length(unique(grid$x))
+      ly <- length(unique(grid$y))
+      lt <- length(unique(grid$t))
+  } else {
+      lx <- length(unique(grid$Longitude))
+      ly <- length(unique(grid$Latitude))
+      lt <- length(unique(grid$t))
+  }
+
 
   # Determine distance type
   is_lalpha <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
@@ -256,6 +264,101 @@ compute_st_variogram <- function(grid,
   }
 
   return(gamma)
+}
+
+compute_st_variogram_sites <- function(grid,
+                                       gamma_space = NULL,
+                                       gamma_space_x = NULL,
+                                       gamma_space_y = NULL,
+                                       gamma_temp,
+                                       adv) {
+  # ---- checks ----
+  if (!all(c("t", "shifted_x", "shifted_y") %in% names(grid))) {
+    stop("grid must contain columns: t, shifted_x, shifted_y (and typically site).")
+  }
+
+  # Determine distance type
+  is_lalpha    <- !is.null(gamma_space_x) && !is.null(gamma_space_y)
+  is_euclidean <- !is.null(gamma_space)
+
+  if (!is_euclidean && !is_lalpha) {
+    stop("Provide either gamma_space (euclidean) OR gamma_space_x and gamma_space_y (lalpha).")
+  }
+
+  n <- nrow(grid)
+
+  # ---- time indexing (robust) ----
+  t_levels <- sort(unique(grid$t))
+  t_index  <- match(grid$t, t_levels)  # 1..lt
+  lt <- length(t_levels)
+
+  # ---- spatial indexing (handles optional dedup when adv==0) ----
+  # If adv==0, you might have computed gamma_space on unique coords only (sometimes).
+  # We'll map each (shifted_x, shifted_y) to a unique spatial index.
+  xy_key <- paste(grid$shifted_x, grid$shifted_y, sep = "_")
+  xy_levels <- unique(xy_key)
+  s_index <- match(xy_key, xy_levels)   # 1..n_unique
+  nsites_unique <- length(xy_levels)
+
+  # Heuristic: decide whether gamma_space is on unique coords or full grid length
+  # (same idea for gamma_space_x/y).
+  get_space_term <- function(ind_full, ind_unique) {
+    if (is_lalpha) {
+      # gamma_space_x/y can be list-like or vector-like depending on how you built them
+      gx <- gamma_space_x
+      gy <- gamma_space_y
+
+      # Support list or atomic vector
+      if (is.list(gx)) {
+        idx <- if (length(gx) == n) ind_full else ind_unique
+        return(gx[[idx]] + gy[[idx]])
+      } else {
+        # atomic vector
+        idx <- if (length(gx) == n) ind_full else ind_unique
+        return(gx[idx] + gy[idx])
+      }
+    } else {
+      gs <- gamma_space
+      if (is.list(gs)) {
+        idx <- if (length(gs) == n) ind_full else ind_unique
+        return(gs[[idx]])
+      } else {
+        idx <- if (length(gs) == n) ind_full else ind_unique
+        return(gs[idx])
+      }
+    }
+  }
+
+  # ---- temp term access (list or vector) ----
+  get_temp_term <- function(ti) {
+    if (is.list(gamma_temp)) return(gamma_temp[[ti]])
+    gamma_temp[ti]
+  }
+
+  # ---- build gamma aligned with grid rows ----
+  gamma_vec <- numeric(n)
+  for (i in seq_len(n)) {
+    space_part <- get_space_term(ind_full = i, ind_unique = s_index[i])
+    temp_part  <- get_temp_term(t_index[i])
+    gamma_vec[i] <- space_part + temp_part
+  }
+
+  # Optional: reshape into n_sites x lt if 'site' exists
+  gamma_mat <- NULL
+  if ("site" %in% names(grid)) {
+    site_levels <- unique(grid$site)
+    ns <- length(site_levels)
+    gamma_mat <- matrix(NA_real_, nrow = ns, ncol = lt,
+                        dimnames = list(site_levels, as.character(t_levels)))
+    # assume grid is constructed as merge(coords, data.frame(t=t)) like before:
+    # for each site, all t in order
+    # We'll fill by matching:
+    row_id <- match(grid$site, site_levels)
+    col_id <- t_index
+    gamma_mat[cbind(row_id, col_id)] <- gamma_vec
+  }
+
+  return(list(gamma_vec = gamma_vec, gamma_mat = gamma_mat))
 }
 
 
@@ -329,7 +432,7 @@ compute_st_gaussian_process <- function(grid, W_s = NULL,
   lx <- length(unique(grid$x))
   ly <- length(unique(grid$y))
   lt <- length(unique(grid$t))
-
+  
   # Shifted coordinates (advection already applied upstream)
   coords <- cbind(grid$shifted_x, grid$shifted_y)
 
@@ -504,6 +607,76 @@ sim_BR <- function(beta1, beta2, alpha1, alpha2, x, y, t, adv = c(0, 0),
   }
   Z
 }
+
+
+# compute_st_gaussian_process_sites <- function(grid,
+#                                               W_s = NULL,
+#                                               W_s_x = NULL, W_s_y = NULL,
+#                                               W_t,
+#                                               adv) {
+#   if (!all(c("t", "shifted_x", "shifted_y") %in% names(grid))) {
+#     stop("grid must contain columns: t, shifted_x, shifted_y (and typically site).")
+#   }
+
+#   is_lalpha    <- !is.null(W_s_x) && !is.null(W_s_y)
+#   is_euclidean <- !is.null(W_s)
+
+#   if (!is_euclidean && !is_lalpha) {
+#     stop("Provide either W_s (euclidean) or W_s_x and W_s_y (lalpha).")
+#   }
+
+#   n <- nrow(grid)
+
+#   # time index
+#   t_levels <- sort(unique(grid$t))
+#   t_index  <- match(grid$t, t_levels)
+#   lt <- length(t_levels)
+
+#   W_t_vec <- as.numeric(W_t)
+#   if (length(W_t_vec) != lt) {
+#     stop("Length of W_t must equal the number of unique time points in grid$t.")
+#   }
+
+#   # map each row to a unique spatial location (for adv==0 dedup cases, etc.)
+#   key <- paste(grid$shifted_x, grid$shifted_y, sep = "_")
+#   key_u <- unique(key)
+#   map_idx <- match(key, key_u)
+#   n_unique <- length(key_u)
+
+#   if (is_euclidean) {
+#     W_s_vec <- as.numeric(W_s)
+#     if (!(length(W_s_vec) %in% c(n_unique, n))) {
+#       stop("Length of W_s must match n_unique(coords) OR nrow(grid).")
+#     }
+#     ind_ws <- if (length(W_s_vec) == n) seq_len(n) else map_idx
+#     W_vec <- W_s_vec[ind_ws] + W_t_vec[t_index]
+
+#   } else {
+#     W_sx_vec <- as.numeric(W_s_x)
+#     W_sy_vec <- as.numeric(W_s_y)
+#     if (!(length(W_sx_vec) %in% c(n_unique, n)) ||
+#         !(length(W_sy_vec) %in% c(n_unique, n))) {
+#       stop("Length of W_s_x / W_s_y must match n_unique(coords) OR nrow(grid).")
+#     }
+#     ind_ws <- if (length(W_sx_vec) == n) seq_len(n) else map_idx
+#     W_vec <- W_sx_vec[ind_ws] + W_sy_vec[ind_ws] + W_t_vec[t_index]
+#   }
+
+#   # Optional reshape to n_sites x lt (if grid has site)
+#   W_mat <- NULL
+#   if ("site" %in% names(grid)) {
+#     site_levels <- unique(grid$site)
+#     ns <- length(site_levels)
+#     W_mat <- matrix(NA_real_, nrow = ns, ncol = lt,
+#                     dimnames = list(site_levels, as.character(t_levels)))
+#     row_id <- match(grid$site, site_levels)
+#     col_id <- t_index
+#     W_mat[cbind(row_id, col_id)] <- W_vec
+#   }
+
+#   return(list(W_vec = W_vec, W_mat = W_mat))
+# }
+
 
 #' sim_rpareto function (extended)
 #'
@@ -755,6 +928,229 @@ sim_rpareto_coords <- function(coords, times,
 
 
 
+
+
+
+
+
+sim_rpareto_coords_risk <- function(coords, times,
+                                   beta1, beta2, alpha1, alpha2,
+                                   adv = c(0,0), threshold = 1,
+                                   riskf = c("sum", "max", "min", "l2"),
+                                   s0_index = 1, t0_index = 1,
+                                   shape = 1,
+                                   max_tries = 1e5,
+                                   seed = NULL) {
+
+  riskf <- match.arg(riskf)
+  if (!is.null(seed)) set.seed(seed)
+
+  ntotsim <- 0L
+  ntotacc <- 0L
+
+  for (k in seq_len(max_tries)) {
+    ntotsim <- ntotsim + 1L
+
+    out <- sim_rpareto_coords(coords, times,
+                             beta1, beta2, alpha1, alpha2,
+                             adv = adv, threshold = 1,
+                             s0_index = s0_index, t0_index = t0_index,
+                             seed = NULL)
+
+    W_mat  <- out$W
+    gamma0 <- out$gamma0
+
+    W0 <- W_mat[s0_index, t0_index]
+    W_inc <- W_mat - W0
+    
+    V <- exp(W_inc - 0.5 * gamma0)
+
+    # 4) Rayon Pareto (comme rparp: u/runif, ici u=1)
+    R <- 1 / runif(1)   # Pareto(shape=1). Si tu veux shape != 1, voir note plus bas.
+
+    Z <- threshold * R * V
+
+    # 5) Test d’acceptation
+    ok <- switch(
+      riskf,
+      sum = TRUE,  # pas de rejet
+      max = (max(Z) > threshold),
+      min = (min(Z) > threshold),
+      l2  = (sum(Z^2) > threshold^2)
+    )
+
+    if (ok) {
+      ntotacc <- ntotacc + 1L
+      attr(Z, "accept.rate") <- ntotacc / ntotsim
+      return(list(Z = Z, W = W_mat, gamma0 = gamma0, R = R,
+                  accept.rate = ntotacc / ntotsim,
+                  ntotsim = ntotsim))
+    }
+  }
+
+  stop("Accept-reject: aucun candidat accepté (augmente max_tries ou ajuste threshold).")
+}
+
+
+# sim_rpareto_sites <- function(beta1, beta2, alpha1, alpha2,
+#                                 coords, t,
+#                                 adv = c(0, 0), t0 = 0,
+#                                 s0 = NULL,
+#                                 random_s0 = FALSE, s0_radius = Inf,
+#                                 distance = "euclidean", seed = NULL,
+#                                 threshold = 1) {
+#   if (!is.null(seed)) set.seed(seed)
+
+#   RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
+#                           install = "no")
+
+#   if (!(distance %in% c("euclidean", "lalpha"))) {
+#     stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+#   }
+#   if (length(adv) != 2) stop("adv must be a length-2 numeric vector (adv1, adv2).")
+
+#   coords <- as.data.frame(coords)
+#   req_cols <- c("Longitude", "Latitude", "site")
+
+#   # ---- check t / t0 ----
+#   t <- as.numeric(t)
+#   if (!(t0 %in% t)) stop("t0 must be one of the values in t.")
+
+#   n_sites <- nrow(coords)
+#   lt <- length(t)
+
+#   # ---- models ----
+#   modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2*beta1)
+#   modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2*beta2)
+
+#   # ---- choose s0 (single) ----
+#   # s0 can be NULL (default: first site) OR a site name (character)
+#   # (you said: always one s0 given in argument, but I keep NULL fallback)
+#   if (is.null(s0)) {
+#     s0_used <- coords[1, c("Longitude", "Latitude", "site"), drop = FALSE]
+#   } else if (is.character(s0) && length(s0) == 1) {
+#     if (!(s0 %in% coords$site)) stop("s0 site name not found in coords$site.")
+#     s0_used <- coords[coords$site == s0, c("Longitude", "Latitude", "site"), drop = FALSE]
+#   } else {
+#     stop("s0 must be NULL or a single site name (character).")
+#   }
+
+#   # random_s0: sample among existing sites within radius around the provided s0
+#   if (random_s0) {
+#     center <- as.numeric(s0_used[1, c("Longitude", "Latitude")])
+#     d <- sqrt((coords$Longitude - center[1])^2 + (coords$Latitude - center[2])^2)
+#     cand <- which(d <= s0_radius)
+#     if (length(cand) == 0) stop("No sites found within specified s0_radius.")
+#     idx <- sample(cand, 1)
+#     s0_used <- coords[idx, c("Longitude", "Latitude", "site"), drop = FALSE]
+#   }
+
+#   # ---- base grid: one row per (site, time) ----
+#   base_grid <- merge(
+#     coords[, c("site", "Longitude", "Latitude")],
+#     data.frame(t = t),
+#     by = NULL
+#   )
+
+#   # Ensure uniqueness of (site,t)
+#   if (anyDuplicated(paste(base_grid$site, base_grid$t))) {
+#     stop("base_grid has duplicated (site,t) pairs. Check coords or t.")
+#   }
+
+#   # ---- advection ----
+#   grid <- base_grid
+#   grid$shifted_x <- grid$Longitude - grid$t * adv[1]
+#   grid$shifted_y <- grid$Latitude  - grid$t * adv[2]
+
+#   # ---- conditioning index (s0 at t0): robust by site name ----
+#   key <- paste(grid$site, grid$t)
+#   ind_s0_t0 <- match(paste(s0_used$site, t0), key)
+#   if (is.na(ind_s0_t0)) stop("Conditioning index ind_s0_t0 not found.")
+
+#   # ---- temporal variogram at t0 ----
+#   gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+
+#   # ---- spatial variogram + simulate W ----
+#   if (distance == "lalpha") {
+#     gamma_space_x <- RandomFields::RFvariogram(
+#       modelSpace, x = grid$shifted_x - grid$shifted_x[ind_s0_t0]
+#     )
+#     gamma_space_y <- RandomFields::RFvariogram(
+#       modelSpace, x = grid$shifted_y - grid$shifted_y[ind_s0_t0]
+#     )
+
+#     tmpg <- compute_st_variogram_sites(
+#       grid,
+#       gamma_space_x = gamma_space_x,
+#       gamma_space_y = gamma_space_y,
+#       gamma_temp = gamma_temp,
+#       adv = adv
+#     )
+#     gamma_0 <- tmpg$gamma_vec
+
+#     W_s_x <- RandomFields::RFsimulate(modelSpace, grid$shifted_x, grid = FALSE)
+#     W_s_y <- RandomFields::RFsimulate(modelSpace, grid$shifted_y, grid = FALSE)
+#     W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+#     tmpW <- compute_st_gaussian_process_sites(
+#       grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv
+#     )
+#     W <- tmpW$W_vec
+
+#   } else {
+#     gamma_space <- RandomFields::RFvariogram(
+#       modelSpace,
+#       x = grid$shifted_x - grid$shifted_x[ind_s0_t0],
+#       y = grid$shifted_y - grid$shifted_y[ind_s0_t0]
+#     )
+
+#     tmpg <- compute_st_variogram_sites(
+#       grid,
+#       gamma_space = gamma_space,
+#       gamma_temp  = gamma_temp,
+#       adv = adv
+#     )
+#     gamma_0 <- tmpg$gamma_vec
+
+#     W_s <- RandomFields::RFsimulate(modelSpace, grid$shifted_x, grid$shifted_y, grid = FALSE)
+#     W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+#     tmpW <- compute_st_gaussian_process_sites(
+#       grid, W_s = W_s, W_t = W_t, adv = adv
+#     )
+#     W <- tmpW$W_vec
+#   }
+
+#   # ---- r-Pareto field ----
+#   Y <- exp(W - W[ind_s0_t0] - gamma_0)
+#   R <- threshold / runif(1)
+#   Z_vec <- R * Y
+
+#   # reshape to matrix n_sites x lt with dimnames
+#   site_levels <- coords$site
+#   t_levels <- sort(unique(grid$t))  # should be t but safe
+#   Z <- matrix(NA_real_, nrow = n_sites, ncol = lt,
+#               dimnames = list(site_levels, as.character(t_levels)))
+
+#   row_id <- match(grid$site, site_levels)
+#   col_id <- match(grid$t, t_levels)
+#   Z[cbind(row_id, col_id)] <- Z_vec
+
+#   return(list(
+#     Z = Z,                 # matrix with site names + time columns
+#     R = R,
+#     s0_used = s0_used,
+#     t0 = t0,
+#     adv = adv,
+#     ind_s0_t0 = ind_s0_t0,
+#     grid = grid
+#   ))
+# }
+
+
+
+
+
 #' save_simulations function
 #'
 #' This function transforms the Brown-Resnick simulations into dataframes and
@@ -909,121 +1305,3 @@ convert_single_simulation_to_df <- function(simu_i, ngrid) {
   df <- df[, -1]
   return(as.data.frame(df))
 }
-
-
-# #' sim_episode function
-# #' This function simulates a single episode of spatio-temporal data
-# #' based on r-Pareto process simulations.
-# #'' @param params_vario A list containing variogram parameters:
-# #'                     beta1, beta2, alpha1, alpha2.
-# #' @param params_margins A list containing marginal parameters:
-# #'                       xi, sigma, kappa (vectors per site).
-# #' @param x Vector for the first spatial dimension.
-# #' @param y Vector for the second spatial dimension.
-# #' @param times Vector for the temporal dimension.
-# #' @param adv The advection coordinates vector.
-# #' @param t0 The conditioning time point.
-# #' @param s0 The conditioning spatial location (index).
-# #' @param u_s Vector of thresholds per site for the Pareto transformation.
-# #' 
-# #' @return A 3D array of simulated data (sites x times).
-# #' @export
-# sim_episode <- function(params_vario, params_margins, coords, times, adv, t0, s0, u_s) {
-#   #---------------------------------------------------------
-#   # Simulate r-Pareto process on the spatial grid
-#   #---------------------------------------------------------
-#   sim <- sim_rpareto(
-#     beta1 = params_vario$beta1,
-#     beta2 = params_vario$beta2,
-#     alpha1 = params_vario$alpha1,
-#     alpha2 = params_vario$alpha2,
-#     adv = adv,
-#     x = unique(coords$x),
-#     y = unique(coords$y),
-#     t = times,
-#     t0 = t0,
-#     s0 = s0
-#   )
-
-#   # Keep only first realization / first conditioning site
-#   Z <- sim$Z[,,,1,1, drop = TRUE] * u_s[s0]
-
-#   n_sites <- nrow(coords)
-#   nx <- length(unique(coords$x))
-#   ny <- length(unique(coords$y))
-#   nt <- length(times)
-
-#   U <- array(NA_real_, dim = c(nx, ny, nt))
-#   X <- array(NA_real_, dim = c(nx, ny, nt))
-
-#   #---------------------------------------------------------
-#   # Transform site by site
-#   #---------------------------------------------------------
-#   for (k in seq_len(n_sites)) {
-#     # Transform Pareto → Uniform using local threshold
-#     xk <- coords$x[k]
-#     yk <- coords$y[k]
-#     U[xk, yk, ] <- pmax(1 - u_s[k] / Z[xk, yk, ], 0)
-
-#     # Transform Uniform → rainfall intensity (EGPD)
-#     X[xk, yk, ] <- qextgp(
-#       U[xk, yk, ],
-#       type  = 1,
-#       xi    = params_margins$xi[k],
-#       sigma = params_margins$sigma[k],
-#       kappa = params_margins$kappa[k]
-#     )
-#   }
-
-#   # Return rainfall simulations (matrix [site × time])
-#   return(X)
-# }
-
-
-
-# sim_episode_coords <- function(params_vario, params_margins, coords, times, adv, t0, s0, u_s) {
-#   #---------------------------------------------------------
-#   # Simulate r-Pareto process on the spatial grid
-#   #---------------------------------------------------------
-#   sim <- sim_rpareto_coords(
-#     beta1 = params_vario$beta1,
-#     beta2 = params_vario$beta2,
-#     alpha1 = params_vario$alpha1,
-#     alpha2 = params_vario$alpha2,
-#     adv = adv,
-#     coords = coords,
-#     t = times,
-#     t0 = t0,
-#     s0 = s0
-#   )
-
-#   # Keep only first realization / first conditioning site
-#   index_s0 <- which(coords$Latitude == s0[2] & coords$Longitude == s0[1])
-#   site_name <- rownames(coords)[index_s0]
-#   Y <- sim$Z[,,1, drop = TRUE]
-#   Z <- Y * u_s[site_name]
-#   n_sites <- nrow(coords)
-#   nt <- length(times)
-#   U <- matrix(NA_real_, n_sites, nt, dimnames = list(rownames(coords), NULL))
-#   X <- matrix(NA_real_, n_sites, nt, dimnames = list(rownames(coords), NULL))
-#   #---------------------------------------------------------
-#   # Transform site by site
-#   #---------------------------------------------------------
-#   for (k in seq_len(n_sites)) {
-#     # Transform Pareto → Uniform using local threshold
-#     sk <- rownames(coords)[k]
-#     U[sk, ] <- pmax(1 - u_s[k] / Z[sk, ], 0.00001)
-
-#     # Transform Uniform → rainfall intensity (EGPD)
-#     X[sk, ] <- qextgp(
-#       U[sk, ],
-#       type  = 1,
-#       xi    = params_margins$xi[k],
-#       sigma = params_margins$sigma[k],
-#       kappa = params_margins$kappa[k]
-#     )
-#   }
-
-#   # Return rainfall simulations (matrix [site × time])
-#   return(X)
-# }

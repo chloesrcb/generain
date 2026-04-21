@@ -104,7 +104,6 @@ format_value <- function(x) {
       }
     }
 
-    # Add "neg" prefix if the number was negative
     if (is_negative) {
       formatted_value <- paste0("neg", formatted_value)
     }
@@ -368,6 +367,7 @@ name_file <- paste0("/optim_rpar_", M, "simu_", m, "rep_", ngrid^2,
                 "s_", length(temp), "t_", param_str, ".csv")
 
 write.csv(df_result_all, paste0(foldername_result, name_file), row.names = FALSE)
+# df_result_all <- read.csv(paste0(foldername_result, name_file))
 print(paste0("Results saved in: ", foldername_result, name_file))
 
 

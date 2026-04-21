@@ -240,41 +240,129 @@ temporal_chi_WLSE <- function(dftemp, weights){
 #' @import lmtest
 #'
 #' @export
-get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
-  # regression on temporal chi without 0 lag
+# get_estimate_variotemp <- function(df_chi, weights, summary = FALSE) {
+#   # regression on temporal chi without 0 lag
+#   if (0 %in% df_chi$lag) {
+#     # remove line with 0 lag
+#     df_chi <- df_chi[df_chi$lag != 0, ]
+#   }
+
+#   chitemp <- df_chi$chi
+#   lagtemp <- df_chi$lag
+
+#   # need to add a eta continuous function for the WLSE with log
+#   dftemp <- data.frame(tchi = zeta(chitemp), lagtemp = log(lagtemp))
+
+#   sum_wls_temp <- temporal_chi_WLSE(dftemp, weights)
+
+#   df_wls_temp <- data.frame(sum_wls_temp$coefficients)
+
+#   # final temporal variogram parameters
+#   alpha_temp <- df_wls_temp$Estimate[2]
+#   c_temp <- df_wls_temp$Estimate[1]
+#   beta_temp <- exp(c_temp) # beta
+
+#   if (summary) {
+#     print(sum_wls_temp)
+#   }
+
+#   # get significance of parameters
+#   p_values <- df_wls_temp$`Pr...t..`
+#   # get significance symbols for parameters
+#   significance <- ifelse(p_values < 0.001, "***",
+#                          ifelse(p_values < 0.01, "**",
+#                                 ifelse(p_values < 0.05, "*", "")))
+#   return(c(c_temp, beta_temp, alpha_temp, significance))
+# }
+get_estimate_variotemp <- function(df_chi,
+                                   weights,
+                                   conf_level = 0.95,
+                                   print_summary = FALSE,
+                                   return_model = FALSE) {
+
+  # remove 0 lag (temporal)
   if (0 %in% df_chi$lag) {
-    # remove line with 0 lag
     df_chi <- df_chi[df_chi$lag != 0, ]
   }
 
   chitemp <- df_chi$chi
   lagtemp <- df_chi$lag
 
-  # need to add a eta continuous function for the WLSE with log
-  dftemp <- data.frame(tchi = zeta(chitemp), lagtemp = log(lagtemp))
+  # build regression df on eta-scale
+  dftemp <- data.frame(
+    tchi    = zeta(chitemp),
+    lagtemp = log(lagtemp)
+  )
 
+  # keep finite only
+  ok <- is.finite(dftemp$tchi) & is.finite(dftemp$lagtemp)
+  dftemp <- dftemp[ok, , drop = FALSE]
+  if (nrow(dftemp) < 3) stop("Not enough valid observations to fit the model.")
+
+  # Fit WLSE model (assumed to return something like summary(lm))
   sum_wls_temp <- temporal_chi_WLSE(dftemp, weights)
 
-  df_wls_temp <- data.frame(sum_wls_temp$coefficients)
+  # Try to retrieve the underlying lm object if your function stores it
+  # If not available, we still can compute Wald CI from coefficients + df if present.
+  # We'll handle both cases.
 
-  # final temporal variogram parameters
-  alpha_temp <- df_wls_temp$Estimate[2]
-  c_temp <- df_wls_temp$Estimate[1]
-  beta_temp <- exp(c_temp) # beta
+  coefs <- sum_wls_temp$coefficients
+  if (is.null(coefs)) stop("temporal_chi_WLSE must return an object with $coefficients.")
 
-  if (summary) {
-    print(sum_wls_temp)
+  # helper: stars
+  signif_stars <- function(p) {
+    ifelse(p < 0.001, "***",
+           ifelse(p < 0.01,  "**",
+                  ifelse(p < 0.05, "*",
+                         ifelse(p < 0.1, ".", ""))))
   }
 
-  # get significance of parameters
-  p_values <- df_wls_temp$`Pr...t..`
-  # get significance symbols for parameters
-  significance <- ifelse(p_values < 0.001, "***",
-                         ifelse(p_values < 0.01, "**",
-                                ifelse(p_values < 0.05, "*", "")))
-  return(c(c_temp, beta_temp, alpha_temp, significance))
-}
+  # degrees of freedom (best effort)
+  df <- sum_wls_temp$df[2]
+  if (is.null(df) || !is.finite(df)) {
+    # fallback: approximate df = n - p
+    df <- nrow(dftemp) - nrow(coefs)
+  }
+  tcrit <- qt(1 - (1 - conf_level) / 2, df)
 
+  # extract by name if possible
+  # coefs is usually a matrix with rownames "(Intercept)" and "lagtemp"
+  if (!("(Intercept)" %in% rownames(coefs))) stop("Missing (Intercept) in coefficients.")
+  if (!("lagtemp" %in% rownames(coefs))) stop("Missing 'lagtemp' in coefficients (check formula inside temporal_chi_WLSE).")
+
+  c_est <- coefs["(Intercept)", "Estimate"]
+  c_se  <- coefs["(Intercept)", "Std. Error"]
+  c_p   <- coefs["(Intercept)", "Pr(>|t|)"]
+  c_ci  <- c_est + c(-1, 1) * tcrit * c_se
+
+  alpha_est <- coefs["lagtemp", "Estimate"]
+  alpha_se  <- coefs["lagtemp", "Std. Error"]
+  alpha_p   <- coefs["lagtemp", "Pr(>|t|)"]
+  alpha_ci  <- alpha_est + c(-1, 1) * tcrit * alpha_se
+
+  beta_est <- exp(c_est)
+  beta_ci  <- exp(c_ci)
+  beta_se_delta <- beta_est * c_se
+
+  if (print_summary) print(sum_wls_temp)
+
+  out <- data.frame(
+    parameter = c("c_temp", "beta_temp", "alpha_temp"),
+    estimate  = c(c_est, beta_est, alpha_est),
+    std_error = c(c_se, beta_se_delta, alpha_se),
+    conf_low  = c(c_ci[1], beta_ci[1], alpha_ci[1]),
+    conf_high = c(c_ci[2], beta_ci[2], alpha_ci[2]),
+    p_value   = c(c_p, NA_real_, alpha_p),
+    signif    = c(signif_stars(c_p), NA_character_, signif_stars(alpha_p)),
+    row.names = NULL
+  )
+
+  if (return_model) {
+    return(list(results = out, summary = sum_wls_temp, data = dftemp))
+  } else {
+    return(out)
+  }
+}
 
 # SPATIAL CHI ------------------------------------------------------------------
 
@@ -471,6 +559,7 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
   }
   lags_sup <- lags # we don't need the 0, only superior born
   for (h in h_vect){
+    print(paste0("h = ", h))
     # station number inside h lag
     ind_h <- which(h_vect == h)
     h_sup <- lags_sup[ind_h]
@@ -505,6 +594,95 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
 }
 
 
+#' Function to estimate the spatial extremogram
+#'
+#' This function calculates the spatial extremogram for a given lags vector and
+#' radius matrix and rainfall data.
+#'
+#' @param rad_mat The matrix of radii.
+#' @param data_rain The rainfall data.
+#' @param quantile The quantile value.
+#' @param zeros Logical value indicating whether to include zero values in the
+#' calculation.
+#' @param mid Logical value indicating whether to return the mean values for
+#' the plot.
+#'
+#' @return A data.frame with the spatial extremogram by lag.
+#'
+#' @export
+spatial_chi_fast <- function(rad_mat, data_rain, quantile, zeros = TRUE,
+                             mid = TRUE) {
+  q <- quantile
+  lags <- get_h_vect(rad_mat, NA, intervals = TRUE)
+
+  if (mid) {
+    h_vect <- spatial_mean_lags(lags, mid = TRUE)
+  } else {
+    h_vect <- lags
+  }
+
+  lags_sup <- lags
+
+  # work with matrix for speed
+  rain_mat <- as.matrix(data_rain)
+
+  # preallocate output
+  chi_slag <- rep(NA_real_, length(h_vect))
+
+  for (k in seq_along(h_vect)) {
+    h <- h_vect[k]
+    h_sup <- lags_sup[k]
+
+    # indices of station pairs corresponding to this lag
+    indices <- which(rad_mat == h_sup, arr.ind = TRUE)
+    nb_pairs <- nrow(indices)
+
+    if (nb_pairs == 0) {
+      chi_slag[k] <- NA_real_
+      next
+    }
+
+    chi_val <- rep(NA_real_, nb_pairs)
+
+    for (i in seq_len(nb_pairs)) {
+      s1 <- indices[i, 1]
+      s2 <- indices[i, 2]
+
+      x1 <- rain_mat[, s1]
+      x2 <- rain_mat[, s2]
+
+      # remove NA pairs
+      keep <- !is.na(x1) & !is.na(x2)
+
+      if (!zeros) {
+        keep <- keep & (x1 != 0 | x2 != 0)
+      }
+
+      if (!any(keep)) {
+        chi_val[i] <- NA_real_
+        next
+      }
+
+      rain_cp <- cbind(s1 = x1[keep], s2 = x2[keep])
+
+      if (length(quantile) > 1) {
+        q <- quantile[s1, s2]
+      }
+
+      chi_val[i] <- get_chiq(rain_cp, q)
+    }
+
+    chi_slag[k] <- mean(chi_val, na.rm = TRUE)
+    if (all(is.na(chi_val))) chi_slag[k] <- NA_real_
+  }
+
+  data.frame(
+    chi = chi_slag,
+    lagspa = h_vect
+  )
+}
+
+
 #' Calculate spatial chi for all lags
 #'
 #' This function calculates the spatial extremogram for a given
@@ -514,23 +692,16 @@ spatial_chi <- function(rad_mat, data_rain, quantile, zeros = TRUE,
 #' @param data_rain The rainfall data.
 #' @param quantile The quantile value.
 #' @param hmax The maximum spatial lag value (optional).
-#' @param comephore Logical value indicating whether we work on the COMEPHORE 
-#'                  dataset. Default is FALSE.
-#'
+#' 
 #' @return The spatial chi-squared distances.
 #'
 #' @import dplyr
 #' @import tidyr
 #'
 #' @export
-spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
-                                comephore = FALSE) {
+spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA) {
   chi_slag <- c()
   q <- quantile
-  # initialize values
-  if (comephore) {
-    df_dist$value <- ceiling(df_dist$value / 100) * 100 / 1000 # in km
-  }
   # get unique distances from rad_mat
   h_vect <- sort(df_dist$value)
   h_vect <- unique(h_vect[h_vect > 0])
@@ -642,60 +813,174 @@ spatial_chi_alldist <- function(df_dist, data_rain, quantile, hmax = NA,
 #' @import lmtest
 #'
 #' @export
-get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
-  # remove 0 lag
-  # if (0 %in% chispa$lag) {
-  #   # remove line with 0 lag
-  #   chispa <- chispa[chispa$lag != 0, ]
-  #     # df_chi$lag <- df_chi$lag + 0.0001
-  # }
+# get_estimate_variospa <- function(chispa, weights, summary = FALSE) {
+#   # remove 0 lag
+#   # if (0 %in% chispa$lag) {
+#   #   # remove line with 0 lag
+#   #   chispa <- chispa[chispa$lag != 0, ]
+#   #     # df_chi$lag <- df_chi$lag + 0.0001
+#   # }
 
-  # eta transformation
-  etachispa_df <- data.frame(chi = zeta(chispa$chi),
-                           lagspa = log(chispa$lagspa))
+#   # eta transformation
+#   etachispa_df <- data.frame(chi = zeta(chispa$chi),
+#                            lagspa = log(chispa$lagspa))
 
+#   if (weights == "residuals") {
+#     # LS reg (clasical model)
+#     model <- lm(chi ~ lagspa, data = etachispa_df)
+#     # define weights to use
+#     ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+#   } else if (weights == "exp") {
+#     ws <- exp(-(etachispa_df$lagspa))
+#   } else if (weights == "exp2") {
+#     ws <- exp(-(etachispa_df$lagspa)^2)
+#   } else if (weights == "expbw") {
+#     if (is.null(bw)) {
+#       stop("Please provide a bandwidth for 'expbw' weights.")
+#     }
+#     ws <- exp(-(etachispa_df$lagspa / bw)^2)
+#   } else if (weights == "none") {
+#     ws <- rep(1, length(etachispa_df$lagspa))
+#   }
+
+#   # perform weighted least squares regression
+#   wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
+
+#   # view summary of model
+#   sum_wls_lag <- summary(wls_model_spa)
+
+#   wls_coef <- data.frame(sum_wls_lag$coefficients)
+
+#   alpha_spa <- wls_coef$Estimate[2]
+#   alpha_spa_stderr <- wls_coef$Std..Error[2]
+#   c_spa <- wls_coef$Estimate[1]
+#   c_spa_stderr <- wls_coef$Std..Error[1]
+#   beta_spa <- exp(c_spa)
+#   beta_spa_stderr <- beta_spa * c_spa_stderr # with delta-method
+#   if (summary) {
+#     print(sum_wls_lag)
+#   }
+
+#   sum_wls_lag <- summary(wls_model_spa)
+#   coefs <- sum_wls_lag$coefficients
+
+#   c_spa <- coefs["(Intercept)", "Estimate"]
+#   c_spa_stderr <- coefs["(Intercept)", "Std. Error"]
+
+#   # slope : par défaut la 2e ligne, mais idéalement par nom
+#   alpha_spa <- coefs[2, "Estimate"]
+#   alpha_spa_stderr <- coefs[2, "Std. Error"]
+#   alpha_spa_ci95 <- alpha_spa + c(-1, 1) * 1.96 * alpha_spa_stderr
+#   beta_spa <- exp(c_spa)
+#   beta_spa_stderr <- beta_spa * c_spa_stderr
+#   beta_spa_ci95 <- exp(c_spa + c(-1, 1) * 1.96 * c_spa_stderr)
+
+#   # get significance of parameters
+#   p_values <- wls_coef$`Pr...t..`
+#   # get significance symbols for parameters
+#   significance <- ifelse(p_values < 0.001, "***",
+#                          ifelse(p_values < 0.01, "**",
+#                                 ifelse(p_values < 0.05, "*", "")))
+#   ci_intervals <- confint(wls_model_spa)
+#   return(c(c_spa, beta_spa, alpha_spa, significance, ci_intervals))
+# }
+
+get_estimate_variospa <- function(chispa,
+                                  weights = c("residuals", "exp", "exp2", "expbw", "none"),
+                                  bw = NULL,
+                                  conf_level = 0.95,
+                                  print_summary = FALSE,
+                                  return_model = FALSE) {
+
+  # transformation zeta
+  zetachispa_df <- data.frame(
+    chi    = zeta(chispa$chi),
+    lagspa = log(chispa$lagspa)
+  )
+
+  ok <- is.finite(zetachispa_df$chi) & is.finite(zetachispa_df$lagspa)
+  zetachispa_df <- zetachispa_df[ok, , drop = FALSE]
+
+  if (nrow(etachispa_df) < 3) {
+    stop("Not enough valid observations to fit the model.")
+  }
+
+  # define weights 
   if (weights == "residuals") {
-    # LS reg (clasical model)
-    model <- lm(chi ~ lagspa, data = etachispa_df)
-    # define weights to use
-    ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+    model_ls <- lm(chi ~ lagspa, data = zetachispa_df)
+    aux <- lm(abs(model_ls$residuals) ~ model_ls$fitted.values)
+    ws <- 1 / (aux$fitted.values^2)
   } else if (weights == "exp") {
-    ws <- exp(-(etachispa_df$lagspa))
+    ws <- exp(-(zetachispa_df$lagspa))
   } else if (weights == "exp2") {
-    ws <- exp(-(etachispa_df$lagspa)^2)
+    ws <- exp(-(zetachispa_df$lagspa)^2)
   } else if (weights == "expbw") {
-    if (is.null(bw)) {
-      stop("Please provide a bandwidth for 'expbw' weights.")
+    if (is.null(bw) || !is.finite(bw) || bw <= 0) {
+      stop("Please provide a positive finite 'bw' for weights = 'expbw'.")
     }
-    ws <- exp(-(etachispa_df$lagspa / bw)^2)
-  } else if (weights == "none") {
-    ws <- rep(1, length(etachispa_df$lagspa))
+    ws <- exp(- (zetachispa_df$lagspa / bw)^2)
+  } else { # "none"
+    ws <- rep(1, nrow(zetachispa_df))
   }
 
-  # perform weighted least squares regression
-  wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
+  # avoid pathological weights
+  ws[!is.finite(ws) | ws <= 0] <- NA_real_
+  keep <- !is.na(ws)
+  zetachispa_df <- zetachispa_df[keep, , drop = FALSE]
+  ws <- ws[keep]
 
-  # view summary of model
-  sum_wls_lag <- summary(wls_model_spa)
-
-  wls_coef <- data.frame(sum_wls_lag$coefficients)
-
-  alpha_spa <- wls_coef$Estimate[2]
-  c_spa <- wls_coef$Estimate[1]
-  beta_spa <- exp(c_spa)
-  if (summary) {
-    print(sum_wls_lag)
+  if (nrow(zetachispa_df) < 3) {
+    stop("Not enough observations after filtering invalid weights.")
   }
 
-  # get significance of parameters
-  p_values <- wls_coef$`Pr...t..`
-  # get significance symbols for parameters
-  significance <- ifelse(p_values < 0.001, "***",
-                         ifelse(p_values < 0.01, "**",
-                                ifelse(p_values < 0.05, "*", "")))
-  return(c(c_spa, beta_spa, alpha_spa, significance))
+  # WLS fit
+  wls_model_spa <- lm(chi ~ lagspa, data = zetachispa_df, weights = ws)
+  sum_wls <- summary(wls_model_spa)
+  if (print_summary) print(sum_wls)
+
+  coefs <- sum_wls$coefficients
+  df <- df.residual(wls_model_spa)
+  tcrit <- qt(1 - (1 - conf_level) / 2, df)
+
+  # significance stars
+  signif_stars <- function(p) {
+    ifelse(p < 0.001, "***",
+           ifelse(p < 0.01,  "**",
+                  ifelse(p < 0.05, "*",
+                         ifelse(p < 0.1, ".", ""))))
+  }
+
+  c_est  <- coefs["(Intercept)", "Estimate"]
+  c_se   <- coefs["(Intercept)", "Std. Error"]
+  c_p    <- coefs["(Intercept)", "Pr(>|t|)"]
+  c_ci   <- c_est + c(-1, 1) * tcrit * c_se
+
+  alpha_est <- coefs["lagspa", "Estimate"]
+  alpha_se  <- coefs["lagspa", "Std. Error"]
+  alpha_p   <- coefs["lagspa", "Pr(>|t|)"]
+  alpha_ci  <- alpha_est + c(-1, 1) * tcrit * alpha_se
+
+  beta_est <- exp(c_est)
+  beta_ci  <- exp(c_ci)
+  beta_se_delta <- beta_est * c_se  # SE delta-method
+
+  out <- data.frame(
+    parameter = c("c_spa", "beta_spa", "alpha_spa"),
+    estimate  = c(c_est, beta_est, alpha_est),
+    std_error = c(c_se, beta_se_delta, alpha_se),
+    conf_low  = c(c_ci[1], beta_ci[1], alpha_ci[1]),
+    conf_high = c(c_ci[2], beta_ci[2], alpha_ci[2]),
+    p_value   = c(c_p, NA_real_, alpha_p),
+    signif    = c(signif_stars(c_p), NA_character_, signif_stars(alpha_p)),
+    row.names = NULL
+  )
+
+  if (return_model) {
+    return(list(results = out, model = wls_model_spa, data = zetachispa_df, weights = ws))
+  } else {
+    return(out)
+  }
 }
-
 
 # VARIOGRAM --------------------------------------------------------------------
 
@@ -953,42 +1238,42 @@ evaluate_vario_estimates <- function(list_simu, quantile,
 # #'         - alpha: rate of spatial decay (in original lag units)
 # #'
 # #' @export
-get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
-  # eta transformation
-  etachispa_df <- data.frame(chi = zeta(chispa$chi),
-                           lagspa = log(chispa$lagspa / 1000)) # in km
+# get_estimate_variospa <- function(chispa, weights, summary = FALSE, bw = NULL) {
+#   # eta transformation
+#   etachispa_df <- data.frame(chi = zeta(chispa$chi),
+#                            lagspa = log(chispa$lagspa / 1000)) # in km
 
-  if (weights == "residuals") {
-    # LS reg (clasical model)
-    model <- lm(chi ~ lagspa, data = etachispa_df)
-    # define weights to use
-    ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
-  } else if (weights == "exp") {
-    ws <- exp(-(chispa$lagspa / 1000))
-  } else if (weights == "exp2") {
-    ws <- exp(-(chispa$lagspa / 1000)^2)
-  } else if (weights == "expbw") {
-    if (is.null(bw)) {
-      stop("Please provide a bandwidth for 'expbw' weights.")
-    }
-    ws <- exp(-(chispa$lagspa / bw)^2)
-  } else if (weights == "none") {
-    ws <- rep(1, length(chispa$lagspa))
-  }
+#   if (weights == "residuals") {
+#     # LS reg (clasical model)
+#     model <- lm(chi ~ lagspa, data = etachispa_df)
+#     # define weights to use
+#     ws <- 1 / lm(abs(model$residuals) ~ model$fitted.values)$fitted.values^2
+#   } else if (weights == "exp") {
+#     ws <- exp(-(chispa$lagspa / 1000))
+#   } else if (weights == "exp2") {
+#     ws <- exp(-(chispa$lagspa / 1000)^2)
+#   } else if (weights == "expbw") {
+#     if (is.null(bw)) {
+#       stop("Please provide a bandwidth for 'expbw' weights.")
+#     }
+#     ws <- exp(-(chispa$lagspa / bw)^2)
+#   } else if (weights == "none") {
+#     ws <- rep(1, length(chispa$lagspa))
+#   }
 
-  # perform weighted least squares regression
-  wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
+#   # perform weighted least squares regression
+#   wls_model_spa <- lm(chi ~ lagspa, data = etachispa_df, weights = ws)
 
-  # view summary of model
-  sum_wls_lag <- summary(wls_model_spa)
+#   # view summary of model
+#   sum_wls_lag <- summary(wls_model_spa)
 
-  wls_coef <- data.frame(sum_wls_lag$coefficients)
+#   wls_coef <- data.frame(sum_wls_lag$coefficients)
 
-  alpha_spa <- wls_coef$Estimate[2]
-  c_spa <- wls_coef$Estimate[1]
-  beta_spa <- exp(c_spa)
-  if (summary) {
-    print(sum_wls_lag)
-  }
-  return(c(c_spa, beta_spa, alpha_spa))
-}
+#   alpha_spa <- wls_coef$Estimate[2]
+#   c_spa <- wls_coef$Estimate[1]
+#   beta_spa <- exp(c_spa)
+#   if (summary) {
+#     print(sum_wls_lag)
+#   }
+#   return(c(c_spa, beta_spa, alpha_spa))
+# }
