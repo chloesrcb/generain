@@ -1,15 +1,11 @@
-
-
-
-#### 
+###################################################
 # Conditional pairs probability plots
-####
+#################################################
 
-
+# coordinates
 grid_omsev <- grid_coords_km
 adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
 all_group_names <- unique(selected_points$speed_class)
-# all_significant_groups <- all_group_names[grep("significant", all_group_names)]
 group_adv <- all_group_names[3]  # choose one group to simulate
 # get list_episodes and s0_list for this group
 indices_group <- which(selected_points$speed_class == group_adv)
@@ -74,10 +70,10 @@ cond_probs_all_sites <- function(X, u) {
   p <- length(sites)
   n <- nrow(X)
 
-  # exceedances matrix: n x p (logical)
+  # exceedances matrix: n x p
   E <- X > u
 
-  # denominators for each s3: count(X_s3 > u)
+  # denominators for each s3 ie count(X_s3 > u)
   denom <- colSums(E)  # length p
   # if there is NA put denom to 0
   denom[is.na(denom)] <- 0
@@ -107,7 +103,7 @@ probs_by_group_obs <- lapply(seq_along(list_episodes_group), function(i) {
 
 names(probs_by_group_obs) <- paste0("group_", seq_along(probs_by_group_obs))
 
-# Example: probability for group 1, (iem,mse | cnrs)
+# probability for (iem,mse | cnrs)
 probs_by_group_obs[["group_1"]]["iem", "mse", "cnrs"]
 
 # Average over all groups without NA
