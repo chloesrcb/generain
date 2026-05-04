@@ -143,18 +143,9 @@ sim_episode_grid_m5 <- function(params_vario, params_margins_common,
   X
 }
 
-
-library(sf)
-library(dplyr)
-library(ggplot2)
-library(magick)
-library(grid)
-
 s0_pixel_id <- "pixel_200"
 u_emp <- 1
 
-
-# pour un demi-pixel de 1 km, prendre plutôt qqch comme c(300, 400) ou c(500, 0)
 
 # number of time steps of 5 min
 nT <- 12
