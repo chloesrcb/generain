@@ -80,8 +80,6 @@ beta2 <- 0.7944467
 alpha1 <- 1.42891232
 alpha2 <- 0.8049938
 
-
-
 head(comephore)
 # remove column "dates"
 comephore <- comephore[, which(colnames(comephore) != "date")]
