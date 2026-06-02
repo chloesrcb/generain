@@ -54,7 +54,7 @@ location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                              "cines", "brives", "hydro")
 
 # get rain data
-filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024.csv")
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
 rain_omsev <- read.csv(filename_rain)
 head(rain_omsev)
 tail(rain_omsev)
@@ -263,7 +263,7 @@ datetime_filename <- paste(data_folder, "/omsev/t0_5min_episodes_q", q * 100,
 write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
 
 
-adv_filename <- paste(data_folder, "/omsev/adv_estim/combined_comephore_omsev/episode_advection_q",
+adv_filename <- paste(data_folder, "/omsev/adv_estim/2025/combined_comephore_omsev/episode_advection_q",
                           q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                           ".csv", sep = "")
 adv_df <- read.csv(adv_filename, sep = ",")
@@ -446,9 +446,7 @@ selected_episodes$t0_date <- as.POSIXct(
 #         "comephore/optim_results/euclidean/free_eta/results_com_classes_q95_delta30_dmin5.csv",
 #         sep = "")
 # com_results <- read.csv(filename_com_res)
-# com_results <- c(0.2024721, 0.9692695, 0.5312816, 0.661511, 5.355625, 2.135717)
 com_results <- c(0.1579947, 0.9923270, 0.5800128, 0.6627969, 3.8962660, 2.2208320)
-# com_results <- c[1] 0.1375921 1.2981401 1.3131385 0.5587735 0.1817064 2.3006370 # last
 
 # check for na in adv and wind
 hmax <- max(dist_mat) / 1000
@@ -588,11 +586,11 @@ foldername_res <- file.path(
 if (!dir.exists(foldername_res)) {
   dir.create(foldername_res, recursive = TRUE)
 }
-filename <- paste0(foldername_res, "/results_q",
-           q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-# write.csv(result_df, filename, row.names = FALSE)
+# filename <- paste0(foldername_res, "/results_q",
+#            q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+# # write.csv(result_df, filename, row.names = FALSE)
 
-result_df <- read.csv(filename)
+# result_df <- read.csv(filename)
 
 params_est <- as.numeric(result_df)
 
@@ -664,26 +662,39 @@ filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jack_estimates, filename, row.names = FALSE)
 
-jack_mean <- colMeans(jack_estimates)
-pseudo_values <- matrix(NA, nrow = n_eff, ncol = length(init_param_jk))
+
+jack_estimates <- do.call(rbind, jack_estimates_list)
+jack_estimates <- na.omit(jack_estimates)
+n_eff <- nrow(jack_estimates)
+
+log_jack_estimates <- log(jack_estimates)
+log_init_param_jk  <- log(init_param_jk[1:4])
+
+pseudo_values_log <- matrix(NA, nrow = n_eff, ncol = 4)
 for (i in 1:n_eff) {
-  pseudo_values[i, ] <- n_eff * jack_mean - (n_eff - 1) * jack_estimates[i, ]
+  pseudo_values_log[i, ] <- n_eff * log_init_param_jk - (n_eff - 1) * log_jack_estimates[i, ]
 }
-jack_mean_pseudo <- colMeans(pseudo_values)
-jack_se <- apply(pseudo_values, 2, sd) / sqrt(n_eff)
+
+jack_mean_pseudo_log <- colMeans(pseudo_values_log)
+jack_se_log          <- apply(pseudo_values_log, 2, sd) / sqrt(n_eff)
 
 z <- qnorm(0.975)
-lower_ci <- jack_mean_pseudo - z * jack_se
-upper_ci <- jack_mean_pseudo + z * jack_se
+lower_ci_log <- jack_mean_pseudo_log - z * jack_se_log
+upper_ci_log <- jack_mean_pseudo_log + z * jack_se_log
+
+estimate_jk_naturel <- exp(jack_mean_pseudo_log)
+lower_ci <- exp(lower_ci_log)
+upper_ci <- exp(upper_ci_log)
 
 jackknife_monthyear_results <- data.frame(
-  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
+  Parameter     = c("beta1", "beta2", "alpha1", "alpha2"),
   Estimate_full = result$par,
-  Estimate_jk   = jack_mean_pseudo,
-  StdError = jack_se,
-  CI_lower = lower_ci,
-  CI_upper = upper_ci
+  Estimate_jk   = estimate_jk_naturel,
+  StdError_log  = jack_se_log,
+  CI_lower      = lower_ci,
+  CI_upper      = upper_ci
 )
+
 
 filename <- paste0(foldername_jk, "results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
@@ -808,7 +819,7 @@ ggplot(res_om_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
         legend.text = element_text(size = 14))
 
 # save plot
-foldername <- paste0(im_folder, "workflows/full_pipeline/")
+foldername <- paste0(im_folder, "workflows/full_pipeline/2025/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
@@ -816,3 +827,45 @@ filename <- paste0(foldername, "omsev_chi_th_emp_dmin1200.png")
 ggsave(filename,
        width = 7,
        height = 6)
+
+
+
+# --- REMPLACE TON BLOC DE CALCUL DE L'IC PAR CELUI-CI ---
+
+jack_estimates <- do.call(rbind, jack_estimates_list)
+jack_estimates <- na.omit(jack_estimates)
+n_eff <- nrow(jack_estimates)
+
+# 1. Passage à l'échelle log pour stabiliser la variance et forcer la positivité
+log_jack_estimates <- log(jack_estimates)
+log_init_param_jk  <- log(init_param_jk[1:4])
+
+# 2. Calcul des pseudo-valeurs sur l'échelle LOG
+# Note : Il est plus rigoureux d'utiliser la vraie estimation totale (log_init_param_jk) plutôt que la moyenne du jackknife
+pseudo_values_log <- matrix(NA, nrow = n_eff, ncol = 4)
+for (i in 1:n_eff) {
+  pseudo_values_log[i, ] <- n_eff * log_init_param_jk - (n_eff - 1) * log_jack_estimates[i, ]
+}
+
+# 3. Moyenne et Standard Error sur l'échelle LOG
+jack_mean_pseudo_log <- colMeans(pseudo_values_log)
+jack_se_log          <- apply(pseudo_values_log, 2, sd) / sqrt(n_eff)
+
+# 4. Calcul de l'IC sur l'échelle LOG
+z <- qnorm(0.975)
+lower_ci_log <- jack_mean_pseudo_log - z * jack_se_log
+upper_ci_log <- jack_mean_pseudo_log + z * jack_se_log
+
+# 5. RETOUR À L'ÉCHELLE NATURELLE VIA EXP() -> Plus de valeurs négatives possibles !
+estimate_jk_naturel <- exp(jack_mean_pseudo_log) # Estimation corrigée du biais
+lower_ci <- exp(lower_ci_log)
+upper_ci <- exp(upper_ci_log)
+
+jackknife_monthyear_results <- data.frame(
+  Parameter     = c("beta1", "beta2", "alpha1", "alpha2"),
+  Estimate_full = result$par,
+  Estimate_jk   = estimate_jk_naturel,
+  StdError_log  = jack_se_log, # L'erreur standard est maintenant relative (multiplicative)
+  CI_lower      = lower_ci,
+  CI_upper      = upper_ci
+)

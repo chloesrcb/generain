@@ -4,7 +4,7 @@ rm(list = ls())
 # clear console
 cat("\014")
 
-muse <- F
+muse <- TRUE
 
 if (muse) {
   folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"
@@ -27,7 +27,6 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 
 library(latex2exp)
 library(sf)
-library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(parallel)
@@ -177,6 +176,15 @@ adv_df$t0 <- as.POSIXct(adv_df$t0, tz = "UTC")
 speed <- sqrt(adv_df$mean_dx_kmh^2 + adv_df$mean_dy_kmh^2)
 plot(speed, main = "Advection speed (km/h)", xlab = "Episode index", ylab = "Speed (km/h)")
 hist(speed, main = "Histogram of advection speeds", xlab = "Speed (km/h)", ylab = "Frequency")
+
+# plot advection vectors
+ggplot(adv_df, aes(x = mean_dx_kmh, y = mean_dy_kmh)) +
+  geom_point() +
+  geom_segment(aes(xend = 0, yend = 0), arrow = arrow(length = unit(0.2, "cm")), color = "blue") +
+  xlim(-6, 6) +
+  ylim(-6, 6) +
+  labs(x = "Advection dx (km/h)", y = "Advection dy (km/h)", title = "Advection vectors") +
+  theme_bw()
 
 selected_points$t0_date <- as.POSIXct(selected_points$t0_date, tz = "UTC")
 
@@ -352,6 +360,9 @@ print(results_df)
 results_df <- read.csv(filename, sep = ",")
 
 # JACKKNIFE ANALYSIS ##########################################################
+# ==============================================================================
+# JACKKNIFE ANALYSIS (BY YEAR)
+# ==============================================================================
 
 selected_episodes$t0_date <- as.POSIXct(
   selected_episodes$t0_date,
@@ -359,10 +370,9 @@ selected_episodes$t0_date <- as.POSIXct(
   tz = "UTC"
 )
 
-month_vec <- format(selected_episodes$t0_date, "%m")
-year_vec  <- format(selected_episodes$t0_date, "%Y")
-month_year_vec <- paste(year_vec, month_vec, sep = "-")
-unique_month_years <- sort(unique(month_year_vec))
+# Extraction des années uniques pour le Jackknife par bloc annuel
+year_vec <- format(selected_episodes$t0_date, "%Y")
+unique_years <- sort(unique(year_vec))
 
 param_names <- c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")
 npar <- length(param_names)
@@ -373,28 +383,28 @@ upper_bounds <- c(10, 10, 1.999, 1.999, 10, 10)
 theta_full <- as.numeric(result$par)
 names(theta_full) <- param_names
 
-# folder for jackknife outputs
-jk_folder <- file.path(foldername_res, "jackknife_estimates")
+# Dossier de sauvegarde pour le Jackknife annuel
+jk_folder <- file.path(foldername_res, "jackknife_annual_estimates")
 if (!dir.exists(jk_folder)) {
   dir.create(jk_folder, recursive = TRUE)
 }
 
-jackknife_one_block <- function(month_year) {
-  exclude_idx <- which(month_year_vec == month_year)
+# Fonction Jackknife modifiée pour exclure une année entière
+jackknife_one_year <- function(target_year) {
+  cat("Exclusion de l'année :", target_year, "\n")
+  exclude_idx <- which(year_vec == target_year)
 
   if (length(exclude_idx) == 0) {
     return(c(rep(NA_real_, npar), convergence = NA_real_, n_removed = 0))
   }
 
   jack_episodes <- list_episodes[-exclude_idx]
-  jack_lags <- list_lags[-exclude_idx]
+  jack_lags     <- list_lags[-exclude_idx]
   jack_excesses <- list_excesses[-exclude_idx]
-  jack_wind <- V_adv[-exclude_idx, , drop = FALSE]
+  jack_wind     <- V_adv[-exclude_idx, , drop = FALSE]
 
-  if (length(jack_episodes) == 0 ||
-      length(jack_lags) == 0 ||
-      length(jack_excesses) == 0 ||
-      nrow(jack_wind) == 0) {
+  if (length(jack_episodes) == 0 || length(jack_lags) == 0 || 
+      length(jack_excesses) == 0 || nrow(jack_wind) == 0) {
     return(c(rep(NA_real_, npar), convergence = NA_real_, n_removed = length(exclude_idx)))
   }
 
@@ -412,16 +422,12 @@ jackknife_one_block <- function(month_year) {
       method = "L-BFGS-B",
       lower = lower_bounds,
       upper = upper_bounds,
-      control = list(maxit = 10000)
+      control = list(maxit = 15000)
     ),
     error = function(e) NULL
   )
 
-  if (is.null(res)) {
-    return(c(rep(NA_real_, npar), convergence = NA_real_, n_removed = length(exclude_idx)))
-  }
-
-  if (is.null(res$par) || !is.numeric(res$par) || length(res$par) != npar) {
+  if (is.null(res) || is.null(res$par) || length(res$par) != npar) {
     return(c(rep(NA_real_, npar), convergence = NA_real_, n_removed = length(exclude_idx)))
   }
 
@@ -433,222 +439,162 @@ jackknife_one_block <- function(month_year) {
 }
 
 jack_estimates_list <- parallel::mclapply(
-  unique_month_years,
-  jackknife_one_block,
+  unique_years,
+  jackknife_one_year,
   mc.cores = ncores
 )
 
-cat("Jackknife estimates computed for all month-year blocks\n")
+cat("Jackknife estimates computed for all annual blocks\n")
 
 jack_raw <- do.call(rbind, jack_estimates_list)
 jack_raw <- as.data.frame(jack_raw)
-jack_raw$block <- unique_month_years
-
-# reorder columns
+jack_raw$block <- unique_years
 jack_raw <- jack_raw[, c("block", param_names, "convergence", "n_removed")]
 
 filename_jack_all <- file.path(
   jk_folder,
-  paste0("all_jk_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+  paste0("all_annual_jk_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 )
 write.csv(jack_raw, filename_jack_all, row.names = FALSE)
-cat("Raw jackknife estimates saved to", filename_jack_all, "\n")
 
-# Keep only valid converged rows
-valid_rows <- complete.cases(jack_raw[, param_names]) &
-  !is.na(jack_raw$convergence) &
-  jack_raw$convergence == 0
+valid_rows <- complete.cases(jack_raw[, param_names]) & 
+              !is.na(jack_raw$convergence) & 
+              jack_raw$convergence == 0
 
 jack_valid <- jack_raw[valid_rows, , drop = FALSE]
+G <- nrow(jack_valid)
 
-cat("Number of valid jackknife replicates:", nrow(jack_valid), "\n")
-cat("Number of discarded replicates:", nrow(jack_raw) - nrow(jack_valid), "\n")
+cat("Nombre de réplicats annuels valides :", G, "sur", length(unique_years), "\n")
 
-if (nrow(jack_valid) < 2) {
-  cat("Not enough valid jackknife replicates to compute standard errors.\n")
-} else {
-
-  jack_estimates <- as.matrix(jack_valid[, param_names, drop = FALSE])
-  storage.mode(jack_estimates) <- "double"
-
-  G <- nrow(jack_estimates)
-  theta_dot <- colMeans(jack_estimates)
-
-  # Jackknife bias-corrected estimate
-  theta_jack <- G * theta_full - (G - 1) * theta_dot
-
-  # Equivalent pseudo-values (optional, for checking / export)
-  pseudo_values <- matrix(
-    NA_real_,
-    nrow = G,
-    ncol = npar,
-    dimnames = list(jack_valid$block, param_names)
-  )
-
-  for (i in seq_len(G)) {
-    pseudo_values[i, ] <- G * theta_full - (G - 1) * jack_estimates[i, ]
-  }
-
-  # Jackknife standard error from leave-one-block-out estimates
-  jack_se <- sqrt(
-    (G - 1) / G * colSums(
-      (jack_estimates - matrix(theta_dot, G, npar, byrow = TRUE))^2
-    )
-  )
-
-  z <- qnorm(0.975)
-
-  jk_df <- data.frame(
-    Parameter = param_names,
-    Estimate_full = as.numeric(theta_full),
-    Estimate_jackknife = as.numeric(theta_jack),
-    StdError = as.numeric(jack_se),
-    CI_lower = as.numeric(theta_jack - z * jack_se),
-    CI_upper = as.numeric(theta_jack + z * jack_se),
-    n_eff = G
-  )
-
-  filename_jk <- file.path(
-    foldername_res,
-    paste0("jackknife_results_com_q", q * 100,
-           "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-  )
-  write.csv(jk_df, filename_jk, row.names = FALSE)
-  cat("Jackknife results saved to", filename_jk, "\n")
-  print(jk_df)
-
-  # Save pseudo-values
-  pseudo_df <- as.data.frame(pseudo_values)
-  pseudo_df$block <- jack_valid$block
-  pseudo_df <- pseudo_df[, c("block", param_names)]
-
-  filename_pseudo <- file.path(
-    jk_folder,
-    paste0("pseudo_values_q", q * 100,
-           "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-  )
-  write.csv(pseudo_df, filename_pseudo, row.names = FALSE)
-  cat("Pseudo-values saved to", filename_pseudo, "\n")
-
-
-  # --------------------------------------------------------------------------
-  # OPTIONAL: log-scale jackknife for eta1 and eta2
-  # --------------------------------------------------------------------------
-  eta_names <- c("eta1", "eta2")
-
-  if (all(jack_estimates[, eta_names] > 0) && all(theta_full[eta_names] > 0)) {
-
-    jack_eta_log <- log(jack_estimates[, eta_names, drop = FALSE])
-    theta_full_log <- log(theta_full[eta_names])
-    theta_dot_log <- colMeans(jack_eta_log)
-
-    theta_jack_log <- G * theta_full_log - (G - 1) * theta_dot_log
-
-    jack_se_log <- sqrt(
-      (G - 1) / G * colSums(
-        (jack_eta_log - matrix(theta_dot_log, G, length(eta_names), byrow = TRUE))^2
-      )
-    )
-
-    ci_log_lower <- theta_jack_log - z * jack_se_log
-    ci_log_upper <- theta_jack_log + z * jack_se_log
-
-    jk_eta_log_df <- data.frame(
-      Parameter = eta_names,
-      Estimate_full = as.numeric(theta_full[eta_names]),
-      Estimate_jackknife = as.numeric(exp(theta_jack_log)),
-      StdError_logscale = as.numeric(jack_se_log),
-      CI_lower = as.numeric(exp(ci_log_lower)),
-      CI_upper = as.numeric(exp(ci_log_upper)),
-      n_eff = G
-    )
-
-    filename_jk_eta_log <- file.path(
-      foldername_res,
-      paste0("jackknife_results_log_eta_q", q * 100,
-             "_delta", delta, "_dmin", min_spatial_dist, ".csv")
-    )
-    write.csv(jk_eta_log_df, filename_jk_eta_log, row.names = FALSE)
-    cat("Log-scale jackknife results for eta saved to", filename_jk_eta_log, "\n")
-    print(jk_eta_log_df)
-
-  } else {
-    cat("Log-scale CI for eta not computed because some eta estimates are non-positive.\n")
-  }
+if (G < 2) {
+  stop("Pas assez de réplicats valides pour calculer les intervalles de confiance.")
 }
+
+jack_estimates <- as.matrix(jack_valid[, param_names, drop = FALSE])
+storage.mode(jack_estimates) <- "double"
+
+if (any(jack_estimates <= 0) || any(theta_full <= 0)) {
+  stop("Certaines estimations sont négatives ou nulles, impossible d'appliquer le Log-Jackknife.")
+}
+
+log_jack_estimates <- log(jack_estimates)
+log_theta_full     <- log(theta_full)
+log_theta_dot      <- colMeans(log_jack_estimates)
+
+pseudo_values_log <- matrix(NA_real_, nrow = G, ncol = npar, dimnames = list(jack_valid$block, param_names))
+for (i in seq_len(G)) {
+  pseudo_values_log[i, ] <- G * log_theta_full - (G - 1) * log_jack_estimates[i, ]
+}
+
+jack_se_log <- sqrt(
+  ((G - 1) / G) * colSums((log_jack_estimates - matrix(log_theta_dot, G, npar, byrow = TRUE))^2)
+)
+
+log_theta_jack_corrected <- colMeans(pseudo_values_log)
+theta_jack_natural       <- exp(log_theta_jack_corrected)
+
+z <- qnorm(0.975)
+ci_log_lower <- log_theta_jack_corrected - z * jack_se_log
+ci_log_upper <- log_theta_jack_corrected + z * jack_se_log
+
+jk_df <- data.frame(
+  Parameter          = param_names,
+  Estimate_full      = as.numeric(theta_full),
+  Estimate_jackknife = as.numeric(theta_natural), 
+  StdError_logscale  = as.numeric(jack_se_log),
+  CI_lower           = as.numeric(exp(ci_log_lower)),
+  CI_upper           = as.numeric(exp(ci_log_upper)),
+  n_blocks_eff       = G
+)
+
+filename_jk <- file.path(
+  foldername_res,
+  paste0("jackknife_annual_results_logscale_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+)
+write.csv(jk_df, filename_jk, row.names = FALSE)
+cat("Intervalles de confiance du Jackknife annuel sauvegardés.\n")
+print(jk_df)
+
+# Sauvegarde des pseudo-valeurs naturelles pour archivage/diagnostics
+pseudo_natural_df <- as.data.frame(exp(pseudo_values_log))
+pseudo_natural_df$block <- jack_valid$block
+pseudo_natural_df <- pseudo_natural_df[, c("block", param_names)]
+
+filename_pseudo <- file.path(jk_folder, paste0("pseudo_values_natural_q", q * 100, ".csv"))
+write.csv(pseudo_natural_df, filename_pseudo, row.names = FALSE)
 
 # com_results <- c(0.1579947, 0.9923270, 0.5800128, 0.6627969, 3.8962660, 2.2208320)
 # com_params <- com_results
-com_params <- results_df[, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")]
-com_params <- as.numeric(com_params[1, ])
-# # get distance matrix and breaks for chi estimation
-df_dist <- reshape_distances(dist_mat)
-n_hbins <- 30
-h_all <- df_dist$value
+# com_params <- results_df[, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")]
+# com_params <- as.numeric(com_params[1, ])
+# # # get distance matrix and breaks for chi estimation
+# df_dist <- reshape_distances(dist_mat)
+# n_hbins <- 30
+# h_all <- df_dist$value
 
-h_breaks_com <- quantile(
-  h_all,
-  probs = seq(0, 1, length.out = n_hbins + 1),
-  na.rm = TRUE
-)
-# h_breaks_com <- seq(0, 13, by=2)
+# h_breaks_com <- quantile(
+#   h_all,
+#   probs = seq(0, 1, length.out = n_hbins + 1),
+#   na.rm = TRUE
+# )
+# # h_breaks_com <- seq(0, 13, by=2)
 
-table(cut(h_all, breaks = h_breaks_com, include.lowest = TRUE), useNA = "ifany")
-length(h_breaks_com)
-h_breaks_com
+# table(cut(h_all, breaks = h_breaks_com, include.lowest = TRUE), useNA = "ifany")
+# length(h_breaks_com)
+# h_breaks_com
 
-h_breaks_com <- unique(as.numeric(h_breaks_com))
-h_breaks_com[length(h_breaks_com)] <- 13
+# h_breaks_com <- unique(as.numeric(h_breaks_com))
+# h_breaks_com[length(h_breaks_com)] <- 13
 
-chi_com <- compute_group_chi(
-  list_lags = list_lags,
-  list_excesses = list_excesses,
-  wind_df = V_adv,
-  params = com_params,
-  tau_fixed = 0,
-  h_breaks = h_breaks_com,
-  adv_transform = TRUE
-)
+# chi_com <- compute_group_chi(
+#   list_lags = list_lags,
+#   list_excesses = list_excesses,
+#   wind_df = V_adv,
+#   params = com_params,
+#   tau_fixed = 0,
+#   h_breaks = h_breaks_com,
+#   adv_transform = TRUE
+# )
 
-corr_com <- summary_correlation(chi_com$res_cmp)
-message(sprintf("COM chi Spearman correlation: %.3f", corr_com))
+# corr_com <- summary_correlation(chi_com$res_cmp)
+# message(sprintf("COM chi Spearman correlation: %.3f", corr_com))
 
-# plot chi_come emp vs theo
-print(chi_com$plots$all)
+# # plot chi_come emp vs theo
+# print(chi_com$plots$all)
 
-ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, color = factor(tau), size = n_pairs)) +
-  geom_point(alpha = 0.8) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-  theme_bw()
+# ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, color = factor(tau), size = n_pairs)) +
+#   geom_point(alpha = 0.8) +
+#   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+#   theme_bw()
 
-res_com_cmp <- chi_com$res_cmp
+# res_com_cmp <- chi_com$res_cmp
+# # ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
+# #   geom_point(alpha = 0.7, color = btfgreen) +
+# #   geom_abline(linetype = "dashed", color = "red") +
+# #   theme_bw() +
+# #   scale_size_continuous(range = c(1, 4)) +
+# #   labs(x = "Theoretical Chi", y = "Empirical Chi",
+# #       size = "Number of pairs") +
+# #   btf_theme
+
 # ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
 #   geom_point(alpha = 0.7, color = btfgreen) +
 #   geom_abline(linetype = "dashed", color = "red") +
 #   theme_bw() +
 #   scale_size_continuous(range = c(1, 4)) +
-#   labs(x = "Theoretical Chi", y = "Empirical Chi",
+#   labs(x = TeX("Theoretical $\\chi$"), y = TeX("Empirical $\\chi$"),
 #       size = "Number of pairs") +
-#   btf_theme
-
-ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
-  geom_point(alpha = 0.7, color = btfgreen) +
-  geom_abline(linetype = "dashed", color = "red") +
-  theme_bw() +
-  scale_size_continuous(range = c(1, 4)) +
-  labs(x = TeX("Theoretical $\\chi$"), y = TeX("Empirical $\\chi$"),
-      size = "Number of pairs") +
-  btf_theme +
-  theme(legend.position = "right",
-        legend.title = element_text(size = 16),
-        legend.text = element_text(size = 14))
-# save plot
-foldername <- paste0(im_folder, "workflows/full_pipeline/")
-if (!dir.exists(foldername)) {
-  dir.create(foldername, recursive = TRUE)
-}
-filename <- paste0(foldername, "com_chi_th_emp.png")
-ggsave(filename,
-       width = 7,
-       height = 6)
+#   btf_theme +
+#   theme(legend.position = "right",
+#         legend.title = element_text(size = 16),
+#         legend.text = element_text(size = 14))
+# # save plot
+# foldername <- paste0(im_folder, "workflows/full_pipeline/")
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
+# filename <- paste0(foldername, "com_chi_th_emp.png")
+# ggsave(filename,
+#        width = 7,
+#        height = 6)
 
