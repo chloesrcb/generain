@@ -34,24 +34,10 @@ files <- list.files(functions_folder, full.names = TRUE)
 # # load all functions in files
 invisible(lapply(files, function(f) source(f, echo = FALSE)))
 
-# get rain data from omsev
-# filename_omsev <- paste0(data_folder,
-#                          "omsev/omsev_5min/rain_mtp_5min_2019_2024_cleaned.csv")
-# # # write.csv(rain, filename_omsev, row.names = FALSE)
-# rain <- read.csv(filename_omsev)
-# head(rain)
-# tail(rain)
-
-# rain_omsev <- rain
-# colnames(rain_omsev)
 filename_loc <- paste0(data_folder,
                            "omsev/loc_rain_gauges.csv")
 # get location of each rain gauge
 location_gauges <- read.csv(filename_loc)
-location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                             "crbm", "archiw", "archie", "um35", "chu1",
-                             "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
-                             "cines", "brives", "hydro")
 
 # get rain data
 filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
@@ -63,10 +49,6 @@ rownames(rain_omsev) <- rain_omsev$dates
 # remove dates after january 2025
 # rain_omsev <- rain_omsev[rownames(rain_omsev) < "2025-01-31 00:00:00", ]
 rain <- rain_omsev[-1] # remove dates column
-# rain$mse
-# Get distances matrix
-dist_mat <- get_dist_mat(location_gauges)
-df_dist <- reshape_distances(dist_mat)
 
 # remove cines, hydro, brives
 rain <- rain[, !(colnames(rain) %in% c("cines", "hydro", "brives"))]
@@ -115,7 +97,7 @@ list_s <- set_st_excess$list_s
 list_t <- set_st_excess$list_t
 list_u <- set_st_excess$list_u
 
-min_spatial_dist <- 1200
+min_spatial_dist <- 1600
 delta <- 12
 # Spatio-temporal neighborhood parameters
 s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
@@ -144,14 +126,14 @@ n_ep <- length(t0_vec)
 
 temporal_overlap <- matrix(FALSE, n_ep, n_ep)
 
-for (i in 1:n_ep) {
-  for (j in 1:n_ep) {
-    temporal_overlap[i, j] <- same_temporality(t0_vec[i], t0_vec[j], delta)
-  }
-}
+# for (i in 1:n_ep) {
+#   for (j in 1:n_ep) {
+#     temporal_overlap[i, j] <- same_temporality(t0_vec[i], t0_vec[j], delta)
+#   }
+# }
 
-has_temporal_neighbor <- apply(temporal_overlap, 1, function(x) sum(x) > 1)
-table(has_temporal_neighbor)
+# has_temporal_neighbor <- apply(temporal_overlap, 1, function(x) sum(x) > 1)
+# table(has_temporal_neighbor)
 
 
 # dmin <- c(500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600)
@@ -387,65 +369,12 @@ df_excesses <- list_excesses[[15]]
 sum(df_excesses$kij)
 
 
-# -------------------------------------------------------------------------
-# Detect temporal overlaps and restrict spatial domain only for those episodes
-# -------------------------------------------------------------------------
-
 selected_episodes$t0_date <- as.POSIXct(
   selected_episodes$t0_date,
   format = "%Y-%m-%d %H:%M:%S",
   tz = "UTC"
 )
 
-# same_temporality <- function(t0_i, t0_j, delta, step_min = 5) {
-#   abs(as.numeric(difftime(t0_i, t0_j, units = "mins"))) < delta * step_min
-# }
-
-# t0_vec <- selected_episodes$t0_date
-# n_ep <- length(t0_vec)
-
-# temporal_overlap <- matrix(FALSE, n_ep, n_ep)
-
-# for (i in 1:n_ep) {
-#   for (j in 1:n_ep) {
-#     if (i != j) {
-#       temporal_overlap[i, j] <- same_temporality(t0_vec[i], t0_vec[j], delta)
-#     }
-#   }
-# }
-
-# has_temporal_overlap <- apply(temporal_overlap, 1, any)
-# table(has_temporal_overlap)
-
-# choose local radius for episodes with temporal overlap
-# IMPORTANT: adapt depending on unit of hnorm
-# d_local <- 0.8   # if hnorm is in km
-# d_local <- 600 # if hnorm is in meters
-
-# list_lags_overlap <- vector("list", length(list_lags))
-# list_excesses_overlap <- vector("list", length(list_excesses))
-
-# for (i in seq_along(list_lags)) {
-#   if (has_temporal_overlap[i]) {
-#     keep <- list_lags[[i]]$hnorm <= d_local
-#   } else {
-#     keep <- rep(TRUE, nrow(list_lags[[i]]))
-#   }
-
-#   list_lags_overlap[[i]] <- list_lags[[i]][keep, , drop = FALSE]
-#   list_excesses_overlap[[i]] <- list_excesses[[i]][keep, , drop = FALSE]
-# }
-
-# selected_episodes_filtered <- selected_episodes
-# list_episodes_filtered <- list_episodes
-# list_lags_filtered <- list_lags
-# list_excesses_filtered <- list_excesses
-
-# get comephore estimates
-# filename_com_res <- paste(data_folder,
-#         "comephore/optim_results/euclidean/free_eta/results_com_classes_q95_delta30_dmin5.csv",
-#         sep = "")
-# com_results <- read.csv(filename_com_res)
 com_results <- c(0.1579947, 0.9923270, 0.5800128, 0.6627969, 3.8962660, 2.2208320)
 
 # check for na in adv and wind
@@ -462,30 +391,21 @@ selected_episodes$adv_direction[selected_episodes$adv_direction < 0] <-
 hist(selected_episodes$adv_speed, main = "Histogram of advection speed",
      xlab = "Speed (km/h)", breaks = 30)
 
-# get advection with speed above 0.2 km/h
-speed_threshold <- 0
-adv_speed <- sqrt(selected_episodes$adv_x^2 +
-                    selected_episodes$adv_y^2)
+# remove episode with advection speed above 200 with transformation 
+eta1 <- com_results[5]
+eta2 <- com_results[6]
 
-# max(adv_speed)
-# # put all adv < speed_threshold to 0
-# adv_speed[adv_speed < speed_threshold] <- 0
-# selected_episodes$adv_speed <- adv_speed
-# selected_episodes$adv_x[adv_speed == 0] <- 0
-# selected_episodes$adv_y[adv_speed == 0] <- 0
-# filtered <- FALSE
-# if (filtered) {
-#   selected_episodes_filtered <- selected_episodes[adv_speed >= speed_threshold, ]
-#     list_episodes_filtered <- list_episodes[adv_speed > speed_threshold]
-#     list_lags_filtered <- list_lags[adv_speed > speed_threshold]
-#     list_excesses_filtered <- list_excesses[adv_speed > speed_threshold]
-# } else {
-  selected_episodes_filtered <- selected_episodes
-    list_episodes_filtered <- list_episodes
-    list_lags_filtered <- list_lags
-    list_excesses_filtered <- list_excesses
+selected_episodes$adv_speed_transformed <- eta1 * selected_episodes$adv_speed^eta2
+# histogram of transformed advection speed
+hist(selected_episodes$adv_speed_transformed, main = "Histogram of transformed advection speed",
+     xlab = "Transformed Speed (km/h)", breaks = 30)
 
-# }
+# remove episode with advection speed above 200 with transformation 
+selected_episodes_filtered <- selected_episodes
+list_episodes_filtered <- list_episodes
+list_lags_filtered <- list_lags
+list_excesses_filtered <- list_excesses
+
 
 V_episodes_filtered <- data.frame(
     vx = selected_episodes_filtered$adv_x,
@@ -512,8 +432,6 @@ print(paste("Number of episodes after filtering:", number_episode))
 # [1] 1.1533284 4.1566903 0.2059604 0.6466280 avec les 414 episodes 
 
 init_com_class <- com_results
-eta1_class <- init_com_class[5]
-eta2_class <- init_com_class[6]
 head(V_episodes_filtered)
 result <- optim(
   par = init_com_class[1:4],
@@ -525,8 +443,8 @@ result <- optim(
   wind_df = V_episodes_filtered,
   latlon = FALSE,
   distance = "euclidean",
-  fixed_eta1 = eta1_class,
-  fixed_eta2 = eta2_class,
+  fixed_eta1 = eta1,
+  fixed_eta2 = eta2,
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08),
   upper = c(10, 10, 1.999, 1.999),
@@ -555,15 +473,15 @@ params_estim_m5min <- c(par_m5min$beta1,
                         par_m5min$beta2,
                         result$par[3],
                         result$par[4],
-                        eta1_class,
-                        eta2_class)
+                        eta1,
+                        eta2)
 
 param_estim_kmh <- c(result$par[1],
                      result$par[2],
                      result$par[3],
                      result$par[4],
-                     eta1_class,
-                     eta2_class)
+                     eta1,
+                     eta2)
 
 
 if (result$convergence != 0) {
@@ -594,7 +512,7 @@ if (!dir.exists(foldername_res)) {
 
 params_est <- as.numeric(result_df)
 
-params_est <- c(params_est, eta1_class, eta2_class)
+params_est <- c(params_est, eta1, eta2)
 
 # Jackknife CI ---------------------------------------------------------------
 
@@ -632,8 +550,8 @@ jack_estimates_list <- parallel::mclapply(unique_month_years, function(month_yea
       wind_df = jack_wind,
       latlon = FALSE,
       distance = "euclidean",
-      fixed_eta1 = eta1_class,
-      fixed_eta2 = eta2_class,
+      fixed_eta1 = eta1,
+      fixed_eta2 = eta2,
       method = "L-BFGS-B",
       lower = c(1e-08, 1e-08, 1e-08, 1e-08),
       upper = c(10, 10, 1.999, 1.999),
@@ -773,6 +691,7 @@ n_zero_adv <- sum(V_episodes_filtered$vx == 0 & V_episodes_filtered$vy == 0)
 cat("Number of episodes with zero advection after filtering:", n_zero_adv, "\n")
 
 
+# VALIDATION -------------------------------------------------------------------
 omsev_params <- params_est
 
 dist_mat <- get_dist_mat(location_gauges) / 1000
@@ -806,6 +725,43 @@ message(sprintf("OMSEV chi Spearman correlation: %.3f", corr_omsev))
 print(chi_omsev$plots$all)
 
 res_om_cmp <- chi_omsev$res_cmp
+
+res_om_cmp_dev <- res_om_cmp %>%
+  mutate(
+    diff = chi_emp_bar - chi_theo_bar,
+    abs_diff = abs(diff),
+    rel_diff = diff / chi_theo_bar,
+    direction = case_when(
+      diff > 0 ~ "empirical > theoretical",
+      diff < 0 ~ "empirical < theoretical",
+      TRUE ~ "on diagonal"
+    )
+  ) %>%
+  arrange(desc(abs_diff))
+
+res_om_cmp_dev %>%
+  select(tau, hbin, chi_theo_bar, chi_emp_bar, diff, rel_diff, n_pairs, direction) %>%
+  head(15)
+
+ggplot(res_om_cmp_dev,
+       aes(x = chi_theo_bar, y = chi_emp_bar,
+           size = n_pairs, color = diff)) +
+  geom_point(alpha = 0.8) +
+  geom_abline(linetype = "dashed", color = "red") +
+  geom_text(
+    data = head(res_om_cmp_dev, 10),
+    aes(label = paste0("tau=", tau, "\n", hbin)),
+    size = 3,
+    vjust = -0.6
+  ) +
+  theme_bw() +
+  labs(
+    x = TeX("Theoretical $\\chi$"),
+    y = TeX("Empirical $\\chi$"),
+    color = "Emp - Theo",
+    size = "Number of pairs"
+  )
+
 ggplot(res_om_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
   geom_point(alpha = 0.7, color = btfgreen) +
   geom_abline(linetype = "dashed", color = "red") +
@@ -828,44 +784,189 @@ ggsave(filename,
        width = 7,
        height = 6)
 
+# check only for tau > 0
+res_taupos <- res_om_cmp %>%
+  filter(tau > 0) %>%
+  mutate(
+    diff = chi_emp_bar - chi_theo_bar,
+    abs_diff = abs(diff),
+    rel_diff = diff / chi_theo_bar,
+    direction = case_when(
+      diff > 0 ~ "empirical > theoretical",
+      diff < 0 ~ "empirical < theoretical",
+      TRUE ~ "on diagonal"
+    )
+  ) %>%
+  arrange(desc(abs_diff))
+
+ggplot(res_taupos, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
+  geom_point(alpha = 0.7, color = btfgreen) +
+  geom_abline(linetype = "dashed", color = "red") +
+  theme_bw() +
+  scale_size_continuous(range = c(1, 4)) +
+  labs(x = TeX("Theoretical $\\chi$"), y = TeX("Empirical $\\chi$"),
+      size = "Number of pairs") +
+  btf_theme +
+  theme(legend.position = "right",
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 14))
+
+# -------------------------------------------------------------------------
+# CHI VALIDATION DIAGNOSTICS
+# -------------------------------------------------------------------------
+
+res_chi <- chi_omsev$res_cmp %>%
+  mutate(
+    diff = chi_emp_bar - chi_theo_bar,
+    abs_diff = abs(diff),
+    rel_diff = diff / chi_theo_bar,
+    tau_lab = paste0(tau * 60, " min")
+  )
+
+# 1. Empirical vs theoretical chi, colored by temporal lag
+p_chi_scatter_tau <- ggplot(
+  res_chi,
+  aes(x = chi_theo_bar, y = chi_emp_bar,
+      color = factor(tau_lab), size = n_pairs)
+) +
+  geom_point(alpha = 0.75) +
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dashed", color = "red") +
+  scale_size_continuous(range = c(1.5, 4)) +
+  labs(
+    x = TeX("Theoretical $\\chi$"),
+    y = TeX("Empirical $\\chi$"),
+    color = "Temporal lag",
+    size = "Number of pairs"
+  ) +
+  btf_theme +
+  theme(legend.position = "right")
+
+print(p_chi_scatter_tau)
 
 
-# --- REMPLACE TON BLOC DE CALCUL DE L'IC PAR CELUI-CI ---
+# 2. Residuals chi_emp - chi_theo as a function of theoretical chi
+p_chi_residual <- ggplot(
+  res_chi,
+  aes(x = chi_theo_bar, y = diff,
+      color = factor(tau_lab), size = n_pairs)
+) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_point(alpha = 0.75) +
+  scale_size_continuous(range = c(1.5, 4)) +
+  labs(
+    x = TeX("Theoretical $\\chi$"),
+    y = TeX("$\\chi_{emp} - \\chi_{theo}$"),
+    color = "Temporal lag",
+    size = "Number of pairs"
+  ) +
+  btf_theme +
+  theme(legend.position = "right")
 
-jack_estimates <- do.call(rbind, jack_estimates_list)
-jack_estimates <- na.omit(jack_estimates)
-n_eff <- nrow(jack_estimates)
+print(p_chi_residual)
 
-# 1. Passage à l'échelle log pour stabiliser la variance et forcer la positivité
-log_jack_estimates <- log(jack_estimates)
-log_init_param_jk  <- log(init_param_jk[1:4])
+# 3. Residuals by spatial distance bin
+p_chi_residual_hbin <- ggplot(
+  res_chi,
+  aes(x = hbin, y = diff, fill = factor(tau_lab))
+) +
+  geom_col(position = "dodge") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Spatial distance bin",
+    y = TeX("$\\chi_{emp} - \\chi_{theo}$"),
+    fill = "Temporal lag"
+  ) +
+  btf_theme +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  ) +
+  ylim(-0.25,0.25)
 
-# 2. Calcul des pseudo-valeurs sur l'échelle LOG
-# Note : Il est plus rigoureux d'utiliser la vraie estimation totale (log_init_param_jk) plutôt que la moyenne du jackknife
-pseudo_values_log <- matrix(NA, nrow = n_eff, ncol = 4)
-for (i in 1:n_eff) {
-  pseudo_values_log[i, ] <- n_eff * log_init_param_jk - (n_eff - 1) * log_jack_estimates[i, ]
+print(p_chi_residual_hbin)
+
+
+# 4. Chi as a function of spatial distance, one panel per temporal lag
+p_chi_by_h_tau <- ggplot(
+  res_chi,
+  aes(x = hbin, group = 1)
+) +
+  geom_line(aes(y = chi_emp_bar, color = "Empirical"), linewidth = 0.9) +
+  geom_point(aes(y = chi_emp_bar, color = "Empirical"), size = 2) +
+  geom_line(aes(y = chi_theo_bar, color = "Theoretical"),
+            linewidth = 0.9, linetype = "dashed") +
+  geom_point(aes(y = chi_theo_bar, color = "Theoretical"), size = 2) +
+  facet_wrap(~ tau_lab) +
+  labs(
+    x = "Spatial distance bin",
+    y = TeX("$\\chi$"),
+    color = ""
+  ) +
+  btf_theme +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  #legend
+  guides(color = guide_legend(title = "Chi"))
+
+print(p_chi_by_h_tau)
+
+# tie color with dégradé
+palette_diff <- colorRampPalette(c("blue", "white", "red"))(100)
+
+# 5. Heatmap of signed residuals
+p_chi_heatmap <- ggplot(
+  res_chi,
+  aes(x = hbin, y = factor(tau_lab), fill = diff)
+) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "#52b4af", mid = "white", high = "#d18181",
+                       midpoint = 0, limits = c(-0.25, 0.25), name = TeX("$\\chi_{emp} - \\chi_{theo}$")) +
+  geom_text(aes(label = round(diff, 2)), size = 3) +
+  labs(
+    x = "Spatial distance bin",
+    y = "Temporal lag",
+    fill = TeX("$\\chi_{emp} - \\chi_{theo}$")
+  ) +
+  btf_theme +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+print(p_chi_heatmap)
+
+foldername <- paste0(im_folder, "optim/omsev/2025_results/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
 }
 
-# 3. Moyenne et Standard Error sur l'échelle LOG
-jack_mean_pseudo_log <- colMeans(pseudo_values_log)
-jack_se_log          <- apply(pseudo_values_log, 2, sd) / sqrt(n_eff)
+ggsave(paste0(foldername, "omsev_chi_scatter_by_tau.png"),
+       p_chi_scatter_tau, width = 7, height = 6)
 
-# 4. Calcul de l'IC sur l'échelle LOG
-z <- qnorm(0.975)
-lower_ci_log <- jack_mean_pseudo_log - z * jack_se_log
-upper_ci_log <- jack_mean_pseudo_log + z * jack_se_log
+ggsave(paste0(foldername, "omsev_chi_residuals.png"),
+       p_chi_residual, width = 7, height = 6)
 
-# 5. RETOUR À L'ÉCHELLE NATURELLE VIA EXP() -> Plus de valeurs négatives possibles !
-estimate_jk_naturel <- exp(jack_mean_pseudo_log) # Estimation corrigée du biais
-lower_ci <- exp(lower_ci_log)
-upper_ci <- exp(upper_ci_log)
+ggsave(paste0(foldername, "omsev_chi_residuals_by_hbin.png"),
+       p_chi_residual_hbin, width = 9, height = 6)
 
-jackknife_monthyear_results <- data.frame(
-  Parameter     = c("beta1", "beta2", "alpha1", "alpha2"),
-  Estimate_full = result$par,
-  Estimate_jk   = estimate_jk_naturel,
-  StdError_log  = jack_se_log, # L'erreur standard est maintenant relative (multiplicative)
-  CI_lower      = lower_ci,
-  CI_upper      = upper_ci
-)
+ggsave(paste0(foldername, "omsev_chi_by_hbin_tau.png"),
+       p_chi_by_h_tau, width = 10, height = 7)
+
+ggsave(paste0(foldername, "omsev_chi_residual_heatmap.png"),
+       p_chi_heatmap, width = 9, height = 6)
+
+
+rmse_chi <- sqrt(mean(
+  (res_om_cmp$chi_emp_bar - res_om_cmp$chi_theo_bar)^2
+))
+
+res_om_cmp %>%
+  group_by(tau) %>%
+  summarise(
+    rmse = sqrt(mean((chi_emp_bar - chi_theo_bar)^2)),
+    mae  = mean(abs(chi_emp_bar - chi_theo_bar))
+  )
+

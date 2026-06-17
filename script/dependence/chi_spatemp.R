@@ -139,7 +139,7 @@ make_radius_quantile <- function(dist_mat, n_bins = 10) {
 }
 
 unique_h_values <- sort(unique(df_chi$distance))
-radius <- make_radius_quantile(dist_mat, n_bins = 10)
+radius <- make_radius_quantile(dist_mat, n_bins = 12)
 df_chi$dist_class <- cut(
   df_chi$distance,
   breaks = radius,
@@ -274,4 +274,5 @@ ggplot(Ratio_vario_diff_h0, aes(x = h, y = diff_vario_h0, color = as.factor(tau)
     btf_theme
 
 # save
-ggsave(paste0(im_folder, "variogram/empirical/omsev/variogram_separability/vario_diff_h0_q", q * 100, ".pdf"), width = 10, height = 5)
+ggsave(paste0(im_folder, "variogram/empirical/omsev/2025/variogram_separability/vario_diff_h0_q", q * 100, ".pdf"), width = 10, height = 5)
+

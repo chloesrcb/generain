@@ -7,6 +7,17 @@ adv_transformed$adv_speed <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
 adv_transformed$adv_direction <- atan2(adv_df$vy_final, adv_df$vx_final) * (180 / pi)
 adv_transformed$adv_speed <- eta1 * adv_transformed$adv_speed^eta2
 
+# max
+adv_above300 <- adv_transformed[adv_transformed$adv_speed > 200, ]
+# for which dates adv_max occurs
+adv_above300_dates <- adv_transformed$t0_comephore[adv_transformed$adv_speed > 300]
+
+# median adv speed
+median_adv <- median(adv_transformed$adv_speed, na.rm = TRUE)
+
+# which is na de adv
+na_adv <- sum(is.na(adv_transformed$adv_speed))
+
 # plot adv_transformed speed vs original speed
 ggplot(adv_transformed, aes(x = sqrt(vx_final^2 + vy_final^2), y = adv_speed)) +
   geom_point() +
@@ -50,16 +61,21 @@ adv_rose <- adv_plot %>%
     speed_bin = cut(
       speed,
       breaks = c(0, 2, 5, 10, 20, 50, 100, Inf),
-      labels = c("0–2", "2–5", "5–10", "10–20", "20–50", "50–100", ">100")
+      labels = c("0-2", "2-5", "5-10", "10-20", "20-50", "50-100", ">100")
     )
   )
+ 
+# remove NA values in dir_bin and speed_bin and count it as zero adv
+nb_na_dir <- sum(is.na(adv_rose$speed_bin))
+adv_rose <- adv_rose[!is.na(adv_rose$dir_bin) & !is.na(adv_rose$speed_bin), ]
+
 
 ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
   geom_histogram(
     binwidth = 22.5,
     boundary = 0,
     color = "white",
-    linewidth = 0.25,
+    linewidth = 0.05,
     alpha = 0.7
   ) +
   coord_polar(start = 0, direction = 1) +
@@ -103,7 +119,7 @@ ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
     binwidth = 22.5,
     boundary = 0,
     color = "white",
-    linewidth = 0.25,
+    linewidth = 0.05,
     alpha = 0.7
   ) +
   coord_polar(start = 0, direction = 1) +
@@ -132,7 +148,7 @@ ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
   )
 
 # save rose plot
-foldername <- paste0(im_folder, "advection/withtransform/")
+foldername <- paste0(im_folder, "advection/withtransform/2025/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
@@ -141,3 +157,15 @@ filename_rose <- paste0(foldername, "omsev_adv_rose_q", q * 100, "_delta", delta
 
 
 ggsave(filename_rose, width = 8, height = 4, dpi = 300)
+
+
+# sumamry stats for transformed advection
+summary_adv <- data.frame(
+  max_adv_speed = max(adv_transformed$adv_speed, na.rm = TRUE),
+  median_adv_speed = median_adv,
+  nb_adv_above300 = nrow(adv_above300),
+  q95_adv_speed = quantile(adv_transformed$adv_speed, 0.95, na.rm = TRUE),
+  q99_adv_speed = quantile(adv_transformed$adv_speed, 0.99, na.rm = TRUE),
+  mean_adv = mean(adv_transformed$adv_speed, na.rm = TRUE),
+  nb_na_adv = sum(is.na(adv_transformed$adv_speed))
+)

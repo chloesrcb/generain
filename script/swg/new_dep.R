@@ -309,6 +309,13 @@ obs_res <- lapply(seq_along(list_episodes_filtered), function(j) {
 })
 P_obs_avg <- weighted_avg_cond_probs(obs_res)
 
+reps <- lapply(seq_along(sims_by_ep), function(j) {
+  u <- u_global
+  lapply(seq_along(sims_by_ep[[j]]), function(m) {
+    Xsim <- get_X_matrix(sims_by_ep[[j]][[m]])
+    cond_probs_episode_q(Xsim, u, sites = sites)
+  })
+})
 
 P_list <- lapply(reps, `[[`, "P")
 den_list <- lapply(reps, `[[`, "denom")
@@ -433,7 +440,7 @@ ggplot(df_plot, aes(x = s1, y = s2, fill = value)) +
   geom_tile() +
   facet_wrap(~ source, nrow = 1) +
   coord_equal() +
-  scale_fill_gradient(low = "white", high = btfgreen,
+  scale_fill_gradient(low = "white", high = "#357470",
                       limits = c(0, 1), na.value = "grey90") +
   labs(
     fill = "Probability"
@@ -449,6 +456,14 @@ ggplot(df_plot, aes(x = s1, y = s2, fill = value)) +
     axis.title = element_text(size = 16)
   )
 
-foldername <- paste0(im_folder, "/swg/omsev/cond_probs/")
+foldername <- paste0(im_folder, "/swg/omsev/2025/cond_probs/")
+# if (!dir.exists(foldername)) {
+#   dir.create(foldername, recursive = TRUE)
+# }
 ggsave(paste0(foldername, "cond_probs_", s3_pick, ".png"), width = 15, height = 7)
+
+
+
+
+
 

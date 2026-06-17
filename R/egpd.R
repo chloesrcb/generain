@@ -176,7 +176,7 @@ choose_censore <- function(rain_df, censores, n_samples = 100) {
 #' @return The computed RMSE value.
 #' @import mev
 #' @export
-compute_rmse <- function(y, left_censore, bound_kappa = c(0, 5), bound_sigma = c(0.001, Inf)) {
+compute_rmse <- function(y, left_censore, bound_kappa = c(0, 2), bound_sigma = c(0.001, 2)) {
   inits <- init_values(y, 0)
   sigma_0 <- inits[1]
   xi_0 <- inits[2]
@@ -201,6 +201,55 @@ compute_rmse <- function(y, left_censore, bound_kappa = c(0, 5), bound_sigma = c
 
   sqrt(mean((q_emp - q_theo)^2))
 }
+
+# compute_rmse <- function(y, left_censore,
+#                          bound_kappa = c(0.05, 3),
+#                          bound_sigma = c(0.001, Inf),
+#                          bound_xi = c(0, 1.0)) {
+#   y <- y[y > 0]
+#   if (length(y) < 20) return(Inf)
+
+#   inits <- init_values(y, 0)
+
+#   fit <- tryCatch({
+#     fit.extgp(
+#       y, model = 1, method = "mle",
+#       init = c(1, inits[1], inits[2]),
+#       censoring = c(left_censore, Inf),
+#       plots = FALSE, confint = FALSE, ncpus = 1
+#     )
+#   }, error = function(e) NULL)
+
+#   if (is.null(fit)) return(Inf)
+
+#   param <- fit$fit$mle
+#   if (!all(is.finite(param))) return(Inf)
+
+#   kappa <- param[1]
+#   sigma <- param[2]
+#   xi    <- param[3]
+
+#   if (kappa < bound_kappa[1] || kappa > bound_kappa[2]) return(Inf)
+#   if (sigma < bound_sigma[1] || sigma > bound_sigma[2]) return(Inf)
+#   if (xi < bound_xi[1] || xi > bound_xi[2]) return(Inf)
+
+#   # Important : diagnostic seulement au-dessus de la censure
+#   y_eval <- y[y > left_censore]
+#   if (length(y_eval) < 20) return(Inf)
+
+#   probs <- ppoints(length(y_eval))
+
+#   q_theo <- qextgp(
+#     probs, type = 1,
+#     kappa = kappa, sigma = sigma, xi = xi
+#   )
+
+#   if (!all(is.finite(q_theo))) return(Inf)
+
+#   q_emp <- sort(y_eval)
+
+#   sqrt(mean((q_emp - q_theo)^2))
+# }
 
 #' process_site function
 #' This function fits the Extreme Generalized Pareto Distribution (EGPD)
@@ -233,8 +282,8 @@ process_site <- function(y, site_name,
   inits <- init_values(y, 0)
   fit <- fit.extgp(y, model = 1, method = "mle",
                    init = c(1, inits[1], inits[2]),
-                   censoring = c(best_cens, Inf),
-                   plots = F, confint = F, ncpus = 7, R = R)
+                   censoring = c(0.216, Inf),
+                   plots = FALSE, confint = FALSE, ncpus = 7, R = R)
 
   param_mle <- fit$fit$mle
   kappa <- param_mle[1]

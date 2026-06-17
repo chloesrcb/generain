@@ -205,7 +205,7 @@ filename <- paste0(foldername, "tradeoff_dmin_episodes.png")
 ggsave(filename, plot = pA, width = 7, height = 5, units = "in", dpi = 300)
 
 dmin_fixed <- 5
-delta_grid <- c(10, 12, 15, 20, 24, 30, 36, 38, 40, 45, 48)  # in "steps" of 5 minutes
+delta_grid <- c(10, 12, 15, 20, 24, 30, 36, 38, 40, 45, 48)  # in hours
 
 set_st_excess <- get_spatiotemp_excess(comephore, quantile = q,
                      remove_zeros = TRUE)
@@ -253,7 +253,7 @@ p_deltaA <- ggplot(df_tradeoff_delta, aes(x = delta_steps, y = n_episodes)) +
   geom_vline(xintercept = 24, linetype = "dashed", color = "red") +
   theme_minimal() +
   labs(
-  x = expression(delta~"(hours)"),
+  x = expression(delta~" (hours)"),
   y = "Number of selected episodes"
   ) +
   btf_theme

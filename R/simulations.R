@@ -761,7 +761,7 @@ sim_rpareto_coords <- function(coords, times,
   rownames(Z) <- rownames(coords)
 
   list(Z = Z, W = W_mat, gamma0 = gamma0, R = R)
-}s
+}
 
 
 #' save_simulations function

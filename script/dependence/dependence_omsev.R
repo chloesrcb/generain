@@ -32,14 +32,15 @@ df_dist <- reshape_distances(dist_mat)
 # get rain measurements
 # load data
 # get rain data from omsev
-filename_omsev <- paste0(data_folder,
-                         "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
-load(filename_omsev)
-rain <- rain.all5[c(1, 6:ncol(rain.all5))]
 # filename_omsev <- paste0(data_folder,
-#                          "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
+#                          "omsev/omsev_5min/rain_mtp_5min_2019_2022.RData")
+# load(filename_omsev)
+# head(rain.all5)
+# rain <- rain.all5[c(1, 6:ncol(rain.all5))]
+filename_omsev <- paste0(data_folder,
+                         "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
 # rain <- rain.all_save
-# rain <- read.csv(filename_omsev)
+rain <- read.csv(filename_omsev)
 head(rain)
 
 typeof(rain)
@@ -49,7 +50,7 @@ rownames(rain) <- rain$dates
 rain_new <- rain[-1] # remove dates column
 
 # remove brives, cines and hydro columns
-# rain_new <- rain_new[, -which(colnames(rain_new) %in% c("brives", "cines", "hydro"))]
+rain_new <- rain_new[, -which(colnames(rain_new) %in% c("brives", "cines", "hydro"))]
 
 ################################################################################
 # EXTREMOGRAM ------------------------------------------------------------------
@@ -101,7 +102,7 @@ chitemp <- ggplot(df_gathered, aes(x = group, y = value)) +
 chitemp
 
 
-foldername_fig <- paste0(im_folder, "WLSE/omsev/temporal/new/")
+foldername_fig <- paste0(im_folder, "WLSE/2025/omsev/new/temporal/")
 if (!dir.exists(foldername_fig)) {
   dir.create(foldername_fig, recursive = TRUE)
 }
@@ -132,7 +133,8 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
   xlab(TeX(r"($\log(\tau)$)")) +
   ylab(TeX(r"($\zeta(\widehat{\chi}(0,\tau))$)")) +
   geom_line(aes(x = lag, y = alpha2 * lag + c2),
-            alpha = 0.6, color = "darkred", linewidth = 1.5)
+            alpha = 0.6, color = "darkred", linewidth = 1.5)+
+  ylim(-1, 1) 
 
 chitemp_eta_estim
 
@@ -174,7 +176,7 @@ histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
 histradius
 
 # SAVE 
-foldername_fig <- paste0(im_folder, "WLSE/omsev/spatial/new/")
+foldername_fig <- paste0(im_folder, "WLSE/2025/omsev/new/spatial/")
 if (!dir.exists(foldername_fig)) {
   dir.create(foldername_fig, recursive = TRUE)
 }
@@ -227,11 +229,6 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
 
 chispa_plot
 
-# save
-foldername_fig <- paste0(im_folder, "WLSE/omsev/spatial/new/")
-if (!dir.exists(foldername_fig)) {
-  dir.create(foldername_fig, recursive = TRUE)
-}
 ggsave(paste0(foldername_fig, "chispa_omsev_q", q*100, ".pdf"),
        width = 8, height = 6)
 
@@ -258,7 +255,7 @@ chispa_eta
 
 # remove lagspa 0
 chispa_df <- chispa_df[chispa_df$lagspa!=0,]
-wlse_spa <- get_estimate_variospa(chispa_df, weights = "exp")
+wlse_spa <- get_estimate_variospa(chispa_df, weights = "residuals")
 alpha1 <- wlse_spa$estimate[[3]]
 beta1 <- wlse_spa$estimate[[2]]
 c1 <- wlse_spa$estimate[[1]]
@@ -278,7 +275,8 @@ chispa_eta_estim <- ggplot(etachispa_df, aes(lagspa, chi)) +
         legend.margin = margin(0.5, 0.5, 0.5, 0, "cm"),
         panel.grid = element_line(color = "#5c595943")) +
   geom_line(aes(x = lagspa, y = alpha1 * lagspa + c1), alpha = 0.6,
-            color = "darkred", size = 1.5)
+            color = "darkred", size = 1.5) +
+  ylim(-3, -0.5)
 
 chispa_eta_estim
 

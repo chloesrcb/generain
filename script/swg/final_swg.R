@@ -33,12 +33,12 @@ library(latex2exp)
 ################################################################################
 
 # get rain data
-filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2024.csv")
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
 rain_omsev <- read.csv(filename_rain)
 head(rain_omsev)
 
 # egpd fit
-filename_egpd <- paste0(data_folder, "../thesis/resources/images/EGPD/OMSEV/2019_2024/egpd_results.csv")
+filename_egpd <- paste0(data_folder, "../thesis/resources/images/EGPD/OMSEV/2019_2025/egpd_results.csv")
 egpd_params <- read.csv(filename_egpd)
 
 # put dates as rownames
@@ -172,7 +172,7 @@ ggplot(selected_points, aes(x = s0)) +
 # save plot
 filename_plot <- paste0(
   im_folder,
-  "swg/omsev/number_episodes_per_site_q",
+  "swg/omsev/2025/number_episodes_per_site_q",
   q * 100,
   "dmin",
   dmin,
@@ -232,9 +232,8 @@ length(list_episodes)
 # VARIOS PARAMETERS FROM KM/H TO M/5MIN
 ###################################################################################
 # From results
-params_est <- c(1.2953654, 4.2212009, 0.2495586, 0.6657619, 3.8962660, 2.2208320)
-# params_est <-  c(1.2743853, 4.2106519, 0.2175129, 0.6678552, 5.3556250, 2.1357170)
-# param_est <- c(0.9740506, 4.5719732, 0.2321974, 0.7175306, 1.6210000, 5.2190000)
+# params_est <- c(1.2953654, 4.2212009, 0.2495586, 0.6657619, 3.8962660, 2.2208320)
+params_est <-  c(1.101,3.716,0.103,0.676, 3.896, 2.221) #2025
 etas_estimates <- params_est[5:6]
 
 params_kmh <- list(
@@ -267,7 +266,7 @@ alpha2 <- params_m5min$alpha2
 ##################################################################################
 # TRANSFORM ADVECTION SPEEDS
 ##################################################################################
-adv_filename <- paste(data_folder, "/omsev/adv_estim/combined_comephore_omsev/episode_advection_q",
+adv_filename <- paste(data_folder, "/omsev/adv_estim/2025/combined_comephore_omsev/episode_advection_q",
                           q * 100, "_delta", delta, "_dmin", dmin,
                           ".csv", sep = "")
 adv_df_raw <- read.csv(adv_filename, sep = ",")
@@ -412,7 +411,7 @@ ggplot(wind_rose_data, aes(x = direction_class, y = count, fill = speed_class)) 
   btf_theme
 
 # save plot
-foldername_plot <- paste0(im_folder,"swg/omsev/")
+foldername_plot <- paste0(im_folder,"swg/omsev/2025/")
 filename_plot <- paste0(
   foldername_plot, "adv_wind_rose_95q1200dmin12delta_NSEW.png")
 

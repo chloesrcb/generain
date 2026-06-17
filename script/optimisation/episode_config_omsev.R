@@ -22,22 +22,22 @@ library(parallel)
 
 # LOAD DATA ####################################################################
 # get rain data from omsev
-filename_omsev <- paste0(data_folder,
-                         "omsev/omsev_5min/rain_mtp_5min_2019_2024.RData")
-
-load(filename_omsev)
-rain_omsev <- rain.all5[, c(1, 6:(ncol(rain.all5)-1))]
+filename_rain <- paste0(data_folder, "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
+rain_omsev <- read.csv(filename_rain)
 head(rain_omsev)
+
 filename_loc <- paste0(data_folder,
                            "omsev/loc_rain_gauges.csv")
 # get location of each rain gauge
 location_gauges <- read.csv(filename_loc)
-location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
-                             "crbm", "archiw", "archie", "um35", "chu1",
-                             "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
-                             "cines", "brives", "hydro")
+# location_gauges$Station <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
+#                              "crbm", "archiw", "archie", "um35", "chu1",
+#                              "chu2", "chu3", "chu4", "chu5", "chu6", "chu7",
+#                              "cines", "brives", "hydro")
 
-
+# remove brives, cines, hydro from location_gauges and rain_omsev
+location_gauges <- location_gauges[!(location_gauges$Station %in% c("brives", "cines", "hydro")), ]
+rain_omsev <- rain_omsev[, !(colnames(rain_omsev) %in% c("brives", "cines", "hydro"))] 
 # DISTANCE AND COORDS ##########################################################
 nsites <- nrow(location_gauges)
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
@@ -52,10 +52,9 @@ rownames(grid_coords_km) <- rownames(sites_coords)
 grid_coords_m <- as.data.frame(coords_m)
 colnames(grid_coords_m) <- c("Longitude", "Latitude")
 rownames(grid_coords_m) <- rownames(sites_coords)
-head(rain_omsev)
 
 # use the same preprocessing as omsev_optim_2024.R
-rownames(rain_omsev) <- rain_omsev$dates
+rownames(rain_omsev) <- as.POSIXct(rain_omsev$dates, tz = "UTC")
 rain_omsev <- rain_omsev[, which(colnames(rain_omsev) != "dates")]
 
 # rain_omsev <- rain_omsev[, !(colnames(rain_omsev) %in% c("cines", "hydro", "brives"))]
@@ -89,9 +88,6 @@ for (i in seq_along(list_s)) {
   }
 }
 
-# rain_omsev <- rain_omsev[, !(colnames(rain_omsev) %in% c("cines", "hydro", "brives"))]
-# grid_coords_m <- grid_coords_m[!(rownames(grid_coords_m) %in% c("cines", "hydro", "brives")), ]
-# grid_coords_km <- grid_coords_km[!(rownames(grid_coords_km) %in% c("cines", "hydro", "brives")), ]
 dmins <- seq(100, 1600, by = 100)  # in m
 episode_size <- delta
 set_st_excess <- get_spatiotemp_excess(rain_omsev, quantile = q,
@@ -127,7 +123,7 @@ pA <- ggplot(df_tradeoff, aes(x = dmin_m, y = n_episodes)) +
   ) + 
   btf_theme
 
-foldername <- paste0(im_folder, "/optim/omsev/choice_config/")
+foldername <- paste0(im_folder, "/optim/omsev/choice_config/2025/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
@@ -137,27 +133,73 @@ ggsave(filename, plot = pA, width = 7, height = 5, units = "in", dpi = 300)
 
 
 
+# same for varying delta
+dmin <- 1200
+deltas <- seq(5, 24, by = 1)  # in steps
+
+res <- lapply(deltas, function(delta) {
+  sel <- get_s0t0_pairs(
+    sites_coords = grid_coords_m,
+    data = rain_omsev,
+    min_spatial_dist = dmin,
+    episode_size = delta,
+    set_st_excess = set_st_excess,
+    n_max_episodes = 10000,
+    latlon = FALSE,
+    beta = 0
+  )
+
+  data.frame(
+    delta_steps = delta,
+    n_episodes = nrow(sel)
+  )
+})
+
+df_tradeoff_delta <- bind_rows(res)
+
+# convert delta in minutes from 5 mins
+df_tradeoff_delta$delta_minutes <- df_tradeoff_delta$delta_steps * 5
+
+# plot tradeoff for delta
+pB <- ggplot(df_tradeoff_delta, aes(x = delta_steps, y = n_episodes)) +
+  geom_line(size = 1.1, color = btfgreen) +
+  geom_point(size = 2, color = btfgreen) +
+  geom_vline(xintercept = delta, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+  x = expression(delta~" (minutes)"),
+  y = "Number of selected episodes"
+  ) +
+  btf_theme
+
+# save plot
+foldername <- paste0(im_folder, "/optim/omsev/choice_config/2025/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "tradeoff_delta_episodes_dmin", dmin, ".png")
+ggsave(filename, plot = pB, width = 7, height = 5, units = "in", dpi = 300)
 
 
 
 
-library(data.table)
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-library(latex2exp)
+
+
+
+
+
+
+
+
+
 
 qs <- c(0.95)
-min_spatial_dists <- c(500, 750, 1000, 1200)
-deltas <- c(7, 12, 15)
+min_spatial_dists <- c(1000, 1200, 1400, 1600)
+deltas <- c(6, 8, 12, 15, 24)
 
-btfgreen <- "#1b9e77"
-btf_theme <- theme_minimal(base_size = 14)
 
-# --- Data cleaning ---
 rain <- rain[rowSums(!is.na(rain)) > 0, ]
 
-# --- Initialize results table ---
 results_summary <- data.frame(
     q = numeric(),
     dmin = numeric(),
@@ -168,7 +210,6 @@ results_summary <- data.frame(
     stringsAsFactors = FALSE
 )
 
-# --- Main loop ---
 for (q in qs) {
     for (min_spatial_dist in min_spatial_dists) {
         for (delta in deltas) {
@@ -177,12 +218,10 @@ for (q in qs) {
                     ", dmin =", min_spatial_dist,
                     ", delta =", delta, "=====\n")
 
-            # --- Step 1: Excess ---
             set_st_excess <- get_spatiotemp_excess(
                 rain, quantile = q, remove_zeros = TRUE
             )
 
-            # --- Step 2: Select episodes ---
             episode_size <- delta
             s0t0_set <- get_s0t0_pairs(
                 grid_coords_m, rain,
@@ -194,7 +233,6 @@ for (q in qs) {
             )
 
             if (nrow(s0t0_set) == 0) {
-                cat("⚠️ No episode found for these parameters\n")
                 results_summary <- rbind(
                     results_summary,
                     data.frame(q = q, dmin = min_spatial_dist, delta = delta,
@@ -221,12 +259,10 @@ for (q in qs) {
                                     ".csv", sep = "")
             write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
 
-            # --- Statistics ---
             n_episodes <- nrow(selected_points)
             u_min <- min(selected_points$u_s0, na.rm = TRUE)
             u_max <- max(selected_points$u_s0, na.rm = TRUE)
 
-            # --- Add to results table ---
             results_summary <- rbind(
                 results_summary,
                 data.frame(q = q,
@@ -237,46 +273,63 @@ for (q in qs) {
                                      u_max = u_max)
             )
 
-            # --- (optional) Plots and saving ---
-            # ... (your previous ggplot + write.csv code)
-
-            cat("✅ Finished for q =", q,
-                    ", dmin =", min_spatial_dist,
-                    ", delta =", delta,
-                    "→", n_episodes, "episodes\n")
         }
     }
 }
 
-# --- Save summary table ---
-summary_file <- paste0(data_folder, "/omsev/summary_episodes.csv")
+summary_file <- paste0(data_folder, "/omsev/summary_episodes_2025.csv")
 write.csv(results_summary, summary_file, row.names = FALSE)
 
-cat("\n✅ Summary table saved:", summary_file, "\n")
 print(results_summary)
 
 
-# transform in latex table
-library(xtable)
-latex_table <- xtable(results_summary, digits = 2)
-# Combine u_min and u_max into one column formatted as an interval
-results_summary$interval <- paste0("[", 
-                                   sprintf("%.2f", results_summary$u_min), 
-                                   ", ", 
-                                   sprintf("%.2f", results_summary$u_max), 
-                                   "]")
+# plot for each dmin and delta, the number of episodes
+pB <- ggplot(results_summary, aes(x = dmin, y = n_episodes, color = factor(delta))) +
+  geom_line(size = 1.1) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(
+    x = expression(d[min]~"(m)"),
+    y = "Number of selected episodes",
+    color = expression(delta~"(steps)")
+  ) +
+  btf_theme
+pB
 
-# Remove old columns
-results_summary$u_min <- NULL
-results_summary$u_max <- NULL
 
-# Generate LaTeX table
-library(xtable)
-latex_table <- xtable(results_summary, digits = 2)
-print(latex_table, include.rownames = FALSE)
 
-# save latex table to file
-table_folder <- "../phd_extremes/thesis/resources/tables/"
-latex_file <- paste0(table_folder, "omsev_summary_episodes.tex")
+library(ggplot2)
+library(dplyr)
+library(viridis) # Pour des palettes de couleurs magnifiques et accessibles
 
-print(latex_table, include.rownames = FALSE, file = latex_file)
+# 1. On prépare les labels pour que le rendu soit propre
+plot_data <- results_summary %>%
+  mutate(
+    q_label = paste0("Quantile : ", q * 100, "%"),
+    delta_factor = factor(delta, levels = sort(unique(delta)))
+  )
+
+# 2. Le Plot
+p_lines <- ggplot(plot_data, aes(x = dmin, y = n_episodes, color = delta_factor, group = delta_factor)) +
+  geom_line(linewidth = 1.2, alpha = 0.8) +
+  geom_point(size = 2.5, alpha = 0.9) +
+  # Facettage par quantile (crée un sous-graphique par valeur de q)
+  facet_wrap(~ q_label, scales = "free_y") + 
+  # Palette de couleur moderne
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 15, margin = margin(b = 5)),
+    plot.subtitle = element_text(color = "gray40", size = 11, margin = margin(b = 15)),
+    strip.background = element_rect(fill = "#f5f5f5", color = NA), # Fond des titres de cadres
+    strip.text = element_text(face = "bold", size = 11),
+    panel.grid.minor = element_blank(),
+    panel.spacing = unit(1.5, "lines"),
+    legend.position = "bottom"
+  ) +
+  labs(
+    x = expression(d[min]~"(m)"),
+    y = "Number of selected episodes",
+    color = expression(delta~" (steps)")
+  )
+
+print(p_lines)

@@ -134,7 +134,7 @@ apply_measurement <- function(x, p) {
 
 sims_all <- unlist(sims_by_ep, recursive = FALSE)
 
-site_names <- c("cefe", "iem", "um", "cnrs")
+site_names <- c("crbm")
 site_names <- colnames(sims_all[[1]]$X)
 
 for (site in site_names) {
@@ -146,37 +146,19 @@ for (site in site_names) {
 
   Xsim_site <- Xsim_site[Xsim_site > 1e-2]
 
-  # Xsim_meas <- apply_discretization(Xsim_site, p = 0.2152)
+  Xsim_meas <- apply_discretization(Xsim_site, p = 0.2152)
   Xsim_meas <- Xsim_site
   Xobs_meas <- Xobs_site
 
   Xsim_site <- Xsim_meas[Xsim_meas > 0]
   Xobs_site <- Xobs_meas[Xobs_meas > 0]
 
-  config <- "above0"
+  config <- "above0_disc"
 
   df <- rbind(
     data.frame(type = "Observations", value = Xobs_site),
     data.frame(type = "Simulations", value = Xsim_site)
   )
-
-  bw_common <- bw.nrd0(df$value)
-
-  df_log <- df %>% mutate(yplot = log1p(value))
-
-  psite_log <- ggplot(df_log, aes(x = type, y = yplot)) +
-    geom_violin(alpha = 0.7, trim = FALSE, color = NA,
-                bw = 0.2, scale = "width", bounds= c(0, Inf), fill = btfgreen) +
-    labs(x = "", y = "log(1 + Rain)") +
-    theme_minimal() + btf_theme +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme(legend.position = "none")
-
-  folder_site <- paste0(im_folder, "swg/omsev/margins/", config, "/")
-  if (!dir.exists(folder_site)) dir.create(folder_site, recursive = TRUE)
-
-  ggsave(paste0(folder_site, "violin_log_", config, "_", site, ".png"),
-         psite_log, width = 6, height = 4)
 
   psite_dens <- ggplot(df, aes(x = value, fill = type)) +
             geom_density(alpha = 0.4, bw = 0.2) +
@@ -283,7 +265,7 @@ df_cumul <- df_cumul %>% filter(is.finite(cumul))
 
 bw_common <- bw.nrd(df_cumul$cumul)
 ggplot(df_cumul, aes(x = cumul, fill = type)) +
-  geom_density(alpha = 0.4, bw = 40) +
+  geom_density(alpha = 0.4, bw = 100) +
   labs(x = "Cumulative rainfall", y = "Density", fill = "Source") +
   geom_boxplot(
     aes(y = -0.0015, group = type),
@@ -294,14 +276,37 @@ ggplot(df_cumul, aes(x = cumul, fill = type)) +
   btf_theme + 
   coord_cartesian(xlim=c(0,700))
 
+
+  
 # save plot
-folder_site <- paste0(im_folder, "swg/omsev/cumuls/")
+folder_site <- paste0(im_folder, "swg/omsev/2025/cumuls/")
 filename <- paste0(folder_site, "cumul_density_all.png")
 if (!dir.exists(folder_site)) {
   dir.create(folder_site, recursive = TRUE)
 }
 ggsave(filename, width = 10, height = 6)  
 
+
+# idem with log(1 + cumul)
+
+df_cumul <- df_cumul %>% filter(is.finite(cumul)) %>%
+  mutate(log_cumul = log1p(cumul))
+
+ggplot(df_cumul, aes(x = log_cumul, fill = type)) +
+  geom_density(alpha = 0.4, bw = 0.5) +
+  labs(x = "log(1 + Cumulative rainfall)", y = "Density", fill = "Source") +
+  geom_boxplot(
+    aes(y = -0.0015, group = type),
+    width = 0.02,
+    alpha = 0.6,
+    outlier.size = 0.1
+  ) +
+  btf_theme + 
+  coord_cartesian(xlim=c(0,10))
+# save plot
+folder_site <- paste0(im_folder, "swg/omsev/2025/cumuls/")
+filename <- paste0(folder_site, "cumul_log_density_all.png")
+ggsave(filename, width = 10, height = 6)
 
 # Cumulatives observed and simulated
 cum_obs_mat <- t(vapply(
@@ -380,19 +385,19 @@ df_plot <- df_all |>
   left_join(meta_ep, by = "ep_id")
 # density
 ggplot(df_plot, aes(x = cumul, fill = source)) +
-  geom_density(alpha = 0.4, bw = 40) +
+  geom_density(alpha = 0.4, bw = 5) +
   labs(x = "Episode cumul", y = "Density", fill = "Source") +
   btf_theme +
   geom_boxplot(
     aes(y = -0.0015, group = source),
     width = 0.002,
     alpha = 0.6,
-    outlier.size = 0.1
+    outlier.size = 0.01
   ) +
-  coord_cartesian(xlim=c(0,700))
+  coord_cartesian(xlim=c(0,500))
 
 # save plot
-folder_site <- paste0(im_folder, "swg/omsev/cumuls/")
+folder_site <- paste0(im_folder, "swg/omsev/2025/cumuls/")
 filename <- paste0(folder_site, "cumul_density_episode_all_disc.png")
 if (!dir.exists(folder_site)) {
   dir.create(folder_site, recursive = TRUE)
@@ -443,10 +448,7 @@ cumul_episode <- function(
 
 
 
-# ============================================================================
 # CUMULS OBSERVED VS SIMULATED WITH NA-MATCHING
-# ============================================================================
-
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -618,7 +620,7 @@ p_norm <- ggplot(df_plot_norm, aes(x = cumul, fill = source)) +
 print(p_norm)
 
 
-folder_site <- paste0(im_folder, "swg/omsev/cumuls/")
+folder_site <- paste0(im_folder, "swg/omsev/2025/cumuls/")
 if (!dir.exists(folder_site)) {
   dir.create(folder_site, recursive = TRUE)
 }
@@ -634,79 +636,136 @@ cat(filename_raw, "\n")
 cat(filename_norm, "\n")
 
 
-mean_ep_sim_raw <- apply(cumul_sim_raw, 1, mean, na.rm = TRUE)
-mean_ep_sim_norm <- apply(cumul_sim_norm, 1, mean, na.rm = TRUE)
 
-df_compare_means <- tibble(
-  ep_id = seq_len(Nep),
-  obs_raw = cumul_obs_raw,
-  sim_mean_raw = mean_ep_sim_raw,
-  obs_norm = cumul_obs_norm,
-  sim_mean_norm = mean_ep_sim_norm,
-  n_avail_obs = n_avail_obs
-)
 
-head(df_compare_means)
-summary(df_compare_means)
 
-# ----------------------------------------------------------------------------
-# 10) Optional scatterplots obs vs mean simulated
-# ----------------------------------------------------------------------------
-p_scatter_raw <- ggplot(df_compare_means, aes(x = obs_raw, y = sim_mean_raw)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(intercept = 0, slope = 1, linetype = 2, color = "red") +
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tibble)
+
+################################################################################
+# Cumulative rainfall: observations vs simulations
+################################################################################
+
+sites_names <- colnames(rain)
+
+Nep <- length(list_episodes_filtered)
+M   <- length(sims_by_ep[[1]])
+
+p_tip <- 0.2152
+
+# Pseudo-discretisation des simulations continues
+apply_discretization <- function(x, p = 0.2152) {
+  x[!is.finite(x)] <- NA_real_
+  x[x < 1e-4] <- 0
+  x[x > 0 & x < p] <- p
+  x[x > p & x < 2 * p] <- 2 * p
+  x
+}
+
+################################################################################
+# 1. Apply observation NA mask to simulations + discretize simulations
+################################################################################
+
+for (j in seq_len(Nep)) {
+  obs_mat <- as.matrix(list_episodes_filtered[[j]][, sites_names, drop = FALSE])
+
+  for (m in seq_len(M)) {
+    sim_mat <- as.matrix(sims_by_ep[[j]][[m]]$X[, sites_names, drop = FALSE])
+
+    # same missingness pattern as observations
+    sim_mat[is.na(obs_mat)] <- NA
+
+    # pseudo measurement / tipping-bucket discretisation
+    sim_mat <- apply_discretization(sim_mat, p = p_tip)
+
+    sims_by_ep[[j]][[m]]$X[, sites_names] <- sim_mat
+  }
+}
+
+################################################################################
+# 2. Compute episode cumulative rainfall
+################################################################################
+
+cumul_obs <- numeric(Nep)
+cumul_sim <- matrix(NA_real_, nrow = Nep, ncol = M)
+
+for (j in seq_len(Nep)) {
+  obs_mat <- as.matrix(list_episodes_filtered[[j]][, sites_names, drop = FALSE])
+
+  cumul_obs[j] <- sum(obs_mat, na.rm = TRUE)
+
+  for (m in seq_len(M)) {
+    sim_mat <- as.matrix(sims_by_ep[[j]][[m]]$X[, sites_names, drop = FALSE])
+    cumul_sim[j, m] <- sum(sim_mat, na.rm = TRUE)
+  }
+}
+
+################################################################################
+# 3. Build plotting dataframe
+################################################################################
+
+df_cumul_plot <- bind_rows(
+  tibble(
+    ep_id = seq_len(Nep),
+    rep = NA_integer_,
+    source = "Observations",
+    cumul = cumul_obs
+  ),
+  as.data.frame(cumul_sim) %>%
+    mutate(ep_id = seq_len(n())) %>%
+    pivot_longer(
+      cols = -ep_id,
+      names_to = "rep",
+      values_to = "cumul"
+    ) %>%
+    mutate(
+      rep = as.integer(gsub("V", "", rep)),
+      source = "Simulations"
+    ) %>%
+    select(ep_id, rep, source, cumul)
+) %>%
+  filter(is.finite(cumul), cumul >= 0) %>%
+  mutate(source = factor(source, levels = c("Observations", "Simulations")))
+
+################################################################################
+# 4. Density + boxplot below
+################################################################################
+
+bw_cumul <- 40
+
+p_cumul_density <- ggplot(df_cumul_plot, aes(x = cumul, fill = source, colour = source)) +
+  geom_density(
+    alpha = 0.35,
+    bw = bw_cumul,
+    linewidth = 0.4,
+    # bounds = c(0, Inf)
+  ) +
+  geom_boxplot(
+    aes(y = -0.0008, group = source),
+    width = 0.0007,
+    alpha = 0.6,
+    outlier.size = 0.15,
+    colour = "black",
+    position = position_dodge(width = 0.0009)
+  ) +
   labs(
-    x = "Observed episode cumulative rainfall",
-    y = "Mean simulated episode cumulative rainfall"
+    x = "Episode cumulative rainfall",
+    y = "Density",
+    fill = "Source",
+    colour = "Source"
   ) +
   btf_theme +
-  coord_cartesian(xlim = c(0, 700), ylim = c(0, 700))
-
-print(p_scatter_raw)
-
-filename_scatter_raw <- paste0(folder_site, "cumul_scatter_obs_vs_sim_mean_raw.png")
-ggsave(filename_scatter_raw, p_scatter_raw, width = 7, height = 6)
-
-p_scatter_norm <- ggplot(df_compare_means, aes(x = obs_norm, y = sim_mean_norm)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(intercept = 0, slope = 1, linetype = 2, color = "red") +
-  labs(
-    x = "Observed normalized cumulative rainfall",
-    y = "Mean simulated normalized cumulative rainfall"
-  ) +
-  btf_theme
-
-print(p_scatter_norm)
-
-filename_scatter_norm <- paste0(folder_site, "cumul_scatter_obs_vs_sim_mean_normalized.png")
-ggsave(filename_scatter_norm, p_scatter_norm, width = 7, height = 6)
-
-cat(filename_scatter_raw, "\n")
-cat(filename_scatter_norm, "\n")
-
-
-df_plot_raw %>%
-  group_by(source) %>%
-  summarise(
-    q50 = quantile(cumul, 0.50, na.rm = TRUE),
-    q75 = quantile(cumul, 0.75, na.rm = TRUE),
-    q90 = quantile(cumul, 0.90, na.rm = TRUE),
-    q95 = quantile(cumul, 0.95, na.rm = TRUE),
-    q99 = quantile(cumul, 0.99, na.rm = TRUE),
-    max = max(cumul, na.rm = TRUE)
+  coord_cartesian(
+    xlim = c(0, 500),
+    ylim = c(-0.0013, NA),
+    clip = "off",
   )
 
+p_cumul_density
 
-summary(df_compare_means$sim_mean_raw - df_compare_means$obs_raw)
-cor(df_compare_means$obs_raw, df_compare_means$sim_mean_raw, use = "complete.obs")
-
-df_compare_means %>%
-  mutate(ratio = sim_mean_raw / obs_raw) %>%
-  ggplot(aes(x = ratio)) +
-  geom_histogram(bins = 50) +
-  btf_theme
-
-ggplot(df_compare_means, aes(x = obs_raw, y = sim_mean_raw)) +
-  geom_point(alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = 2, color = "red") +
-  btf_theme
+# save plot
+folder_site <- paste0(im_folder, "swg/omsev/2025/cumuls/")
+filename <- paste0(folder_site, "cumul_density_episode_all.png")
+ggsave(filename, p_cumul_density, width = 10, height = 6)
