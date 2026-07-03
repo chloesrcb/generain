@@ -81,9 +81,11 @@ These parameters can be estimated from observed data and adapted.
 #### 2. Extreme spatio-temporal dependence
 
 Dependence is modeled via a non-separable variogram:
-\[
+
+$$
 \gamma(h, \tau) = \beta_1 ||h - \tau V||^{\alpha_1} + \beta_2 |\tau|^{\alpha_2}
-\]
+$$
+
 where $h \in \mathbb{R}^2$ is the spatial lag, $\tau \in \mathbb{R}$ is the temporal lag and $V \in \mathbb{R}^2$ is the advection vector.
 
 The parameters $(\beta_1, \beta_2,\alpha_1, \alpha_2)$ can be estimated using the current `generain` package.
