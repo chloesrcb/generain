@@ -51,10 +51,10 @@ rownames(rain_omsev) <- rain_omsev$dates
 rain <- rain_omsev[-1] # remove dates column
 
 # remove cines, hydro, brives
-rain <- rain[, !(colnames(rain) %in% c("cines", "hydro", "brives"))]
-location_gauges <- location_gauges[location_gauges$Station != "cines" &
-                                   location_gauges$Station != "hydro" &
-                                   location_gauges$Station != "brives", ]
+# rain <- rain[, !(colnames(rain) %in% c("cines", "hydro", "brives"))]
+# location_gauges <- location_gauges[location_gauges$Station != "cines" &
+#                                    location_gauges$Station != "hydro" &
+#                                    location_gauges$Station != "brives", ]
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
 
@@ -97,7 +97,7 @@ list_s <- set_st_excess$list_s
 list_t <- set_st_excess$list_t
 list_u <- set_st_excess$list_u
 
-min_spatial_dist <- 1600
+min_spatial_dist <- 1200
 delta <- 12
 # Spatio-temporal neighborhood parameters
 s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
@@ -152,15 +152,15 @@ temporal_overlap <- matrix(FALSE, n_ep, n_ep)
 # ggplot(df_n_episodes, aes(x = dmin, y = n_episodes)) +
 #   geom_line(color=btfgreen) +
 #   geom_point(color=btfgreen) +
-#   ylim(0, 800) +
-#   geom_vline(xintercept = 1000, linetype = "dashed", color = "red") +
+#   ylim(0, 1000) +
+#   geom_vline(xintercept = 1200, linetype = "dashed", color = "red") +
 #   labs(x = "Minimum spatial distance (m)", y = "Number of episodes") +
 #   btf_theme
 
-# filename <- paste0(im_folder, "/optim/omsev/choice_config/n_episodes_dmin1000_delta", delta, ".png")
+# filename <- paste0(im_folder, "/optim/omsev/choice_config/2025_all/n_episodes_dmin1200_delta", delta, ".png")
 
-# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/"))) {
-#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/"), recursive = TRUE)
+# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"))) {
+#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"), recursive = TRUE)
 # }
 
 # ggsave(filename, width = 7, height = 5)
@@ -183,15 +183,15 @@ temporal_overlap <- matrix(FALSE, n_ep, n_ep)
 # ggplot(df_n_episodes, aes(x = delta, y = n_episodes)) +
 #   geom_line(color=btfgreen) +
 #   geom_point(color=btfgreen) +
-#   ylim(0, 500) +
+#   ylim(0, 1000) +
 #   geom_vline(xintercept = delta * 5, linetype = "dashed", color = "red") +
 #   labs(x = "Episode size (minutes)", y = "Number of episodes") +
 #   btf_theme
 
-# filename <- paste0(im_folder, "/optim/omsev/choice_config/n_episodes_delta_dmin", min_spatial_dist, ".png")
+# filename <- paste0(im_folder, "/optim/omsev/choice_config/2025_all/n_episodes_delta_dmin", min_spatial_dist, ".png")
 
-# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/"))) {
-#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/"), recursive = TRUE)
+# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"))) {
+#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"), recursive = TRUE)
 # }
 
 # ggsave(filename, width = 7, height = 5)
@@ -245,13 +245,22 @@ datetime_filename <- paste(data_folder, "/omsev/t0_5min_episodes_q", q * 100,
 write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
 
 
-adv_filename <- paste(data_folder, "/omsev/adv_estim/2025/combined_comephore_omsev/episode_advection_q",
+adv_filename <- paste(data_folder, "/omsev/adv_estim/2025_all/combined_comephore_omsev/episode_advection_q",
                           q * 100, "_delta", delta, "_dmin", min_spatial_dist,
                           ".csv", sep = "")
 adv_df <- read.csv(adv_filename, sep = ",")
 
 head(adv_df)
 tail(adv_df)
+
+# count number of mean_dx_kmh_comephore and mean_dy_kmh_comephore at 0 and value >0 in vx_final and vy_final
+n_zero_comephore <- sum(adv_df$mean_dx_kmh_comephore == 0 & adv_df$mean_dy_kmh_comephore == 0)
+cat("Number of episodes with comephore advection at 0:", n_zero_comephore, "\n")
+
+n_zero_com_and_posV <- sum(adv_df$mean_dx_kmh_comephore == 0 & adv_df$mean_dy_kmh_comephore == 0 &
+                            (adv_df$vx_final > 0 | adv_df$vy_final > 0))
+cat("Number of episodes with comephore advection at 0 and positive velocity:", n_zero_com_and_posV, "\n")
+
 # get index of advection speed below 0.1 km/h
 adv_speed <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
 summary(adv_speed)
@@ -456,7 +465,7 @@ if(result$convergence == 0) {
 } else {
   warning("Optimization did not converge")
 }
-# [1] 1.0603714 4.4023551 0.1923471 0.6743526 5.3556250 2.1357170 dmin=1000
+# [1] 1.0756788 3.9110884 0.1160579 0.6534962 3.8962660 2.2208320
 result
 
 convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
@@ -518,7 +527,6 @@ params_est <- c(params_est, eta1, eta2)
 
 # Initial parameters for jackknife (from full data optimization)
 init_param_jk <- as.numeric(result_df)
-
 #### MONTH-YEAR JACKKNIFE ------------------------------------------------------
 
 selected_episodes_filtered$t0_date <- as.POSIXct(
@@ -580,6 +588,7 @@ filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jack_estimates, filename, row.names = FALSE)
 
+jack_estimates <- read.csv(filename)
 
 jack_estimates <- do.call(rbind, jack_estimates_list)
 jack_estimates <- na.omit(jack_estimates)
@@ -617,86 +626,13 @@ jackknife_monthyear_results <- data.frame(
 filename <- paste0(foldername_jk, "results_jk_by_monthyear_n",
            n_eff, "_q", q*100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 write.csv(jackknife_monthyear_results, filename, row.names = FALSE)
-jackknife_monthyear_results <- read.csv(filename)
-convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
-  beta1_new <- beta1 / (c_x^alpha1)
-  beta2_new <- beta2 / (c_t^alpha2)
-  list(beta1 = beta1_new, beta2 = beta2_new)
-}
-
-# convert params from km/h to m/5min
-c_x_m <- 1000    # for m
-c_t_5min <- 12   # 1 hour = 12 * 5min
-
-# convert params and ci to m/5min
-params_m5min <- convert_params(result$par[1], result$par[2],
-                               result$par[3], result$par[4],
-                               c_x = c_x_m, c_t = c_t_5min)
-
-beta1_m5min_i <- jack_estimates[,1] / (1000 ^ jack_estimates[,3])
-beta2_m5min_i <- jack_estimates[,2] / (12   ^ jack_estimates[,4])
-
-b1L <- jackknife_monthyear_results$CI_lower[1]
-b1U <- jackknife_monthyear_results$CI_upper[1]
-a1L <- jackknife_monthyear_results$CI_lower[3]
-a1U <- jackknife_monthyear_results$CI_upper[3]
-
-b2L <- jackknife_monthyear_results$CI_lower[2]
-b2U <- jackknife_monthyear_results$CI_upper[2]
-a2L <- jackknife_monthyear_results$CI_lower[4]
-a2U <- jackknife_monthyear_results$CI_upper[4]
-
-# conversion correcte
-beta1_m5_low  <- b1L / (1000 ^ a1U)
-beta1_m5_high <- b1U / (1000 ^ a1L)
-beta2_m5_low  <- b2L / (12   ^ a2U)
-beta2_m5_high <- b2U / (12   ^ a2L)
-
-
-# Pseudo-valeurs sur l’échelle m/5min
-n_eff <- nrow(jack_estimates)
-b1_full_m5 <- result$par[1] / (1000 ^ result$par[3])
-b2_full_m5 <- result$par[2] / (12   ^ result$par[4])
-
-b1_jk <- jack_mean_pseudo[1] / (1000 ^ jack_mean_pseudo[3])
-b2_jk <- jack_mean_pseudo[2] / (12   ^ jack_mean_pseudo[4])
-
-# Table of results
-param_table_m5min <- data.frame(
-  Parameter = c("beta1", "beta2", "alpha1", "alpha2"),
-  Estimate_full_kmh = result$par,
-  Estimate_jk_kmh = jack_mean_pseudo,
-  CI_lower_kmh = jackknife_monthyear_results$CI_lower,
-  CI_upper_kmh = jackknife_monthyear_results$CI_upper,
-  Estimate_full_m5min = c(params_m5min$beta1, params_m5min$beta2,
-                          result$par[3], result$par[4]),
-  Estimate_jk_m5min = c(b1_jk, b2_jk,
-                          jack_mean_pseudo[3], jack_mean_pseudo[4]),
-  CI_lower_m5min = c(beta1_m5_low, beta2_m5_low,
-                     jackknife_monthyear_results$CI_lower[3],
-                     jackknife_monthyear_results$CI_lower[4]),
-  CI_upper_m5min = c(beta1_m5_high, beta2_m5_high,
-                     jackknife_monthyear_results$CI_upper[3],
-                     jackknife_monthyear_results$CI_upper[4])
-)
-print(param_table_m5min)
-
-number_of_episodes <- length(list_episodes_filtered)
-cat("Number of episodes used in optimization:", number_of_episodes, "\n")
-adv_threshold <- speed_threshold
-cat("Advection speed threshold (km/h):", adv_threshold, "\n")
-
-# number of advection put to 0
-n_zero_adv <- sum(V_episodes_filtered$vx == 0 & V_episodes_filtered$vy == 0)
-cat("Number of episodes with zero advection after filtering:", n_zero_adv, "\n")
-
 
 # VALIDATION -------------------------------------------------------------------
 omsev_params <- params_est
 
 dist_mat <- get_dist_mat(location_gauges) / 1000
 df_dist <- reshape_distances(dist_mat)
-n_hbins <- 12
+n_hbins <- 10
 h_all <- df_dist$value
 
 h_breaks_omsev <- quantile(
@@ -811,162 +747,13 @@ ggplot(res_taupos, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 14))
 
-# -------------------------------------------------------------------------
-# CHI VALIDATION DIAGNOSTICS
-# -------------------------------------------------------------------------
-
-res_chi <- chi_omsev$res_cmp %>%
-  mutate(
-    diff = chi_emp_bar - chi_theo_bar,
-    abs_diff = abs(diff),
-    rel_diff = diff / chi_theo_bar,
-    tau_lab = paste0(tau * 60, " min")
-  )
-
-# 1. Empirical vs theoretical chi, colored by temporal lag
-p_chi_scatter_tau <- ggplot(
-  res_chi,
-  aes(x = chi_theo_bar, y = chi_emp_bar,
-      color = factor(tau_lab), size = n_pairs)
-) +
-  geom_point(alpha = 0.75) +
-  geom_abline(slope = 1, intercept = 0,
-              linetype = "dashed", color = "red") +
-  scale_size_continuous(range = c(1.5, 4)) +
-  labs(
-    x = TeX("Theoretical $\\chi$"),
-    y = TeX("Empirical $\\chi$"),
-    color = "Temporal lag",
-    size = "Number of pairs"
-  ) +
-  btf_theme +
-  theme(legend.position = "right")
-
-print(p_chi_scatter_tau)
-
-
-# 2. Residuals chi_emp - chi_theo as a function of theoretical chi
-p_chi_residual <- ggplot(
-  res_chi,
-  aes(x = chi_theo_bar, y = diff,
-      color = factor(tau_lab), size = n_pairs)
-) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  geom_point(alpha = 0.75) +
-  scale_size_continuous(range = c(1.5, 4)) +
-  labs(
-    x = TeX("Theoretical $\\chi$"),
-    y = TeX("$\\chi_{emp} - \\chi_{theo}$"),
-    color = "Temporal lag",
-    size = "Number of pairs"
-  ) +
-  btf_theme +
-  theme(legend.position = "right")
-
-print(p_chi_residual)
-
-# 3. Residuals by spatial distance bin
-p_chi_residual_hbin <- ggplot(
-  res_chi,
-  aes(x = hbin, y = diff, fill = factor(tau_lab))
-) +
-  geom_col(position = "dodge") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(
-    x = "Spatial distance bin",
-    y = TeX("$\\chi_{emp} - \\chi_{theo}$"),
-    fill = "Temporal lag"
-  ) +
-  btf_theme +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "right"
-  ) +
-  ylim(-0.25,0.25)
-
-print(p_chi_residual_hbin)
-
-
-# 4. Chi as a function of spatial distance, one panel per temporal lag
-p_chi_by_h_tau <- ggplot(
-  res_chi,
-  aes(x = hbin, group = 1)
-) +
-  geom_line(aes(y = chi_emp_bar, color = "Empirical"), linewidth = 0.9) +
-  geom_point(aes(y = chi_emp_bar, color = "Empirical"), size = 2) +
-  geom_line(aes(y = chi_theo_bar, color = "Theoretical"),
-            linewidth = 0.9, linetype = "dashed") +
-  geom_point(aes(y = chi_theo_bar, color = "Theoretical"), size = 2) +
-  facet_wrap(~ tau_lab) +
-  labs(
-    x = "Spatial distance bin",
-    y = TeX("$\\chi$"),
-    color = ""
-  ) +
-  btf_theme +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
-  ) +
-  #legend
-  guides(color = guide_legend(title = "Chi"))
-
-print(p_chi_by_h_tau)
-
-# tie color with dégradé
-palette_diff <- colorRampPalette(c("blue", "white", "red"))(100)
-
-# 5. Heatmap of signed residuals
-p_chi_heatmap <- ggplot(
-  res_chi,
-  aes(x = hbin, y = factor(tau_lab), fill = diff)
-) +
-  geom_tile(color = "white") +
-  scale_fill_gradient2(low = "#52b4af", mid = "white", high = "#d18181",
-                       midpoint = 0, limits = c(-0.25, 0.25), name = TeX("$\\chi_{emp} - \\chi_{theo}$")) +
-  geom_text(aes(label = round(diff, 2)), size = 3) +
-  labs(
-    x = "Spatial distance bin",
-    y = "Temporal lag",
-    fill = TeX("$\\chi_{emp} - \\chi_{theo}$")
-  ) +
-  btf_theme +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "right"
-  )
-
-print(p_chi_heatmap)
-
-foldername <- paste0(im_folder, "optim/omsev/2025_results/")
+# save plot
+foldername <- paste0(im_folder, "workflows/full_pipeline/2025/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
-
-ggsave(paste0(foldername, "omsev_chi_scatter_by_tau.png"),
-       p_chi_scatter_tau, width = 7, height = 6)
-
-ggsave(paste0(foldername, "omsev_chi_residuals.png"),
-       p_chi_residual, width = 7, height = 6)
-
-ggsave(paste0(foldername, "omsev_chi_residuals_by_hbin.png"),
-       p_chi_residual_hbin, width = 9, height = 6)
-
-ggsave(paste0(foldername, "omsev_chi_by_hbin_tau.png"),
-       p_chi_by_h_tau, width = 10, height = 7)
-
-ggsave(paste0(foldername, "omsev_chi_residual_heatmap.png"),
-       p_chi_heatmap, width = 9, height = 6)
-
-
-rmse_chi <- sqrt(mean(
-  (res_om_cmp$chi_emp_bar - res_om_cmp$chi_theo_bar)^2
-))
-
-res_om_cmp %>%
-  group_by(tau) %>%
-  summarise(
-    rmse = sqrt(mean((chi_emp_bar - chi_theo_bar)^2)),
-    mae  = mean(abs(chi_emp_bar - chi_theo_bar))
-  )
+filename <- paste0(foldername, "omsev_chi_th_emp_taupos_dmin1200.png")
+ggsave(filename,
+       width = 7,
+        height = 6)
 

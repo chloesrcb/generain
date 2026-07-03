@@ -1,7 +1,8 @@
 # do transformations with eta1 and eta2 on magnitude
-eta1 = 3.8
-eta2 = 2.2
-
+eta1 = 3.896266
+eta2 = 2.220832
+adv_df <- V_adv
+colnames(adv_df) <- c("vx_final", "vy_final")
 adv_transformed <- adv_df
 adv_transformed$adv_speed <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
 adv_transformed$adv_direction <- atan2(adv_df$vy_final, adv_df$vx_final) * (180 / pi)
@@ -18,15 +19,8 @@ median_adv <- median(adv_transformed$adv_speed, na.rm = TRUE)
 # which is na de adv
 na_adv <- sum(is.na(adv_transformed$adv_speed))
 
-# plot adv_transformed speed vs original speed
-ggplot(adv_transformed, aes(x = sqrt(vx_final^2 + vy_final^2), y = adv_speed)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-  labs(x = "Original advection speed (km/h)", y = "Transformed advection speed", title = "Advection speed transformation") +
-  theme_bw()
-# plot transformed advection vectors
-library(dplyr)
-library(ggplot2)
+
+
 
 adv_plot <- bind_rows(
   adv_df %>%
@@ -64,55 +58,12 @@ adv_rose <- adv_plot %>%
       labels = c("0-2", "2-5", "5-10", "10-20", "20-50", "50-100", ">100")
     )
   )
- 
+
 # remove NA values in dir_bin and speed_bin and count it as zero adv
 nb_na_dir <- sum(is.na(adv_rose$speed_bin))
 adv_rose <- adv_rose[!is.na(adv_rose$dir_bin) & !is.na(adv_rose$speed_bin), ]
 
-
-ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
-  geom_histogram(
-    binwidth = 22.5,
-    boundary = 0,
-    color = "white",
-    linewidth = 0.05,
-    alpha = 0.7
-  ) +
-  coord_polar(start = 0, direction = 1) +
-  facet_wrap(~type) +
-  scale_x_continuous(
-    limits = c(0, 360),
-    breaks = c(0, 90, 180, 270),
-    labels = c("N", "E", "S", "W")
-  )
-
-ggplot(adv_plot, aes(x = 0, y = 0, xend = dx, yend = dy, color = type)) +
-  geom_segment(
-    arrow = arrow(length = unit(0.16, "cm")),
-    linewidth = 0.5
-  ) +
-  geom_hline(yintercept = 0, color = "grey70") +
-  geom_vline(xintercept = 0, color = "grey70") +
-  coord_equal(xlim = c(-10, 10), ylim = c(-10, 10)) +
-  scale_alpha_continuous(range = c(0.15, 0.8), guide = "none") +
-  labs(
-    x = expression(V[x]~"(km/h)"),
-    y = expression(V[y]~"(km/h)"),
-    color = NULL,
-    title = "Advection vectors",
-    subtitle = "Empirical vs transformed advection"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "top",
-    plot.title = element_text(face = "bold")
-  )
-
-
-
 adv_rose <- adv_rose[!is.na(adv_rose$dir_bin) & !is.na(adv_rose$speed_bin), ]
-
-
 
 ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
   geom_histogram(
@@ -148,11 +99,11 @@ ggplot(adv_rose, aes(x = direction_rose, fill = speed_bin)) +
   )
 
 # save rose plot
-foldername <- paste0(im_folder, "advection/withtransform/2025/")
+foldername <- paste0(im_folder, "advection/withtransform/2025_all/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
-filename_rose <- paste0(foldername, "omsev_adv_rose_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+filename_rose <- paste0(foldername, "comephore_adv_rose_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist,
 "eta1", eta1, "_eta2", eta2, ".png")
 
 

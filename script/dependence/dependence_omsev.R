@@ -22,6 +22,15 @@ location_gauges$codestation <- c("iem", "mse", "poly", "um", "cefe", "cnrs",
                                  "crbm", "archiw", "archie", "um35", "chu1",
                                  "chu2", "chu3", "chu4", "chu5", "chu6", "chu7")
 
+
+filename_omsev <- paste0(data_folder,
+                         "omsev/omsev_5min/rain_mtp_5min_2019_2025.csv")
+
+rain <- read.csv(filename_omsev, sep = ",")
+
+# get location of each rain gauge
+filename_loc <- paste0(data_folder, "omsev/loc_rain_gauges.csv")
+location_gauges <- read.csv(filename_loc)
 # Get distances matrix
 dist_mat <- get_dist_mat(location_gauges)
 df_dist <- reshape_distances(dist_mat)
@@ -50,7 +59,7 @@ rownames(rain) <- rain$dates
 rain_new <- rain[-1] # remove dates column
 
 # remove brives, cines and hydro columns
-rain_new <- rain_new[, -which(colnames(rain_new) %in% c("brives", "cines", "hydro"))]
+# rain_new <- rain_new[, -which(colnames(rain_new) %in% c("brives", "cines", "hydro"))]
 
 ################################################################################
 # EXTREMOGRAM ------------------------------------------------------------------
@@ -133,8 +142,7 @@ chitemp_eta_estim <- ggplot(dftemp, aes(x = lag, y = chi)) +
   xlab(TeX(r"($\log(\tau)$)")) +
   ylab(TeX(r"($\zeta(\widehat{\chi}(0,\tau))$)")) +
   geom_line(aes(x = lag, y = alpha2 * lag + c2),
-            alpha = 0.6, color = "darkred", linewidth = 1.5)+
-  ylim(-1, 1) 
+            alpha = 0.6, color = "darkred", linewidth = 1.5)
 
 chitemp_eta_estim
 
@@ -144,63 +152,79 @@ ggsave(paste0(foldername_fig, "chitemp_zeta_estim_omsev_q", q*100, ".pdf"),
 # SPATIAL CHI ------------------------------------------------------------------
 
 # SPATIAL with temporal lag fixed at 0 (ie 1 in the precedent temporal case)
+# -------------------------------------------------------------------------
+# Spatial bins excluding h = 0
+# -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# SPATIAL chi with temporal lag fixed at 0
+# -------------------------------------------------------------------------
 
-# spatial structure with an almost constant amount of pairs in each intervals
-df_dist_order <- df_dist[order(df_dist$value), ]
-num_intervals <- 12
-quantiles_rad <- quantile(df_dist_order$value,
-                            probs = seq(0, 1, length.out = num_intervals + 1))
-radius_intervals <- unique(quantiles_rad)
-radius <- as.integer(radius_intervals)
-radius[length(radius)] <- 1550
-dist_counts <- table(cut(df_dist$value, breaks = radius))
+make_distance_bins_min_pairs <- function(h, min_pairs = 10, first_break_min = 0.15) {
 
-# Get dataframe for the histogram plot
+  h_pos <- sort(h[is.finite(h) & h > 0])
+
+  if (length(h_pos) < min_pairs) {
+    stop("Not enough positive distances to create bins.")
+  }
+
+  groups <- split(
+    h_pos,
+    ceiling(seq_along(h_pos) / min_pairs)
+  )
+
+  breaks <- c(0, sapply(groups, max))
+  breaks <- sort(unique(as.numeric(breaks)))
+
+  while (length(breaks) > 3 && breaks[2] < first_break_min) {
+    breaks <- breaks[-2]
+  }
+
+  breaks[1] <- 0
+  breaks[length(breaks)] <- max(h_pos) + 1e-6
+
+  sort(unique(breaks))
+}
+
+h_pos <- df_dist$value[is.finite(df_dist$value) & df_dist$value > 0]
+
+radius <- make_distance_bins_min_pairs(
+  h_pos,
+  min_pairs = 8,
+  first_break_min = 0.15
+)
+
+print(radius)
+print(table(cut(h_pos, breaks = radius, include.lowest = TRUE), useNA = "ifany"))
+dist_counts <- table(
+  cut(h_pos, breaks = radius, include.lowest = TRUE)
+)
+
 df_hist <- data.frame(dist_counts)
-
 colnames(df_hist) <- c("Interval", "Count")
 
-df_hist$Breaks <- gsub("e\\+0.", "0", df_hist$Interval)
-df_hist$Breaks <- gsub("\\.", "", df_hist$Breaks)
-
-# # Histogram
 histradius <- ggplot(df_hist, aes(x = Interval, y = Count)) +
   btf_theme +
   geom_bar(stat = "identity", fill = btfgreen, alpha = 0.8) +
-  xlab("Spatial lag (m)") +
+  xlab("Spatial lag (km)") +
   ylab("Pair count") +
-  theme(axis.text.x = element_text(angle = 45)) +
-  scale_x_discrete(labels = df_hist$Breaks) +
-  scale_y_continuous(breaks = c(0, 4, 6, 8, 10, 12))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 histradius
+rad_mat <- matrix(Inf, nrow = nrow(dist_mat), ncol = ncol(dist_mat))
+rownames(rad_mat) <- rownames(dist_mat)
+colnames(rad_mat) <- colnames(dist_mat)
 
-# SAVE 
-foldername_fig <- paste0(im_folder, "WLSE/2025/omsev/new/spatial/")
-if (!dir.exists(foldername_fig)) {
-  dir.create(foldername_fig, recursive = TRUE)
-}
-ggsave(paste0(foldername_fig, "hist_radius_omsev_q", q*100, ".pdf"),
-       width = 8, height = 6)
-# Create matrix of radius
-rad_mat <- dist_mat
-# Loop through radius and set distances in matrix
 for (i in 2:length(radius)) {
   curr_radius <- radius[i]
   prev_radius <- radius[i - 1]
+
   rad_mat[dist_mat >= prev_radius & dist_mat < curr_radius] <- curr_radius
-  rad_mat[dist_mat > curr_radius] <- Inf
 }
 
-rad_mat[dist_mat == 0] <- 0
-# Make a triangle
-rad_mat[lower.tri(rad_mat)] <- NA
+rad_mat[dist_mat == 0] <- NA
+rad_mat[lower.tri(rad_mat, diag = TRUE)] <- NA
 
-hmax <- max(radius) # distance max in absolute value...
-nb_col <- length(unique(radius)) # we exclude 0 ?
 
-rad_mat <- rad_mat  / 1000 # convert to km
-# plot chi for each distance
 chispa_df <- spatial_chi(rad_mat, rain_new,
                          quantile = 0.95, zeros = F)
 

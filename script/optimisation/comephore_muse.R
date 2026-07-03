@@ -4,11 +4,12 @@ rm(list = ls())
 # clear console
 cat("\014")
 
-muse <- TRUE
+muse <- FALSE
 
 if (muse) {
   folder_muse <- "/home/serrec/work_rainstsimu/rpareto/"
   setwd(folder_muse)
+  .libPaths("~/R/x86_64-pc-linux-gnu-library/4.3")  
   source("load_libraries.R")
   im_folder <- "./images"
   source("config_com.R")
@@ -49,12 +50,6 @@ head(df_comephore)
 # remove every dates before 2008
 df_comephore <- df_comephore[format(df_comephore$date, "%Y") >= "2008", ]
 
-# plot 2025
-# df_2025 <- df_comephore[format(df_comephore$date, "%Y") == "2025", ]
-# df_2025_p101 <- df_2025$p101
-# plot(df_2025_p101, type = "l", main = "p101 in 2025", xlab = "Time step", ylab = "Value")
-# remove 2025
-# df_comephore <- df_comephore[format(df_comephore$date, "%Y") != "2025", ]
 comephore <- df_comephore[-1]
 
 
@@ -75,9 +70,11 @@ rownames(grid_coords_km) <- rownames(sites_coords)
 dist_mat <- get_dist_mat(grid_coords_km, latlon = FALSE)
 # Spatial chi WLSE #############################################################
 beta1 <- 0.01611951
-beta2 <- 0.7944467
+# beta2 <- 0.7944467
+beta2 <- 1.553
 alpha1 <- 1.42891232
-alpha2 <- 0.8049938
+# alpha2 <- 0.8049938
+alpha2 <- 0.283
 
 head(comephore)
 # remove column "dates"
@@ -124,7 +121,6 @@ list_episodes_points <- get_extreme_episodes(selected_points, comephore,
 
 list_episodes <- list_episodes_points$episodes
 episodes <- list_episodes[[130]]
-plot(episodes$p101, type = "l", main = "Example episode", xlab = "Time step", ylab = "Value")
 
 s0_list <- selected_points$s0
 t0_list <- selected_points$t0
@@ -174,17 +170,6 @@ adv_filename <- paste0(
 adv_df <- read.csv(adv_filename, sep = ",")
 adv_df$t0 <- as.POSIXct(adv_df$t0, tz = "UTC")
 speed <- sqrt(adv_df$mean_dx_kmh^2 + adv_df$mean_dy_kmh^2)
-plot(speed, main = "Advection speed (km/h)", xlab = "Episode index", ylab = "Speed (km/h)")
-hist(speed, main = "Histogram of advection speeds", xlab = "Speed (km/h)", ylab = "Frequency")
-
-# plot advection vectors
-ggplot(adv_df, aes(x = mean_dx_kmh, y = mean_dy_kmh)) +
-  geom_point() +
-  geom_segment(aes(xend = 0, yend = 0), arrow = arrow(length = unit(0.2, "cm")), color = "blue") +
-  xlim(-6, 6) +
-  ylim(-6, 6) +
-  labs(x = "Advection dx (km/h)", y = "Advection dy (km/h)", title = "Advection vectors") +
-  theme_bw()
 
 selected_points$t0_date <- as.POSIXct(selected_points$t0_date, tz = "UTC")
 
@@ -196,6 +181,7 @@ rownames(adv_df) <- NULL
 selected_episodes <- selected_points
 selected_episodes$adv_x <- NA
 selected_episodes$adv_y <- NA
+
 
 for (i in 1:nrow(selected_episodes)) {
   t0_date <- selected_episodes$t0_date[i]
@@ -213,72 +199,6 @@ selected_episodes$t0_date <- as.POSIXct(
   tz = "UTC"
 )
 
-# same_temporality <- function(t0_i, t0_j, delta, step_min = 5) {
-#   abs(as.numeric(difftime(t0_i, t0_j, units = "mins"))) < delta * step_min
-# }
-
-# t0_vec <- selected_episodes$t0_date
-# n_ep <- length(t0_vec)
-
-# temporal_overlap <- matrix(FALSE, n_ep, n_ep)
-
-# for (i in 1:n_ep) {
-#   for (j in 1:n_ep) {
-#     if (i != j) {
-#       temporal_overlap[i, j] <- same_temporality(t0_vec[i], t0_vec[j], delta)
-#     }
-#   }
-# }
-
-# has_temporal_overlap <- apply(temporal_overlap, 1, any)
-# table(has_temporal_overlap)
-
-# choose local radius for episodes with temporal overlap
-# IMPORTANT: adapt depending on unit of hnorm
-# d_local <- 2.5  # if hnorm is in km
-# # d_local <- 600 # if hnorm is in meters
-
-# list_lags_overlap <- vector("list", length(list_lags))
-# list_excesses_overlap <- vector("list", length(list_excesses))
-
-# for (i in seq_along(list_lags)) {
-#   if (has_temporal_overlap[i]) {
-#     keep <- list_lags[[i]]$hnorm <= d_local
-#   } else {
-#     keep <- rep(TRUE, nrow(list_lags[[i]]))
-#   }
-
-#   list_lags_overlap[[i]] <- list_lags[[i]][keep, , drop = FALSE]
-#   list_excesses_overlap[[i]] <- list_excesses[[i]][keep, , drop = FALSE]
-# }
-
-# # selected_episodes_filtered <- selected_episodes
-# # list_episodes_filtered <- list_episodes
-# list_lags <- list_lags_overlap
-# list_excesses <- list_excesses_overlap
-
-
-# # remove 2025 episodes
-# idx_2025 <- which(format(selected_episodes$t0_date, "%Y") == "2025")
-# if (length(idx_2025) > 0) {
-#   selected_episodes <- selected_episodes[-idx_2025, ]
-#   list_episodes <- list_episodes[-idx_2025]
-#   list_lags <- list_lags[-idx_2025]
-#   list_excesses <- list_excesses[-idx_2025]
-#   cat("Removed", length(idx_2025), "episodes from 2025\n")
-# } else {
-#   cat("No episodes from 2025 found\n")
-# }
-
-# # keep only episodes with speed adv <=5.6 km/h
-# index_speed_above <- which(sqrt(selected_episodes$adv_x^2 + selected_episodes$adv_y^2) > 5.6)
-# length(index_speed_above)
-# index_speed <- which(sqrt(selected_episodes$adv_x^2 + selected_episodes$adv_y^2) <= 5.6)
-# selected_episodes <- selected_episodes[index_speed, ]
-# list_episodes <- list_episodes[index_speed]
-# list_lags <- list_lags[index_speed]
-# list_excesses <- list_excesses[index_speed]
-
 
 # COMPUTE ADVECTION CLASSES ####################################################
 selected_episodes$adv_speed <- sqrt(selected_episodes$adv_x^2 +
@@ -293,6 +213,8 @@ V_adv <- selected_episodes[, c("adv_x", "adv_y")]
 colnames(V_adv) <- c("vx", "vy")
 # OPTIMIZATION ON ALL EPISODES ################################################################
 init <- c(beta1, beta2, alpha1, alpha2, 1, 1)
+# init <- c(0.1579947, 0.9923211, 0.5800001, 0.6627909, 3.896299, 2.221052)
+# v0 <- median(selected_episodes$adv_speed , na.rm = TRUE) # 0.8987283
 
 hmax <- 10
 result <- optim(
@@ -303,6 +225,7 @@ result <- optim(
   list_excesses = list_excesses,
   hmax = hmax,
   wind_df = V_adv,
+  v0 = 1,
   latlon = FALSE,
   distance = "euclidean",
   method = "L-BFGS-B",
@@ -360,17 +283,12 @@ print(results_df)
 results_df <- read.csv(filename, sep = ",")
 
 # JACKKNIFE ANALYSIS ##########################################################
-# ==============================================================================
-# JACKKNIFE ANALYSIS (BY YEAR)
-# ==============================================================================
-
 selected_episodes$t0_date <- as.POSIXct(
   selected_episodes$t0_date,
   format = "%Y-%m-%d %H:%M:%S",
   tz = "UTC"
 )
 
-# Extraction des années uniques pour le Jackknife par bloc annuel
 year_vec <- format(selected_episodes$t0_date, "%Y")
 unique_years <- sort(unique(year_vec))
 
@@ -383,13 +301,11 @@ upper_bounds <- c(10, 10, 1.999, 1.999, 10, 10)
 theta_full <- as.numeric(result$par)
 names(theta_full) <- param_names
 
-# Dossier de sauvegarde pour le Jackknife annuel
-jk_folder <- file.path(foldername_res, "jackknife_annual_estimates")
+jk_folder <- file.path(foldername_res, "jackknife_annual_estimates_new")
 if (!dir.exists(jk_folder)) {
   dir.create(jk_folder, recursive = TRUE)
 }
 
-# Fonction Jackknife modifiée pour exclure une année entière
 jackknife_one_year <- function(target_year) {
   cat("Exclusion de l'année :", target_year, "\n")
   exclude_idx <- which(year_vec == target_year)
@@ -417,6 +333,7 @@ jackknife_one_year <- function(target_year) {
       list_excesses = jack_excesses,
       hmax = hmax,
       wind_df = jack_wind,
+      v0 = v0,
       latlon = FALSE,
       distance = "euclidean",
       method = "L-BFGS-B",
@@ -462,139 +379,90 @@ valid_rows <- complete.cases(jack_raw[, param_names]) &
               jack_raw$convergence == 0
 
 jack_valid <- jack_raw[valid_rows, , drop = FALSE]
+
 G <- nrow(jack_valid)
-
-cat("Nombre de réplicats annuels valides :", G, "sur", length(unique_years), "\n")
-
-if (G < 2) {
-  stop("Pas assez de réplicats valides pour calculer les intervalles de confiance.")
-}
 
 jack_estimates <- as.matrix(jack_valid[, param_names, drop = FALSE])
 storage.mode(jack_estimates) <- "double"
 
-if (any(jack_estimates <= 0) || any(theta_full <= 0)) {
-  stop("Certaines estimations sont négatives ou nulles, impossible d'appliquer le Log-Jackknife.")
-}
 
-log_jack_estimates <- log(jack_estimates)
-log_theta_full     <- log(theta_full)
-log_theta_dot      <- colMeans(log_jack_estimates)
+theta_dot <- colMeans(jack_estimates)
 
-pseudo_values_log <- matrix(NA_real_, nrow = G, ncol = npar, dimnames = list(jack_valid$block, param_names))
+pseudo_values <- matrix(NA_real_, nrow = G, ncol = npar, dimnames = list(jack_valid$block, param_names))
 for (i in seq_len(G)) {
-  pseudo_values_log[i, ] <- G * log_theta_full - (G - 1) * log_jack_estimates[i, ]
+  pseudo_values[i, ] <- G * theta_full - (G - 1) * jack_estimates[i, ]
 }
 
-jack_se_log <- sqrt(
-  ((G - 1) / G) * colSums((log_jack_estimates - matrix(log_theta_dot, G, npar, byrow = TRUE))^2)
+jack_se <- sqrt(
+  ((G - 1) / G) * colSums((jack_estimates - matrix(theta_dot, G, npar, byrow = TRUE))^2)
 )
 
-log_theta_jack_corrected <- colMeans(pseudo_values_log)
-theta_jack_natural       <- exp(log_theta_jack_corrected)
+theta_jack_corrected <- colMeans(pseudo_values)
 
 z <- qnorm(0.975)
-ci_log_lower <- log_theta_jack_corrected - z * jack_se_log
-ci_log_upper <- log_theta_jack_corrected + z * jack_se_log
+ci_lower <- theta_full - z * jack_se
+ci_upper <- theta_full + z * jack_se
+
+ci_lower <- pmax(1e-08, ci_lower)
 
 jk_df <- data.frame(
   Parameter          = param_names,
   Estimate_full      = as.numeric(theta_full),
-  Estimate_jackknife = as.numeric(theta_natural), 
-  StdError_logscale  = as.numeric(jack_se_log),
-  CI_lower           = as.numeric(exp(ci_log_lower)),
-  CI_upper           = as.numeric(exp(ci_log_upper)),
+  Estimate_jackknife = as.numeric(theta_jack_corrected), 
+  StdError           = as.numeric(jack_se),
+  CI_lower           = as.numeric(ci_lower),
+  CI_upper           = as.numeric(ci_upper),
   n_blocks_eff       = G
 )
 
 filename_jk <- file.path(
   foldername_res,
-  paste0("jackknife_annual_results_logscale_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
+  paste0("jackknife_annual_results_natural_q", q * 100, "_delta", delta, "_dmin", min_spatial_dist, ".csv")
 )
 write.csv(jk_df, filename_jk, row.names = FALSE)
-cat("Intervalles de confiance du Jackknife annuel sauvegardés.\n")
 print(jk_df)
-
-# Sauvegarde des pseudo-valeurs naturelles pour archivage/diagnostics
-pseudo_natural_df <- as.data.frame(exp(pseudo_values_log))
+pseudo_values_log[, c("eta1", "eta2")]
+pseudo_natural_df <- as.data.frame(pseudo_values)
 pseudo_natural_df$block <- jack_valid$block
 pseudo_natural_df <- pseudo_natural_df[, c("block", param_names)]
 
 filename_pseudo <- file.path(jk_folder, paste0("pseudo_values_natural_q", q * 100, ".csv"))
 write.csv(pseudo_natural_df, filename_pseudo, row.names = FALSE)
 
-# com_results <- c(0.1579947, 0.9923270, 0.5800128, 0.6627969, 3.8962660, 2.2208320)
-# com_params <- com_results
-# com_params <- results_df[, c("beta1", "beta2", "alpha1", "alpha2", "eta1", "eta2")]
-# com_params <- as.numeric(com_params[1, ])
-# # # get distance matrix and breaks for chi estimation
-# df_dist <- reshape_distances(dist_mat)
-# n_hbins <- 30
-# h_all <- df_dist$value
 
-# h_breaks_com <- quantile(
-#   h_all,
-#   probs = seq(0, 1, length.out = n_hbins + 1),
-#   na.rm = TRUE
-# )
-# # h_breaks_com <- seq(0, 13, by=2)
+influence_df <- jack_valid[, c("block", "eta1", "eta2", "n_removed")]
 
-# table(cut(h_all, breaks = h_breaks_com, include.lowest = TRUE), useNA = "ifany")
-# length(h_breaks_com)
-# h_breaks_com
+influence_df$delta_eta1 <- influence_df$eta1 - theta_full["eta1"]
+influence_df$delta_eta2 <- influence_df$eta2 - theta_full["eta2"]
 
-# h_breaks_com <- unique(as.numeric(h_breaks_com))
-# h_breaks_com[length(h_breaks_com)] <- 13
+influence_df$abs_delta_eta1 <- abs(influence_df$delta_eta1)
+influence_df$abs_delta_eta2 <- abs(influence_df$delta_eta2)
 
-# chi_com <- compute_group_chi(
-#   list_lags = list_lags,
-#   list_excesses = list_excesses,
-#   wind_df = V_adv,
-#   params = com_params,
-#   tau_fixed = 0,
-#   h_breaks = h_breaks_com,
-#   adv_transform = TRUE
-# )
+influence_df <- influence_df[order(-influence_df$abs_delta_eta1), ]
 
-# corr_com <- summary_correlation(chi_com$res_cmp)
-# message(sprintf("COM chi Spearman correlation: %.3f", corr_com))
+print(influence_df)
 
-# # plot chi_come emp vs theo
-# print(chi_com$plots$all)
 
-# ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, color = factor(tau), size = n_pairs)) +
-#   geom_point(alpha = 0.8) +
-#   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-#   theme_bw()
+influence_df$influence_score <- sqrt(
+  (influence_df$delta_eta1 / sd(jack_valid$eta1))^2 +
+  (influence_df$delta_eta2 / sd(jack_valid$eta2))^2
+)
 
-# res_com_cmp <- chi_com$res_cmp
-# # ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
-# #   geom_point(alpha = 0.7, color = btfgreen) +
-# #   geom_abline(linetype = "dashed", color = "red") +
-# #   theme_bw() +
-# #   scale_size_continuous(range = c(1, 4)) +
-# #   labs(x = "Theoretical Chi", y = "Empirical Chi",
-# #       size = "Number of pairs") +
-# #   btf_theme
+influence_df <- influence_df[order(-influence_df$influence_score), ]
+print(influence_df)
 
-# ggplot(res_com_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
-#   geom_point(alpha = 0.7, color = btfgreen) +
-#   geom_abline(linetype = "dashed", color = "red") +
-#   theme_bw() +
-#   scale_size_continuous(range = c(1, 4)) +
-#   labs(x = TeX("Theoretical $\\chi$"), y = TeX("Empirical $\\chi$"),
-#       size = "Number of pairs") +
-#   btf_theme +
-#   theme(legend.position = "right",
-#         legend.title = element_text(size = 16),
-#         legend.text = element_text(size = 14))
-# # save plot
-# foldername <- paste0(im_folder, "workflows/full_pipeline/")
-# if (!dir.exists(foldername)) {
-#   dir.create(foldername, recursive = TRUE)
-# }
-# filename <- paste0(foldername, "com_chi_th_emp.png")
-# ggsave(filename,
-#        width = 7,
-#        height = 6)
 
+ggplot(influence_df, aes(x = eta2, y = eta1, label = block)) +
+  geom_point(size = 3) +
+  geom_text_repel() +
+  geom_point(
+    aes(x = theta_full["eta2"], y = theta_full["eta1"]),
+    color = "red",
+    size = 4
+  ) +
+  labs(
+    x = expression(hat(eta)[2]),
+    y = expression(hat(eta)[1])
+  ) +
+  btf_theme
+ 

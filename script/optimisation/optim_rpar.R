@@ -24,7 +24,7 @@ if (muse) {
   num_cores <- detectCores() - 1
   source("./script/load_libraries.R")
   source("./script/optimisation/config_rpar.R")
-  M <- num_cores
+  M <- 50
 }
 
 # Get all files in the folder "R"
@@ -405,12 +405,12 @@ labels_latex <- c(
 
 # Get the initial parameters for true values
 initial_param <- c(
-  beta1 = true_param[1],
-  beta2 = true_param[2],
-  alpha1 = true_param[3],
-  alpha2 = true_param[4],
-  eta1 = true_param[5],
-  eta2 = true_param[6]
+  beta1 = as.numeric(true_param[1]),
+  beta2 = as.numeric(true_param[2]),
+  alpha1 = as.numeric(true_param[3]),
+  alpha2 = as.numeric(true_param[4]),
+  eta1 = as.numeric(true_param[5]),
+  eta2 = as.numeric(true_param[6])
 )
 
 # First plot

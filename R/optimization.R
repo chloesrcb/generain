@@ -706,7 +706,7 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
                              list_lags, wind_df = NA,
                              hmax = NA, latlon = TRUE,
                              distance = "euclidean", threshold = FALSE,
-                             rpar = TRUE, normalize = FALSE) {
+                             rpar = TRUE, normalize = FALSE, v0 = 1) {
 
   if (length(params) == 4) {
     params <- c(params, 0, 0)
@@ -732,9 +732,13 @@ neg_ll_composite <- function(params, list_episodes, list_excesses,
     r <- sqrt(vx^2 + vy^2)
     eps <- 1e-12
 
-    scale <- eta1 * (pmax(r, eps)^(eta2 - 1))  # = eta1*r^(eta2)/r
+    scale <- eta1 * (pmax(r, eps) / v0)^eta2 / pmax(r, eps)
     adv_x <- scale * vx
     adv_y <- scale * vy
+
+    # scale <- eta1 * (pmax(r, eps)^(eta2 - 1))  # = eta1*r^(eta2)/r
+    # adv_x <- scale * vx
+    # adv_y <- scale * vy
 
     adv_df <- cbind(adv_x, adv_y)
     if (nrow(adv_df) == 1) adv <- as.vector(adv_df)

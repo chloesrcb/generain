@@ -282,7 +282,7 @@ process_site <- function(y, site_name,
   inits <- init_values(y, 0)
   fit <- fit.extgp(y, model = 1, method = "mle",
                    init = c(1, inits[1], inits[2]),
-                   censoring = c(0.216, Inf),
+                   censoring = c(best_cens, Inf),
                    plots = FALSE, confint = FALSE, ncpus = 7, R = R)
 
   param_mle <- fit$fit$mle

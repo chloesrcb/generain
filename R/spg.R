@@ -206,11 +206,6 @@ sim_episode_coords <- function(params_vario, params_margins,
 
 }
 
-  # # transformed to uniform scale
-    # V[k, ] <- G_std(Zk, p0 = p0, u = u)
-
-    # # Final rainfall values
-    # X[k, ] <- qEGPD_full(V[k, ], p0, xi, sigma, kappa)
 
 #' compute_p0_episode
 #' 
@@ -447,8 +442,21 @@ plot_th_emp_chi <- function(list_lags,
   }
 
   res <- data.table::rbindlist(res_list, fill = TRUE)
-  res$hbin <- cut(res$h, breaks = h_breaks, include.lowest = TRUE)
+  # res$hbin <- cut(res$h, breaks = h_breaks, include.lowest = TRUE)
+  eps_h <- 1e-10
 
+  res$hbin <- ifelse(
+    abs(res$h) <= eps_h,
+    "h = 0",
+    as.character(cut(res$h, breaks = h_breaks, include.lowest = FALSE))
+  )
+
+  res$hbin <- factor(
+    res$hbin,
+    levels = c("h = 0", levels(cut(res$h[res$h > eps_h],
+                                    breaks = h_breaks,
+                                    include.lowest = FALSE)))
+  )
   grouped <- dplyr::group_by(
     dplyr::filter(res, .data$tau >= tau_min),
     .data$tau,
@@ -511,7 +519,20 @@ plot_th_emp_chi <- function(list_lags,
 }
 
 
-
+#' compute_group_chi
+#' 
+#' Compute and plot empirical vs theoretical chi values for multiple episodes
+#' @param list_lags list of data frames with lag information for each episode
+#' @param list_excesses list of data frames with excess information for each episode
+#' @param wind_df data frame with advection parameters for each episode
+#' @param params numeric vector of estimated model parameters
+#' @param tau_min minimum tau value to consider
+#' @param tau_fixed fixed tau value for specific plot
+#' @param h_breaks breaks for h binning
+#' @param latlon logical, whether coordinates are in lat/lon
+#' @param adv_transform logical, whether to apply advection transformation
+#' @return invisible list with results and plots
+#' @export
 compute_group_chi <- function(list_lags,
                               list_excesses,
                               wind_df,
@@ -652,4 +673,413 @@ make_qq_df <- function(x_obs, x_sim, min_n = 10) {
     q_obs = as.numeric(quantile(x_obs, probs = p, names = FALSE)), 
     q_sim = as.numeric(quantile(x_sim, probs = p, names = FALSE)) 
   ) 
+}
+
+
+
+#' sim_rpareto_coords_m5
+#'
+#' Simulate a single episode over given coordinates and times
+#' with r-Pareto process and transform to observed scale
+#' @param coords matrix of coordinates (sites x 2)
+#' @param steps vector of time steps
+#' @param beta1, beta2, alpha1, alpha2 variogram parameters
+#' @param adv_m5 vector of advection (vx, vy)
+#' @param threshold threshold in the latent space
+#' @param s0_index index of the site of the event origin
+#' @param t0_index index of the time of the event origin
+#' @param seed random seed for reproducibility
+#' @param cell_m cell size for spatial discretization, default is 100
+#' @return list with latent Z, latent W, gamma0, and R
+#' @export
+sim_rpareto_coords_m5 <- function(coords,
+                                  steps,
+                                  beta1, beta2, alpha1, alpha2,
+                                  adv_m5 = c(0, 0),
+                                  threshold = 1,
+                                  s0_index = 1,
+                                  t0_index = 1,
+                                  seed = NULL,
+                                  cell_m = 100) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  RandomFields::RFoptions(
+    spConform = FALSE,
+    allow_duplicated_locations = TRUE,
+    install = "no"
+  )
+
+  beta1 <- as.numeric(beta1)
+  beta2 <- as.numeric(beta2)
+  alpha1 <- as.numeric(alpha1)
+  alpha2 <- as.numeric(alpha2)
+
+  stopifnot(
+    is.finite(beta1), is.finite(beta2),
+    is.finite(alpha1), is.finite(alpha2)
+  )
+
+  coords <- as.data.frame(coords)
+  stopifnot(all(c("x", "y") %in% names(coords)))
+  stopifnot(all(is.finite(coords$x)), all(is.finite(coords$y)))
+
+  n_sites <- nrow(coords)
+  lt <- length(steps)
+
+  stopifnot(s0_index >= 1, s0_index <= n_sites)
+  stopifnot(t0_index >= 1, t0_index <= lt)
+
+  x_coords <- coords$x
+  y_coords <- coords$y
+
+  step_grid <- expand.grid(site = seq_len(n_sites), it = seq_len(lt))
+
+  x <- x_coords[step_grid$site]
+  y <- y_coords[step_grid$site]
+  step_t <- steps[step_grid$it]
+
+  x_shift <- x - step_t * adv_m5[1]
+  y_shift <- y - step_t * adv_m5[2]
+  x_shift <- round(x_shift / cell_m) * cell_m
+  y_shift <- round(y_shift / cell_m) * cell_m
+
+  ind0 <- which(step_grid$site == s0_index & step_grid$it == t0_index)
+  x0s <- x_shift[ind0]
+  y0s <- y_shift[ind0]
+  t0_step <- step_t[ind0]
+
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1, scale = 1)
+  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2, scale = 1)
+
+  gamma_space_vec <- RandomFields::RFvariogram(
+    modelSpace,
+    x = x_shift - x0s,
+    y = y_shift - y0s
+  )
+
+  gamma_time_vec <- RandomFields::RFvariogram(
+    modelTime,
+    x = step_t - t0_step
+  )
+
+  gamma0_vec <- gamma_space_vec + gamma_time_vec
+  gamma0 <- matrix(gamma0_vec, nrow = n_sites, ncol = lt, byrow = FALSE)
+
+  key <- paste0(sprintf("%.8f", x_shift), "_", sprintf("%.8f", y_shift))
+  key_u <- unique(key)
+  map_idx <- match(key, key_u)
+
+  xy_u <- do.call(rbind, strsplit(key_u, "_", fixed = TRUE))
+  x_u <- as.numeric(xy_u[, 1])
+  y_u <- as.numeric(xy_u[, 2])
+
+  cat("Unique spatial simulation points:", length(x_u), "\n")
+
+  W_s_u <- RandomFields::RFsimulate(modelSpace, x = x_u, y = y_u, grid = FALSE)
+  W_s <- as.numeric(W_s_u)[map_idx]
+
+  W_t <- RandomFields::RFsimulate(modelTime, steps, grid = TRUE)
+  W_t <- as.numeric(W_t)
+
+  W <- W_s + W_t[step_grid$it]
+  W_mat <- matrix(W, nrow = n_sites, ncol = lt, byrow = FALSE)
+
+  W0 <- W_mat[s0_index, t0_index]
+  Y  <- exp(W_mat - W0 - gamma0)
+  R  <- evd::rgpd(n = 1, loc = 1, scale = 1, shape = 1)
+
+  Z <- threshold * R * Y
+  rownames(Z) <- rownames(coords)
+
+  list(Z = Z, W = W_mat, gamma0 = gamma0, R = R)
+}
+
+
+#' sim_episode_grid_m5
+#'
+#' Simulate a single episode over given regular grid coordinates and times
+#' with r-Pareto process and transform to observed scale
+#' @param params_vario list of variogram parameters
+#' @param params_margins_common list of common marginal parameters
+#' @param coords matrix of coordinates (sites x 2)
+#' @param steps vector of time steps
+#' @param adv_m5 vector of advection (vx, vy)
+#' @param t0 time index of the event origin 
+#' @param s0_pixel_id site name of the event origin
+#' @param u_emp empirical threshold in the observed space
+#' @param seed random seed for reproducibility
+#' @param cell_m cell size for spatial discretization, default is 100
+#' @return matrix of observed X values (sites x time)
+#' @export
+sim_episode_grid_m5 <- function(params_vario,
+                                params_margins_common,
+                                coords,
+                                steps,
+                                adv_m5,
+                                t0,
+                                s0_pixel_id,
+                                u_emp,
+                                seed = NULL,
+                                cell_m = 100) {
+
+  stopifnot(s0_pixel_id %in% rownames(coords))
+  s0_index <- which(rownames(coords) == s0_pixel_id)
+
+  x_s0 <- pEGPD_full(
+    u_emp,
+    p0    = params_margins_common$p0,
+    xi    = params_margins_common$xi,
+    sigma = params_margins_common$sigma,
+    kappa = params_margins_common$kappa
+  )
+
+  u <- G_std_inv(x_s0, p0 = params_margins_common$p0)
+
+  sim <- sim_rpareto_coords_m5(
+    beta1 = params_vario$beta1,
+    beta2 = params_vario$beta2,
+    alpha1 = params_vario$alpha1,
+    alpha2 = params_vario$alpha2,
+    adv_m5 = adv_m5,
+    coords = coords,
+    steps = steps,
+    t0_index = t0 + 1,
+    s0_index = s0_index,
+    threshold = u,
+    seed = seed,
+    cell_m = cell_m
+  )
+
+  Z <- sim$Z
+  nS <- nrow(coords)
+  nT <- length(steps)
+
+  X <- matrix(NA_real_, nS, nT, dimnames = list(rownames(coords), NULL))
+
+  for (k in seq_len(nS)) {
+    V <- G_std(Z[k, ], p0 = params_margins_common$p0)
+    X[k, ] <- qEGPD_full(
+      V,
+      p0    = params_margins_common$p0,
+      xi    = params_margins_common$xi,
+      sigma = params_margins_common$sigma,
+      kappa = params_margins_common$kappa
+    )
+  }
+
+  X
+}
+
+
+#' run_spg_episode
+#'
+#' Run a single episode simulation over a specified study area with optional plotting
+#' @param study_geom_file path to the study area shapefile
+#' @param gauges_file path to the gauges shapefile (optional)
+#' @param params_vario list of variogram parameters
+#' @param params_margins list of marginal parameters
+#' @param adv vector of advection (vx, vy)
+#' @param s0_pixel_id site name of the event origin
+#' @param nT number of time steps
+#' @param steps vector of time steps
+#' @param u_emp empirical threshold in the observed space
+#' @param cell_m cell size for spatial discretization, default is 100
+#' @param seed random seed for reproducibility
+#' @param im_folder folder to save frames for plotting (optional)
+#' @param episode_id identifier for the episode (used in file naming)
+#' @param make_plots logical, whether to generate plots for each time step
+#' @return list containing the simulated episode, grid, coordinates, plots, and frames directory
+#' @export
+run_spg_episode <- function(
+  study_geom_file,
+  gauges_file = NULL,
+  params_vario,
+  params_margins,
+  adv,
+  s0_pixel_id,
+  nT = 12,
+  steps = 0:11,
+  u_emp = 1,
+  cell_m = 100,
+  seed = 1,
+  im_folder = NULL,
+  episode_id = "episode",
+  make_plots = FALSE
+) {
+
+  set.seed(seed)
+
+  ##############################################################################
+  # area geometry
+  ##############################################################################
+
+  study_geom <- st_read(study_geom_file, quiet = TRUE) |>
+    st_transform(2154) |>
+    st_make_valid()
+
+  study_union <- st_union(study_geom)
+
+  ##############################################################################
+  # GRID
+  ##############################################################################
+
+  grid_raw <- st_make_grid(
+    study_union,
+    cellsize = cell_m,
+    square = TRUE
+  ) |>
+    st_as_sf()
+
+  grid_raw$pixel_id <- paste0("pixel_", seq_len(nrow(grid_raw)))
+
+  grid_cent <- st_centroid(grid_raw)
+  inside <- lengths(st_within(grid_cent, study_union)) > 0
+
+  grid_poly <- grid_raw[inside, ]
+  grid_cent <- grid_cent[inside, ]
+
+  grid_poly$pixel_id <- grid_raw$pixel_id[inside]
+  grid_cent$pixel_id <- grid_raw$pixel_id[inside]
+
+  grid_xy <- st_coordinates(grid_cent)
+
+  coords_df <- data.frame(
+    x = grid_xy[, 1],
+    y = grid_xy[, 2]
+  )
+  rownames(coords_df) <- grid_cent$pixel_id
+
+  ##############################################################################
+  # SIMULATION
+  ##############################################################################
+
+  sim_episode <- sim_episode_grid_m5(
+    params_vario = params_vario,
+    params_margins_common = params_margins,
+    coords = coords_df,
+    steps = steps,
+    adv_m5 = adv,
+    t0 = 0,
+    s0_pixel_id = s0_pixel_id,
+    u_emp = u_emp,
+    seed = seed,
+    cell_m = cell_m
+  )
+
+  ##############################################################################
+  # OPTIONAL PLOTS
+  ##############################################################################
+  
+  plots <- NULL
+  dir_frames <- NULL
+
+  if (make_plots) {
+
+    dx <- adv[1]
+    dy <- adv[2]
+
+    if (!is.null(im_folder)) {
+      dir_frames <- file.path(im_folder, paste0("frames_", episode_id))
+      dir.create(dir_frames, recursive = TRUE, showWarnings = FALSE)
+    }
+
+    grid_xy_mat <- grid_xy
+
+    plots <- list()
+
+    for (tt in seq_len(nT)) {
+
+      df_t <- data.frame(
+        pixel_id = rownames(sim_episode),
+        rain = sim_episode[, tt]
+      )
+
+      map_t <- grid_poly |>
+        left_join(df_t, by = "pixel_id") |>
+        mutate(rain_plot = rain)
+
+      tmp <- df_t |>
+        mutate(w = pmax(rain, 0))
+
+      has_rain <- any(tmp$w > u_emp / 4, na.rm = TRUE)
+
+      p <- ggplot() +
+    geom_sf(data = study_geom, fill = NA, color = "black", linewidth = 0.8) +
+
+    geom_sf(data = map_t, aes(fill = rain_plot), color = NA) +
+    geom_sf(data = s0_poly_l93, fill = NA, color = "#ee8686", linewidth = 1.2) +
+    geom_sf(data = sites_l93, color = "white", size = 3) +
+    geom_sf(data = sites_l93, color = "grey40", size = 2) +
+    scale_fill_gradientn(
+      colours = c("white", "#dbe9f6", "#9ecae1", "#4a90d9", "#08519c"),
+      values = scales::rescale(c(0, 0.2, threshold, 2 * threshold, fill_limits[2])),
+      limits = fill_limits,
+      oob = scales::squish,
+      na.value = "transparent",
+      name = paste0("Rainfall (mm/5min)\nThreshold u = ", round(threshold, 2))
+    ) +
+    labs(
+      title = paste0(
+        "t = ", tt
+      )
+    ) +
+    theme_void() +
+    theme(
+      plot.title = element_text(size = 18, hjust = 0.5),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      panel.background = element_rect(fill = "transparent", color = NA),
+      legend.background = element_rect(fill = "transparent", color = NA),
+      legend.key = element_rect(fill = "transparent", color = NA),
+      legend.box.background = element_rect(fill = "transparent", color = NA),
+      legend.text = element_text(size = 14)
+    ) +
+    coord_sf(expand = FALSE)
+
+      if (has_rain) {
+
+        bx <- sum(grid_xy_mat[,1] * tmp$w, na.rm = TRUE) / sum(tmp$w, na.rm = TRUE)
+        by <- sum(grid_xy_mat[,2] * tmp$w, na.rm = TRUE) / sum(tmp$w, na.rm = TRUE)
+
+        bary <- st_sfc(st_point(c(bx, by)), crs = 2154) |> st_sf()
+
+        arrow <- st_sfc(
+          st_linestring(rbind(
+            c(bx, by),
+            c(bx + dx, by + dy)
+          )),
+          crs = 2154
+        ) |> st_sf()
+
+        p <- p +
+          geom_sf(data = bary, color = "red") +
+          geom_sf(
+            data = arrow,
+            arrow = arrow(length = unit(0.3, "cm")),
+            color = "red"
+          )
+      }
+
+      if (!is.null(dir_frames)) {
+        ggsave(
+          file.path(dir_frames, sprintf("frame_%03d.png", tt)),
+          plot = p,
+          width = 7,
+          height = 6,
+          dpi = 150,
+          bg = "transparent"
+        )
+      }
+
+      plots[[tt]] <- p
+    }
+  }
+
+  return(list(
+    sim = sim_episode,
+    grid = grid_poly,
+    coords = coords_df,
+    plots = plots,
+    frames_dir = dir_frames
+  ))
 }
