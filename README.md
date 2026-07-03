@@ -88,7 +88,10 @@ $$
 
 where $h \in \mathbb{R}^2$ is the spatial lag, $\tau \in \mathbb{R}$ is the temporal lag and $V \in \mathbb{R}^2$ is the advection vector.
 
-The parameters $(\beta_1, \beta_2,\alpha_1, \alpha_2)$ can be estimated using the current `generain` package.
+The parameters $(\beta_1, \beta_2,\alpha_1, \alpha_2)$ can be estimated using the current `generain` package. The constraints on the parameters are:
+
+- $\beta_1, \beta_2 > 0$;
+- $\alpha_1, \alpha_2 \in (0, 2]$.
 
 #### 3. Advection
 
