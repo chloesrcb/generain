@@ -83,7 +83,7 @@ These parameters can be estimated from observed data and adapted.
 Dependence is modeled via a non-separable variogram:
 
 $$
-\gamma(h, \tau) = \beta_1 ||h - \tau V||^{\alpha_1} + \beta_2 |\tau|^{\alpha_2}
+\gamma(h, \tau) = \beta_1 \lVert h - \tau V\rVert^{\alpha_1} + \beta_2 |\tau|^{\alpha_2}
 $$
 
 where $h \in \mathbb{R}^2$ is the spatial lag, $\tau \in \mathbb{R}$ is the temporal lag and $V \in \mathbb{R}^2$ is the advection vector.
