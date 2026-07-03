@@ -129,11 +129,11 @@ The Verdanson example is only a **case study configuration**.
 
 To apply the model to another region, the following elements must be adapted:
 
-- **Geometry file**: replace `verdanson_basin.geojson` with the target domain
-- **Coordinate system**: all spatial data must be in a projected CRS (meters)
+- **Geometry file**: replace the geometry file with the target domain
+- **Coordinate system**: all spatial data must be in a projected CRS
 - **Grid resolution**: adjust `cell_m` depending on spatial scale
-- **Advection vector**: ensure consistency with spatial units (m per time step)
+- **Advection vector**: ensure consistency with spatial units
 - **Model parameters**: recalibrate variogram and EGPD parameters for the new region
-- **File paths**: update `data_folder` and output directories
+- **File paths**: update `data_folder` and output directories (`im_folder`)
 
 Care must be taken to maintain consistency between spatial scale, temporal resolution, and model parameters.
