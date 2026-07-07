@@ -49,18 +49,17 @@ bassin_outline <- st_concave_hull(
 ) %>%
   st_make_valid()
 
-cell_m <- 100
+cell_m <- 100 # resolution of the grid in meters
 
-margin <- 5 * cell_m
+margin <- 5 * cell_m # add a margin around the bassin
 
+# Create a grid of square pixels over the bassin
 bbox_b <- st_bbox(bassin_outline)
-
 bbox_b_expanded <- bbox_b
 bbox_b_expanded[c("xmin", "ymin")] <- bbox_b[c("xmin", "ymin")] - margin
 bbox_b_expanded[c("xmax", "ymax")] <- bbox_b[c("xmax", "ymax")] + margin
-
 bbox_sfc <- st_as_sfc(bbox_b_expanded)
-
+# grid
 grid_raw <- st_make_grid(
   bbox_sfc,
   cellsize = cell_m,
@@ -68,12 +67,13 @@ grid_raw <- st_make_grid(
 ) %>%
   st_as_sf() 
 
+# Select only the pixels that intersect with the bassin
 grid_square_l93 <- grid_raw[
   lengths(st_intersects(grid_raw, bassin_outline)) > 0,
 ] %>%
   mutate(pixel_id = paste0("pixel_", row_number()))
 
-
+# select the conditioning pixel
 s0_pixel_id <- grid_square_l93$pixel_id[1400]
 s0_geom <- grid_square_l93[grid_square_l93$pixel_id == s0_pixel_id, ]
 
@@ -87,21 +87,20 @@ ggplot() +
   coord_sf(expand = FALSE) +
   theme_void()
 
-ggsave(
-  filename = paste0(im_folder, "swg/fabregues_grid_pixels_inside_basin_l93.png"),
-  plot = p_grid,
-  width = 8,
-  height = 6,
-  dpi = 300,
-  bg = "white"
-)
+# ggsave(
+#   filename = paste0(im_folder, "swg/fabregues_grid_pixels_inside_basin_l93.png"),
+#   plot = p_grid,
+#   width = 8,
+#   height = 6,
+#   dpi = 300,
+#   bg = "white"
+# )
 
-
+# get the centroids of the pixels
 grid_cent_l93 <- st_centroid(grid_square_l93)
 grid_cent_l93$pixel_id <- grid_square_l93$pixel_id
-
 grid_xy <- st_coordinates(grid_cent_l93)
-
+# coordinates of the pixels in a data frame
 grid_df_l93 <- data.frame(
   x = grid_xy[, 1],
   y = grid_xy[, 2]
@@ -151,9 +150,9 @@ sim_episode <- sim_episode_grid_m5(
   cell_m = 100
 )
 
-head(sim_episode)
-tail(sim_episode)
-nrow(sim_episode)
+
+
+# To SW2D format --------------------------------------------------------------
 dt_sec <- 300  # 5 minutes
 
 # mm/5min -> m/s
@@ -162,8 +161,6 @@ sim_episode_mps <- sim_episode_mps * 1e-3 / dt_sec
 
 mat <- sim_episode_mps
 mat <- sim_episode_mps
-head(mat)
-
 stations <- rownames(mat)
 times <- seq(0, by = 300, length.out = ncol(mat))  # 5 min = 300s
 
@@ -195,31 +192,7 @@ apply(df_sw2d, 1, function(row) {
 
 close(con)
 
-
-
-# grid_df_l93 <- grid_df_l93 %>%
-#   mutate(
-#     station_id = row_number()
-#   )
-
-
-# file_map <- "Precipitation_station_codes_map.txt"
-
-# con <- file(paste0(folder_out, file_map), "w")
-
-# writeLines("Unif\t0", con)
-# writeLines("==== Default Param", con)
-# writeLines("Sta", con)
-# writeLines("Sta", con)
-# writeLines("==== Distrib", con)
-
-# for(i in seq_len(nrow(grid_df_l93))) {
-#   writeLines(as.character(i), con)
-# }
-
-# close(con)
-
-
+# get the coordinates of the stations and save them to a CSV file
 write.csv(grid_df_l93,
           paste0(folder_out, "precipitation_station_coordinates.csv"),
           row.names = FALSE)
@@ -302,11 +275,6 @@ for (tt in seq_len(nT)) {
     coord_sf(expand = FALSE)
 
   if (has_rain) {
-    # put arrow on the maximal value of rain
-    # mx <- tmp$x[which.max(tmp$w)]
-    # my <- tmp$y[which.max(tmp$w)]
-    # mx_pt_l93 <- st_sfc(st_point(c(mx, my)), crs = 2154) %>% st_sf()
-    
     # put arrow on the barycenter of rain
     bx <- sum(tmp$x * tmp$w, na.rm = TRUE) / sum(tmp$w, na.rm = TRUE)
     by <- sum(tmp$y * tmp$w, na.rm = TRUE) / sum(tmp$w, na.rm = TRUE)
