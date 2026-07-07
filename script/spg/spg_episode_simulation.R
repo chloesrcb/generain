@@ -17,7 +17,7 @@ source("./R/distances.R", echo = FALSE)
 # CONFIGURATION TO ADAPT
 ################################################################################
 config <- list(
-  study_geom_file = file.path(data_folder, "geometry/verdanson_basin.geojson"),
+  study_geom_file = file.path(data_folder, "geometry/verdanson_basin.geojson"), # geojson 
   cell_m = 100, # resolution of the grid in meters
   nT = 12, # number of time steps
   steps = 0:11, # time steps to simulate
@@ -63,3 +63,8 @@ res <- run_spg_episode(
   episode_id = config$episode_id,
   make_plots = FALSE # if TRUE, generates plots for each time step
 )
+
+
+res$sim
+res$coords
+res$grid
