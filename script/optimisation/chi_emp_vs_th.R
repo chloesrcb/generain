@@ -2,6 +2,9 @@ library(dplyr)
 library(ggplot2)
 library(ggrepel)
 library(latex2exp)
+functions_folder <- "./R"
+files <- list.files(functions_folder, full.names = TRUE)
+invisible(lapply(files, function(f) source(f, echo = FALSE)))
 
 
 # omsev_params <- c(1.101, 3.716, 0.103, 0.676, 3.896299, 2.221052)
@@ -136,7 +139,6 @@ p_chi_scatter_tau <- ggplot(
 print(p_chi_scatter_tau)
 
 # Tau > 0 only
-
 res_taupos <- res_chi %>%
   filter(tau > 0)
 
@@ -160,10 +162,7 @@ p_chi_taupos <- ggplot(
 
 print(p_chi_taupos)
 
-# -------------------------------------------------------------------------
 # Tau = 0 only
-# -------------------------------------------------------------------------
-
 res_tau0 <- res_chi %>%
   filter(tau == 0)
 
@@ -192,10 +191,7 @@ p_chi_tau0 <- ggplot(
 
 print(p_chi_tau0)
 
-# -------------------------------------------------------------------------
-# 9. Residuals as a function of theoretical chi
-# -------------------------------------------------------------------------
-
+# Residuals as a function of theoretical chi
 p_chi_residual <- ggplot(
   res_chi,
   aes(x = chi_theo_bar, y = diff,
@@ -215,9 +211,7 @@ p_chi_residual <- ggplot(
 
 print(p_chi_residual)
 
-# -------------------------------------------------------------------------
-# 10. Residuals by spatial distance bin
-# -------------------------------------------------------------------------
+# Residuals by spatial distance bin
 
 p_chi_residual_hbin <- ggplot(
   res_chi,
@@ -239,9 +233,7 @@ p_chi_residual_hbin <- ggplot(
 
 print(p_chi_residual_hbin)
 
-# -------------------------------------------------------------------------
-# 11. Chi as function of spatial distance, one panel per temporal lag
-# -------------------------------------------------------------------------
+# Chi as function of spatial distance, one panel per temporal lag
 get_h_mid <- function(hbin) {
   x <- as.character(hbin)
 
@@ -321,10 +313,7 @@ x_labs <- res_chi_ci %>%
     label = ifelse(row_number() %% 2 == 1, sprintf("%.2f", hbin_mid), "")
   )
 
-# -------------------------------------------------------------------------
-# 12. Heatmap of signed residuals
-# -------------------------------------------------------------------------
-
+# Heatmap of signed residuals
 p_chi_heatmap <- ggplot(
   res_chi_plot,
   aes(x = hbin, y = factor(tau_lab), fill = diff)
@@ -351,10 +340,7 @@ p_chi_heatmap <- ggplot(
 
 print(p_chi_heatmap)
 
-# -------------------------------------------------------------------------
-# 13. Save plots
-# -------------------------------------------------------------------------
-
+# Save plots
 foldername <- paste0(im_folder, "optim/omsev/2025_results/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
@@ -395,8 +381,8 @@ filename <- paste0(foldername_jk, "all_results_jk_by_monthyear_n",
 
 jack_estimates <- read.csv(filename, header = TRUE)
 colnames(jack_estimates) <- c("beta1", "beta2", "alpha1", "alpha2")
-       # jack_estimates must contain beta1, beta2, alpha1, alpha2
-# If eta fixed, add eta1 eta2 if compute_group_chi expects 6 params
+       
+# If eta fixed
 eta_fixed <- c(eta1 = 3.896299, eta2 = 2.221052)
 
 
@@ -678,7 +664,6 @@ ggsave(paste0(foldername, "omsev_chi_band_by_h_tau_no_h0.pdf"),
 
 
 # do the same on comephore data
-
 com_params <- c(0.1579922, 0.99232, 0.5800247, 0.6627991, 3.896299, 2.221052)
 
 # # get distance matrix and breaks for chi estimation
@@ -700,8 +685,6 @@ h_breaks_com
 
 h_breaks_com <- unique(as.numeric(h_breaks_com))
 h_breaks_com[length(h_breaks_com)] <- 13
-
-
 
 chi_com <- compute_group_chi(
   list_lags = list_lags,

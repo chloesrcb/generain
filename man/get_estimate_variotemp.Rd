@@ -4,17 +4,23 @@
 \alias{get_estimate_variotemp}
 \title{Calculate the estimate of variotemp}
 \usage{
-get_estimate_variotemp(df_chi, weights, summary = FALSE)
+get_estimate_variotemp(
+  df_chi,
+  weights,
+  conf_level = 0.95,
+  print_summary = FALSE,
+  return_model = FALSE
+)
 }
 \arguments{
 \item{weights}{The weights parameter, "residuals", "exp", or "none".}
 
-\item{summary}{Logical value indicating whether to return the summary of the
-model. Default is FALSE.}
-
 \item{chitemp}{The chitemp parameter.}
 
 \item{tmax}{The tmax parameter.}
+
+\item{summary}{Logical value indicating whether to return the summary of the
+model. Default is FALSE.}
 }
 \value{
 The estimate of variotemp.

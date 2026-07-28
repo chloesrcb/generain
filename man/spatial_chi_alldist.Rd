@@ -19,9 +19,6 @@ spatial_chi_alldist(df_dist, data_rain, quantile, hmax = NA, zeros = FALSE)
 
 \item{zeros}{Logical value indicating whether to include zero values in the
 calculation.}
-
-\item{comephore}{Logical value indicating whether we work on the COMEPHORE 
-dataset. Default is FALSE.}
 }
 \value{
 The spatial chi-squared distances.

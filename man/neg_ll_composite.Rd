@@ -15,7 +15,8 @@ neg_ll_composite(
   distance = "euclidean",
   threshold = FALSE,
   rpar = TRUE,
-  normalize = FALSE
+  normalize = FALSE,
+  v0 = 1
 )
 }
 \arguments{

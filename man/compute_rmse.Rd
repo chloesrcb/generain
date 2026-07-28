@@ -7,7 +7,7 @@ This function computes the Root Mean Square Error (RMSE) between empirical
 and theoretical quantiles of the Extreme Generalized Pareto Distribution (EGPD)
 for a given dataset and left censoring value.}
 \usage{
-compute_rmse(y, left_censore)
+compute_rmse(y, left_censore, bound_kappa = c(0, 2), bound_sigma = c(0.001, 2))
 }
 \arguments{
 \item{y}{The data to be evaluated.}
