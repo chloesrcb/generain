@@ -42,7 +42,7 @@ mesh_union <- st_union(mesh) %>%
   st_make_valid()
 
 # Envelope of the bassin
-bassin_outline <- st_concave_hull(
+bassin_geom <- st_concave_hull(
   mesh_union,
   ratio = 0.15,
   allow_holes = FALSE
@@ -54,7 +54,7 @@ cell_m <- 100 # resolution of the grid in meters
 margin <- 5 * cell_m # add a margin around the bassin
 
 # Create a grid of square pixels over the bassin
-bbox_b <- st_bbox(bassin_outline)
+bbox_b <- st_bbox(bassin_geom)
 bbox_b_expanded <- bbox_b
 bbox_b_expanded[c("xmin", "ymin")] <- bbox_b[c("xmin", "ymin")] - margin
 bbox_b_expanded[c("xmax", "ymax")] <- bbox_b[c("xmax", "ymax")] + margin
@@ -69,7 +69,7 @@ grid_raw <- st_make_grid(
 
 # Select only the pixels that intersect with the bassin
 grid_square_l93 <- grid_raw[
-  lengths(st_intersects(grid_raw, bassin_outline)) > 0,
+  lengths(st_intersects(grid_raw, bassin_geom)) > 0,
 ] %>%
   mutate(pixel_id = paste0("pixel_", row_number()))
 
@@ -82,7 +82,7 @@ ggplot() +
           fill = "grey95", color = "grey75", linewidth = 0.15) +
   geom_sf(data = s0_geom,
           fill = NA, color = "red", linewidth = 1.5) +
-  geom_sf(data = st_as_sf(bassin_outline),
+  geom_sf(data = st_as_sf(bassin_geom),
           fill = NA, color = "black", linewidth = 1) +
   coord_sf(expand = FALSE) +
   theme_void()
@@ -113,8 +113,8 @@ grid_df_l93$pixel_id <- grid_cent_l93$pixel_id
 #############################################################################################
 
 # Parameters for simulation
-u_emp <- 1 # threshold for simulation
-nT <- 12 # time steps
+u_emp <- 10 # threshold for simulation
+nT <- 36 # time steps
 steps <- 0:(nT - 1)
 
 # marginal parameters for simulation
@@ -134,8 +134,9 @@ params_m5min <- list(
 )
 
 # random advection for one episode
-adv_5m <- c(100, 200)
-
+adv_5m <- c(20, 50)
+seed <- 157 # 487
+# seed :  52 100 104 114 117 123 157 186
 # Simulate random episode
 sim_episode <- sim_episode_grid_m5(
   params_vario = params_m5min,
@@ -146,7 +147,7 @@ sim_episode <- sim_episode_grid_m5(
   t0 = 0,
   s0_pixel_id = s0_pixel_id,
   u_emp = u_emp,
-  seed = NULL,
+  seed = seed,
   cell_m = 100
 )
 
@@ -169,16 +170,23 @@ df_sw2d <- data.frame(
   t(mat) 
 )
 
-file_out <- "precipitation_time_series.txt"
+file_out <- "/precipitation_time_series.txt"
 
 N <- nrow(mat)
 
-folder_out <- paste0(data_folder, "spg/fabregues/")
+
+folder_out <- paste0(data_folder, "/spg/fabregues/")
 if (!dir.exists(folder_out)) {
   dir.create(folder_out, recursive = TRUE)
 }
 
-con <- file(paste0(folder_out, file_out), open = "w")
+str_adv <- paste0("adv_", adv_5m[1], "_", adv_5m[2])
+episode_idx <- paste0(str_adv, "_seed", seed)
+folder <- file.path(folder_out, paste0("frames_episode_", episode_idx))
+dir.create(folder, recursive = TRUE, showWarnings = FALSE)
+
+
+con <- file(paste0(folder, file_out), open = "w")
 
 writeLines("#Precipitation time series", con)
 writeLines("#Precipitation stations", con)
@@ -192,9 +200,12 @@ apply(df_sw2d, 1, function(row) {
 
 close(con)
 
+str_adv <- paste0("adv_", adv_5m[1], "_", adv_5m[2])
+episode_idx <- paste0(str_adv, "_seed", seed)
+
 # get the coordinates of the stations and save them to a CSV file
 write.csv(grid_df_l93,
-          paste0(folder_out, "precipitation_station_coordinates.csv"),
+          paste0(folder, "/precipitation_station_coordinates.csv"),
           row.names = FALSE)
 
 ###############################################################################################
@@ -213,8 +224,8 @@ fill_max <- max(fill_max, 2 * threshold)
 fill_limits <- c(0, fill_max)
 
 str_adv <- paste0("adv_", adv_5m[1], "_", adv_5m[2])
-episode_idx <- str_adv
-dir_frames <- file.path(im_folder, paste0("swg/fabregues/frames_episode_", episode_idx))
+episode_idx <- paste0(str_adv, "_seed", seed)
+dir_frames <- file.path(im_folder, paste0("swg/fabregues/more_extreme/frames_episode_", episode_idx))
 dir.create(dir_frames, recursive = TRUE, showWarnings = FALSE)
 
 cent_df <- data.frame(
@@ -318,3 +329,72 @@ for (tt in seq_len(nT)) {
     bg = "transparent"
   )
 }
+
+
+################################################################################
+# TOTAL RAINFALL VOLUME (m3)
+################################################################################
+
+# Surface of one pixel
+pixel_area <- cell_m^2  # m²
+
+# rainfall in mm/5min -> m
+rain_m <- sim_episode * 1e-3
+
+# volume per pixel and timestep
+volume_m3 <- rain_m * pixel_area
+
+# total volume over the whole simulation
+total_volume_m3 <- sum(volume_m3, na.rm = TRUE)
+
+print(paste0(
+  "Total rainfall volume = ",
+  round(total_volume_m3, 0),
+  " m3"
+))
+
+duration_hours <- nT * dt_sec / 3600
+
+volume_per_hour <- total_volume_m3 / duration_hours
+
+print(paste0(
+  "Mean hourly volume = ",
+  round(volume_per_hour,0),
+  " m3/h"
+))
+
+
+
+
+n_sim <- 500
+
+volumes <- numeric(n_sim)
+
+for (i in 1:n_sim){
+
+  sim_episode <- sim_episode_grid_m5(
+    params_vario = params_m5min,
+    params_margins_common = params_margins_common,
+    coords = grid_df_l93,
+    steps = steps,
+    adv_m5 = adv_5m,
+    t0 = 0,
+    s0_pixel_id = s0_pixel_id,
+    u_emp = u_emp,
+    seed = i,
+    cell_m = 100
+  )
+
+  rain_m <- sim_episode * 1e-3
+
+  volumes[i] <- sum(rain_m * cell_m^2, na.rm=TRUE)
+}
+
+
+threshold_extreme <- quantile(volumes, 0.95)
+
+which_extreme <- which(volumes >= threshold_extreme)
+
+volumes[which_extreme]
+
+summary(volumes)

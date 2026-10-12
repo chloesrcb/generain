@@ -111,9 +111,12 @@ calc_chi_spatemp <- function(data_rain, dist_mat, tau_max, q, remove_zeros = TRU
 
 q <- 0.9995
 
-dist_m
+rain_sept_2022 <- rain_new[rownames(rain_new) >= "2022-09-01 00:00:00" &
+                              rownames(rain_new) < "2022-10-01 00:00:00", ]
 
-df_chi <- calc_chi_spatemp(rain_new, dist_mat, tau_max = 10, q = q, remove_zeros = FALSE)
+df_chi <- calc_chi_spatemp(rain_sept_2022, dist_mat, tau_max = 10, q = q, remove_zeros = FALSE)
+
+
 
 make_radius_quantile <- function(dist_mat, n_bins = 10) {
   
@@ -164,6 +167,14 @@ ggplot(chi_summary, aes(x = h, y = mean_chi, color = as.factor(tau))) +
        color = "Temporal lag (5 min)") +
   theme_minimal()
 
+# loess smoothing
+ggplot(chi_summary, aes(x = h, y = mean_chi, color = as.factor(tau))) +
+  geom_point() +
+  geom_smooth(method = "loess", se = F, span = 2) +
+  labs(title = "Chi Spatio-Temporel Empirique (loess smoothing)",
+       x = "Distance (m)", y = expression(chi(h, tau)),
+       color = "Temporal lag (5 min)") +
+  theme_minimal()
 
 # from chi compute variogram
 vario_spatemp <- function(chi) {
@@ -204,7 +215,7 @@ library(dplyr)
 # référence tau = 0
 chi_ref_df <- chi_summary %>%
   filter(tau == 0) %>%
-  select(h, chi_ref = mean_chi)
+  dplyr::select(h, chi_ref = mean_chi)
 
 # calcul du ratio
 Ratio <- chi_summary %>%
@@ -223,7 +234,7 @@ ggplot(Ratio, aes(x = h, y = ratio, color = as.factor(tau))) +
 # do it with gamma(h, tau) / gamma(h, 0)
 vario_ref_df <- df_vario %>%
   filter(tau == 0) %>%
-  select(h, vario_ref = vario)
+  dplyr::select(h, vario_ref = vario)
 Ratio_vario <- df_vario %>%
   filter(tau > 0) %>%
   left_join(vario_ref_df, by = "h") %>%
@@ -244,18 +255,20 @@ Ratio_vario_diff <- df_vario %>%
   left_join(vario_ref_df, by = "h") %>%
   mutate(diff_vario = vario - vario_ref)
 
-# ggplot(Ratio_vario_diff, aes(x = h, y = diff_vario, color = as.factor(tau))) +
-#     geom_smooth(method = "loess", se = F, span = 2) +
-#     labs(title = "Difference of Variogram to Tau=0",
-#          x = "Distance (m)", y = expression(gamma(h, tau) - gamma(h, 0)),
-#          color = "Temporal lag (5 min)") +
-#     theme_minimal()
+ggplot(Ratio_vario_diff, aes(x = h, y = diff_vario, color = as.factor(tau))) +
+    geom_smooth(method = "loess", se = F, span = 2) +
+    labs(title = "Difference of Variogram to Tau=0",
+         x = "Distance (m)", y = expression(gamma(h, tau) - gamma(h, 0)),
+         color = "Temporal lag (5 min)") +
+    theme_minimal()
 
 
 # with a spatial ref h0
 h0 <- min(df_vario$h)
 Ratio_vario_diff_h0 <- df_vario %>%
-  left_join(df_vario %>% filter(h == h0) %>% select(tau, vario_h0 = vario), by = "tau") %>%
+  left_join(df_vario %>% 
+  filter(h == h0) %>% 
+  dplyr::select(tau, vario_h0 = vario), by = "tau") %>%
   mutate(diff_vario_h0 = vario - vario_h0)
 ggplot(Ratio_vario_diff_h0, aes(x = h, y = diff_vario_h0, color = as.factor(tau))) +
     geom_smooth(method = "loess", se = F, span = 2) +
@@ -268,7 +281,7 @@ ggsave(paste0(im_folder, "variogram/empirical/omsev/2025/variogram_separability/
 
 
 
-calc_chi_spatemp_avec_zero <- function(data_rain, dist_mat, tau_max, q, remove_zeros = TRUE) {
+calc_chi_spatemp_with_zero <- function(data_rain, dist_mat, tau_max, q, remove_zeros = TRUE) {
   library(dplyr)
   library(tidyr)
 
@@ -327,7 +340,7 @@ calc_chi_spatemp_avec_zero <- function(data_rain, dist_mat, tau_max, q, remove_z
 }
 
 
-df_chi <- calc_chi_spatemp_avec_zero(rain_new, dist_mat, tau_max = 10, q = q, remove_zeros = FALSE)
+df_chi <- calc_chi_spatemp_with_zero(rain_new, dist_mat, tau_max = 10, q = q, remove_zeros = FALSE)
 
 distances_positives <- df_chi$distance[df_chi$distance > 0]
 radius_posits <- quantile(distances_positives, probs = seq(0, 1, length.out = 10), na.rm = TRUE)
@@ -370,11 +383,15 @@ df_vario <- chi_summary %>%
 
 vario_zero_ref <- df_vario %>%
   filter(h == 0) %>%
-  select(tau, vario_0 = vario)
+  dplyr::select(tau, vario_0 = vario)
 
 df_separabilite_zero <- df_vario %>%
   left_join(vario_zero_ref, by = "tau") %>%
   mutate(diff_vario_0 = vario - vario_0)
+
+# legend in minutes
+legend_labels <- paste0(as.numeric(levels(as.factor(df_separabilite_zero$tau))) * 5, " min")
+
 
 ggplot(df_separabilite_zero %>% filter(h > 0), aes(x = h, y = diff_vario_0, color = as.factor(tau))) +
     # geom_line() +
@@ -385,7 +402,98 @@ ggplot(df_separabilite_zero %>% filter(h > 0), aes(x = h, y = diff_vario_0, colo
       y = expression(hat(gamma)(bold(h), tau) - hat(gamma)(0, tau)),
       color = "Temporal lag (5 min)"
     ) +
-    btf_theme
+    btf_theme +
+    scale_color_discrete(labels = legend_labels)
 
 # save
 ggsave(paste0(im_folder, "variogram/empirical/omsev/2025/variogram_separability/all_vario_diff_h0_q", q * 100,  ".pdf"), width = 10, height = 5)
+
+
+
+
+
+
+
+
+
+
+
+
+dates <- as.POSIXct(rownames(rain_new))
+
+month_id <- format(dates, "%Y-%m")
+
+unique_months <- unique(month_id)
+
+
+bootstrap_chi_vario_month <- function(data_rain, dist_mat, tau_max, q,
+                                      B = 500) {
+
+  dates <- as.POSIXct(rownames(data_rain))
+  month_id <- format(dates, "%Y-%m")
+
+  months <- unique(month_id)
+
+  boot_results <- vector("list", B)
+
+  for (b in 1:B) {
+
+    # tirage de mois avec remise
+    sampled_months <- sample(months,
+                             length(months),
+                             replace = TRUE)
+
+    ind <- unlist(lapply(sampled_months,
+                         function(m)
+                           which(month_id == m)))
+
+    data_boot <- data_rain[ind, ]
+
+    chi_b <- calc_chi_spatemp_with_zero(
+      data_boot,
+      dist_mat,
+      tau_max = tau_max,
+      q = q,
+      remove_zeros = FALSE
+    )
+
+    chi_summary_b <- chi_b %>%
+      mutate(
+        dist_class = cut(
+          distance,
+          breaks = radius,
+          include.lowest = TRUE
+        )
+      ) %>%
+      group_by(dist_class, tau) %>%
+      summarise(
+        mean_chi = mean(chi, na.rm=TRUE),
+        .groups="drop"
+      ) %>%
+      mutate(
+        vario = vario_spatemp(mean_chi)
+      )
+
+    boot_results[[b]] <- chi_summary_b
+  }
+
+  bind_rows(boot_results, .id="boot")
+}
+
+
+boot_vario <- bootstrap_chi_vario_month(
+  rain_new,
+  dist_mat,
+  tau_max=10,
+  q=q,
+  B=50
+)
+
+
+vario_CI <- boot_vario %>%
+ group_by(dist_class,tau) %>%
+ summarise(
+   lower=quantile(vario,0.025,na.rm=TRUE),
+   upper=quantile(vario,0.975,na.rm=TRUE),
+   .groups="drop"
+ )

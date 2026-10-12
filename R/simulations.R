@@ -918,3 +918,40 @@ convert_single_simulation_to_df <- function(simu_i, ngrid) {
   df <- df[, -1]
   return(as.data.frame(df))
 }
+
+
+
+
+simulate_OU_wind <- function(t, mu, kappa, sigma,
+                             V0 = mu, seed = NULL) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  nt <- length(t)
+
+  if (length(mu) != 2) stop("mu must have length 2")
+  if (length(kappa) == 1) kappa <- rep(kappa, 2)
+  if (length(sigma) == 1) sigma <- rep(sigma, 2)
+
+  V <- matrix(NA_real_, nrow = nt, ncol = 2)
+  colnames(V) <- c("Vx", "Vy")
+
+  V[1, ] <- V0
+
+  for (j in 2:nt) {
+
+    dt <- t[j] - t[j - 1]
+
+    phi <- exp(-kappa * dt)
+
+    sd_innov <- sigma *
+      sqrt((1 - exp(-2 * kappa * dt)) / (2 * kappa))
+
+    V[j, ] <-
+      mu +
+      phi * (V[j - 1, ] - mu) +
+      sd_innov * rnorm(2)
+  }
+
+  V
+}

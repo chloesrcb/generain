@@ -381,20 +381,6 @@ plot_th_emp_chi <- function(list_lags,
                             h_breaks = seq(0, 10, by = 1),
                             latlon = FALSE,
                             adv_transform = TRUE) {
-  stopifnot(
-    length(list_lags) == length(list_excesses),
-    length(list_lags) <= nrow(list_adv)
-  )
-
-  if (!requireNamespace("data.table", quietly = TRUE)) {
-    stop("Package 'data.table' is required.")
-  }
-  if (!requireNamespace("dplyr", quietly = TRUE)) {
-    stop("Package 'dplyr' is required.")
-  }
-  if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    stop("Package 'ggplot2' is required.")
-  }
 
   params <- params_estimates
   eta1 <- params[5]

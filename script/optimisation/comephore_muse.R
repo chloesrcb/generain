@@ -218,7 +218,7 @@ init <- c(beta1, beta2, alpha1, alpha2, 1, 1)
 
 hmax <- 10
 result <- optim(
-  par = init,
+  par = c(0.1508616, 0.9094684, 0.6145341, 0.6217052, 9.0792290, 1.0000000),
   fn = neg_ll_composite,
   list_lags = list_lags,
   list_episodes = list_episodes,
@@ -230,7 +230,7 @@ result <- optim(
   distance = "euclidean",
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
-  upper = c(10, 10, 1.999, 1.999, 10, 10),
+  upper = c(10, 10, 1.999, 1.999, 50, 10),
   control = list(maxit = 20000, trace = 1)
 )
 
@@ -252,6 +252,20 @@ results_df <- data.frame(
     nll = result$value
   )
 
+# $par
+# [1] 0.1579991 0.9921846 0.5799749 0.6628580 3.9001225 2.2202421
+
+# $value
+# [1] 620496.8
+
+
+# avec eta2 fixé à 1
+# > result
+# $par
+# [1] 0.1508616 0.9094684 0.6145341 0.6217052 9.0792290 1.0000000
+
+# $value
+# [1] 621623.6
 
 # SAVE RESULTS #################################################################
 eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
@@ -466,3 +480,401 @@ ggplot(influence_df, aes(x = eta2, y = eta1, label = block)) +
   ) +
   btf_theme
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+eta2_grid <- c(1, 1.4, 1.8, 2.0, 2.22, 2.5, 3.0)
+
+# =============================================================================
+# PROFILE NCL FOR ETA2
+# =============================================================================
+
+# Full-model estimates
+par_full <- c(
+    beta1  = 0.1579991,
+    beta2  = 0.9921846,
+    alpha1 = 0.5799749,
+    alpha2 = 0.6628580,
+    eta1   = 3.9001225,
+    eta2   = 2.2202421
+)
+
+ncl_full <- 620496.8
+
+
+# -----------------------------------------------------------------------------
+# Objective with eta2 fixed
+# params_free = beta1, beta2, alpha1, alpha2, eta1
+# -----------------------------------------------------------------------------
+
+neg_ll_profile_eta2 <- function(
+    params_free,
+    eta2_fixed,
+    list_episodes,
+    list_excesses,
+    list_lags,
+    wind_df,
+    hmax
+) {
+
+    full_params <- c(
+        params_free[1:4],
+        params_free[5],
+        eta2_fixed
+    )
+
+    neg_ll_composite(
+        params = full_params,
+        list_episodes = list_episodes,
+        list_excesses = list_excesses,
+        list_lags = list_lags,
+        wind_df = wind_df,
+        hmax = hmax,
+        v0 = 1,
+        latlon = FALSE,
+        distance = "euclidean"
+    )
+}
+
+
+eta2_grid <- c(
+    1,
+    1.4,
+    1.8,
+    2.0,
+    2.22,
+    2.5,
+    3.0
+)
+
+
+speed <- sqrt(V_adv$vx^2 + V_adv$vy^2)
+
+r_med <- median(
+    speed[speed > 0],
+    na.rm = TRUE
+)
+
+r_med
+
+
+
+get_init_eta2 <- function(eta2_fixed) {
+
+    eta1_init <- par_full["eta1"] *
+        r_med^(par_full["eta2"] - eta2_fixed)
+
+    c(
+        par_full["beta1"],
+        par_full["beta2"],
+        par_full["alpha1"],
+        par_full["alpha2"],
+        eta1_init
+    )
+}
+
+
+
+ncores_profile <- min(7, length(eta2_grid))
+
+profile_results <- parallel::mclapply(
+    eta2_grid,
+    function(eta2_fixed) {
+
+        cat(
+            "Starting eta2 =", eta2_fixed,
+            "PID =", Sys.getpid(), "\n"
+        )
+
+        init_eta2 <- get_init_eta2(eta2_fixed)
+
+        res <- tryCatch(
+            optim(
+                par = init_eta2,
+
+                fn = neg_ll_profile_eta2,
+
+                eta2_fixed = eta2_fixed,
+                list_lags = list_lags,
+                list_episodes = list_episodes,
+                list_excesses = list_excesses,
+                wind_df = V_adv,
+                hmax = hmax,
+
+                method = "L-BFGS-B",
+
+                lower = c(
+                    1e-08,  # beta1
+                    1e-08,  # beta2
+                    1e-08,  # alpha1
+                    1e-08,  # alpha2
+                    1e-08   # eta1
+                ),
+
+                upper = c(
+                    10,     # beta1
+                    10,     # beta2
+                    1.999,  # alpha1
+                    1.999,  # alpha2
+                    50      # eta1
+                ),
+
+                control = list(
+                    maxit = 20000,
+                    trace = 0
+                )
+            ),
+
+            error = function(e) {
+                message(
+                    "Error for eta2 = ",
+                    eta2_fixed,
+                    ": ",
+                    e$message
+                )
+                NULL
+            }
+        )
+
+        if (is.null(res)) {
+            return(
+                data.frame(
+                    eta2 = eta2_fixed,
+                    beta1 = NA,
+                    beta2 = NA,
+                    alpha1 = NA,
+                    alpha2 = NA,
+                    eta1 = NA,
+                    ncl = NA,
+                    convergence = NA
+                )
+            )
+        }
+
+        data.frame(
+            eta2 = eta2_fixed,
+            beta1 = res$par[1],
+            beta2 = res$par[2],
+            alpha1 = res$par[3],
+            alpha2 = res$par[4],
+            eta1 = res$par[5],
+            ncl = res$value,
+            convergence = res$convergence
+        )
+
+    },
+    mc.cores = ncores_profile
+)
+
+profile_eta2 <- do.call(
+    rbind,
+    profile_results
+)
+
+profile_eta2 <- profile_eta2 %>%
+    arrange(eta2)
+
+profile_eta2
+
+
+profile_eta2 <- profile_eta2 %>%
+    mutate(
+        delta_ncl = ncl - min(ncl, na.rm = TRUE)
+    )
+
+profile_eta2
+
+
+
+theta_full <- c(
+  0.1579991,
+  0.9921846,
+  0.5799749,
+  0.6628580,
+  3.9001225,
+  2.2202421
+)
+
+H_full <- numDeriv::hessian(
+  func = function(theta) {
+    neg_ll_composite(
+      params = theta,
+      list_episodes = list_episodes,
+      list_excesses = list_excesses,
+      list_lags = list_lags,
+      wind_df = V_adv,
+      hmax = hmax,
+      latlon = FALSE,
+      distance = "euclidean",
+      v0 = 1
+    )
+  },
+  x = theta_full
+)
+
+
+
+m <- length(list_episodes)
+
+ncl_one_episode <- function(params, i,
+                            list_episodes,
+                            list_excesses,
+                            list_lags,
+                            wind_df,
+                            hmax) {
+
+  neg_ll_composite(
+    params = params,
+    list_episodes = list(list_episodes[[i]]),
+    list_excesses = list(list_excesses[[i]]),
+    list_lags = list(list_lags[[i]]),
+    wind_df = wind_df[i, , drop = FALSE],
+    hmax = hmax,
+    latlon = FALSE,
+    distance = "euclidean",
+    v0 = 1
+  )
+}
+
+scores_full <- parallel::mclapply(
+  seq_len(m),
+  function(i) {
+
+    numDeriv::grad(
+      func = function(theta) {
+        ncl_one_episode(
+          params = theta,
+          i = i,
+          list_episodes = list_episodes,
+          list_excesses = list_excesses,
+          list_lags = list_lags,
+          wind_df = V_adv,
+          hmax = hmax
+        )
+      },
+      x = theta_full
+    )
+  },
+  mc.cores = ncores
+)
+
+scores_full <- do.call(rbind, scores_full)
+
+J_full <- crossprod(scores_full)
+
+
+p_eff_full <- sum(diag(
+  solve(H_full, J_full)
+))
+
+CLAIC_full <- 2 * 620496.8 + 2 * p_eff_full
+
+p_eff_full
+CLAIC_full
+
+# > p_eff_full
+# [1] 783.9725
+# > CLAIC_full
+# [1] 1242562
+
+
+eigen(H_full, symmetric = TRUE)$values
+kappa(H_full)
+
+theta_eta2_1 <- c(
+  0.1508616,
+  0.9094684,
+  0.6145341,
+  0.6217052,
+  9.0792290
+)
+
+
+ncl_eta2_1 <- function(theta) {
+
+  neg_ll_composite_fixed_eta(
+    params = theta,
+    list_episodes = list_episodes,
+    list_excesses = list_excesses,
+    list_lags = list_lags,
+    wind_df = V_adv,
+    hmax = hmax,
+    latlon = FALSE,
+    distance = "euclidean",
+    fixed_eta1 = NA,
+    fixed_eta2 = 1
+  )
+}
+
+H_eta2_1 <- numDeriv::hessian(
+  ncl_eta2_1,
+  theta_eta2_1
+)
+
+eigen(H_eta2_1, symmetric = TRUE)$values
+kappa(H_eta2_1)
+
+J_eta2_1 <- parallel::mclapply(
+  seq_len(m),
+  function(i) {
+
+    numDeriv::grad(
+      func = function(theta) {
+        neg_ll_composite_fixed_eta(
+          params = theta,
+          list_episodes = list(list_episodes[[i]]),
+          list_excesses = list(list_excesses[[i]]),
+          list_lags = list(list_lags[[i]]),
+          wind_df = V_adv[i, , drop = FALSE],
+          hmax = hmax,
+          latlon = FALSE,
+          distance = "euclidean",
+          fixed_eta1 = NA,
+          fixed_eta2 = 1
+        )
+      },
+      x = theta_eta2_1
+    )
+  },
+  mc.cores = ncores
+)
+
+scores_eta2_1 <- do.call(rbind, J_eta2_1)
+
+J_eta2_1_calculated <- crossprod(scores_eta2_1)
+
+
+p_eff_eta2_1 <- sum(diag(
+  solve(H_eta2_1, J_eta2_1_calculated)
+))
+
+CLAIC_eta2_1 <- 2 * ncl_eta2_1(theta_eta2_1) + 2 * p_eff_eta2_1
+
+p_eff_eta2_1
+CLAIC_eta2_1
+# > p_eff_eta2_1
+# [1] 611.6029
+# CLAIC_eta2_1
+# > CLAIC_eta2_1
+# [1] 1244470
+
+# > p_eff_full
+# [1] 783.9725
+# > CLAIC_full
+# [1] 1242562

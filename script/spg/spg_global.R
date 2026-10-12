@@ -104,14 +104,12 @@ rownames(grid_coords_m) <- rownames(sites_coords)
 # head(rain_complete)
 # rain <- rain_complete
 
-# to compute p0 remove all cumul over 1h above 10 mm
 window_time <- 12 # 1 hour = 12 * 5min
-# rain_cumul_1h <- zoo::rollapply(rain, width = window_time, FUN = sum, align = "right", fill = NA)
-# rain_cumul_1h[rain_cumul_1h > 22] <- NA
 
 p0_values <- sapply(colnames(rain), function(s) {
   mean(rain[, s] == 0, na.rm = TRUE)
 })
+
 
 kappa_vect <- egpd_params[match(colnames(rain), egpd_params$Site), "kappa"]
 xi_vect    <- egpd_params[match(colnames(rain), egpd_params$Site), "xi"]
@@ -124,20 +122,18 @@ params_margins <- list(
   p0    = p0_values
 )
 
-# for all sites names in params_margins$p0, put p0 to 0.95
-# for (i in seq_along(params_margins$p0)) {
-#   site <- names(params_margins$p0)[i]
-#   if (site %in% colnames(rain)) {
-#     params_margins$p0[i] <- 0.95
-#   }
-# }
+# common_margins <- list(
+#   xi    = mean(xi_vect, na.rm = TRUE),
+#   sigma = mean(sigma_vect, na.rm = TRUE),
+#   kappa = mean(kappa_vect, na.rm = TRUE),
+#   p0    = mean(p0_values, na.rm = TRUE)
+# )
+
 
 #################################################################################
 # GET EPISODES
 #################################################################################
-# rain_complete <- rain[rowSums(is.na(rain)) <= (ncol(rain) / 2), ]
-# head(rain_complete)
-# rain <- rain_complete
+
 q <- 0.95
 delta <- 12
 dmin <- 1200  # m
@@ -216,9 +212,10 @@ list_results <- mclapply(1:length(s0_list), function(i) {
                                       df_lags = lags, t0 = ind_t0_ep)
   # tau is in 5 minutes
   lags$tau <- lags$tau * 5 / 60 # convert to hours
-  # lags$hnorm <- lags$hnorm / 1000 # convert to km
+  lags$hnorm <- lags$hnorm / 1000 # convert to km
   list(lags = lags, excesses = excesses)
 }, mc.cores = detectCores() - 1)
+
 
 list_lags <- lapply(list_results, `[[`, "lags")
 list_excesses <- lapply(list_results, `[[`, "excesses")
@@ -308,6 +305,20 @@ adv_df_transfo <- adv_df
 # Transform advections with etas estimates
 adv_df_transfo$vnorm <- sqrt(adv_df$vx_final^2 + adv_df$vy_final^2)
 adv_df_transfo$vnorm_t <- etas_estimates[1] * adv_df_transfo$vnorm^etas_estimates[2]
+eta_test_1 <- 9.08
+eta_test_2 <- 1
+adv_df_transfo$vnorm_t_test <- eta_test_1 * adv_df_transfo$vnorm^eta_test_2
+adv_df_transfo$vx_final_test <- ifelse(
+  adv_df_transfo$vnorm > 0,
+  adv_df_transfo$vx_final / adv_df_transfo$vnorm * adv_df_transfo$vnorm_t_test,
+  0
+)
+
+adv_df_transfo$vy_final_test <- ifelse(
+  adv_df_transfo$vnorm > 0,
+  adv_df_transfo$vy_final / adv_df_transfo$vnorm * adv_df_transfo$vnorm_t_test,
+  0
+)
 
 adv_df_transfo$vx_t <- ifelse(
   adv_df_transfo$vnorm > 0,
@@ -326,6 +337,10 @@ plot(adv_df$vx_final, adv_df$vy_final, pch = 19,
 
 plot(adv_df_transfo$vx_t, adv_df_transfo$vy_t, pch = 19,
      xlab = "vx", ylab = "vy")
+
+plot(adv_df_transfo$vx_final_test, adv_df_transfo$vy_final_test, pch = 19,
+     xlab = "vx", ylab = "vy")
+
 
 # if too big advections after transformation, cap them
 # max_adv <- 100  # km/h

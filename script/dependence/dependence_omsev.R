@@ -52,6 +52,35 @@ filename_omsev <- paste0(data_folder,
 rain <- read.csv(filename_omsev)
 head(rain)
 
+library(dplyr)
+
+sept_2022_data <- rain[
+  as.Date(rain$dates) >= as.Date("2022-09-01") &
+  as.Date(rain$dates) <  as.Date("2022-10-01"),
+]
+
+sept_2022_data$dates <- as.POSIXct(
+  sept_2022_data$dates,
+  format = "%Y-%m-%d %H:%M:%S"
+)
+
+sept_2022_data_30min <- sept_2022_data %>%
+  arrange(dates) %>%
+  mutate(
+    block_30min = (row_number() - 1) %/% 6
+  ) %>%
+  group_by(block_30min) %>%
+  summarise(
+    dates = first(dates),
+    across(
+      -dates,
+      ~ if (any(is.na(.x))) NA_real_ else sum(.x)
+    ),
+    .groups = "drop"
+  ) %>%
+  select(-block_30min)
+
+rain <- sept_2022_data_30min
 typeof(rain)
 class(rain)
 colnames(rain)
@@ -151,13 +180,6 @@ ggsave(paste0(foldername_fig, "chitemp_zeta_estim_omsev_q", q*100, ".pdf"),
 
 # SPATIAL CHI ------------------------------------------------------------------
 
-# SPATIAL with temporal lag fixed at 0 (ie 1 in the precedent temporal case)
-# -------------------------------------------------------------------------
-# Spatial bins excluding h = 0
-# -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-# SPATIAL chi with temporal lag fixed at 0
-# -------------------------------------------------------------------------
 
 make_distance_bins_min_pairs <- function(h, min_pairs = 10, first_break_min = 0.15) {
 
@@ -189,8 +211,8 @@ h_pos <- df_dist$value[is.finite(df_dist$value) & df_dist$value > 0]
 
 radius <- make_distance_bins_min_pairs(
   h_pos,
-  min_pairs = 8,
-  first_break_min = 0.15
+  min_pairs = 10,
+  first_break_min = 0.
 )
 
 print(radius)
@@ -252,6 +274,14 @@ chispa_plot <- ggplot(chispa_df, aes(lagspa, chi)) +
         panel.grid.minor = element_line(color = "white"))
 
 chispa_plot
+
+
+# loess smoothing
+chispa_plot_smooth <- ggplot(chispa_df, aes(lagspa, chi)) +
+  btf_theme +
+  geom_point(col = btfgreen, size = 4) +
+  geom_smooth(method = "loess", se = FALSE, span = 2, color = "darkred", size = 1.5) 
+
 
 ggsave(paste0(foldername_fig, "chispa_omsev_q", q*100, ".pdf"),
        width = 8, height = 6)

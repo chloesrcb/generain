@@ -4,50 +4,44 @@ library(ggplot2)
 library(tibble)
 library(purrr)
 
-M <- 100
-p_tip <- 0.2152
-timesteps <- 0:11
+
+
+M <- 50 # number of simulation repetitions for each episode
+p_tip <- 0.2152 # precision of the tipping-bucket discretization (mm / 5 min)
+timesteps <- 0:11 # time steps (0 to 11) in 5 min
 
 sites_names <- colnames(rain)
 grid_omsev <- grid_coords_m
 
-folder_margins <- paste0(im_folder, "swg/omsev/2025/margins/above0_disc/")
-folder_cumuls  <- paste0(im_folder, "swg/omsev/2025/cumuls/")
+folder_margins <- paste0(im_folder, "swg/omsev/sept_2026/margins/above0_disc/")
+folder_cumuls  <- paste0(im_folder, "swg/omsev/sept_2026/cumuls/")
 
 if (!dir.exists(folder_margins)) dir.create(folder_margins, recursive = TRUE)
 if (!dir.exists(folder_cumuls))  dir.create(folder_cumuls, recursive = TRUE)
 
+
+# function to apply discretization to simulated rainfall values
 apply_discretization <- function(x, p = 0.2152) {
-#   x[!is.finite(x)] <- NA_real_
   x[x < 1e-2] <- 0
   x[x > 0 & x < p] <- p
   x[x > p & x < 2 * p] <- 2 * p
   x
 }
 
-# Prepare advection and filter valid episodes
 
 adv_matrix <- as.matrix(adv_df_transfo[, c("vx_t", "vy_t")])
+adv_matrix_filtered    <- adv_matrix
+list_episodes_filtered <- list_episodes
+s0_list_filtered       <- s0_list
+u_list_filtered        <- u_list
 
-# km/h -> m/5min
-adv_matrix <- adv_matrix * (1000 * 5 / 60)
-
-id_not_invalid <- which(adv_class$group != "invalid")
-
-adv_matrix_filtered    <- adv_matrix[id_not_invalid, , drop = FALSE]
-list_episodes_filtered <- list_episodes[id_not_invalid]
-s0_list_filtered       <- s0_list[id_not_invalid]
-u_list_filtered        <- u_list[id_not_invalid]
-
+# number of episodes
 Nep <- length(list_episodes_filtered)
-
-# Simulate M repetitions for each episode
-
-set.seed(123)
-
+set.seed(56) # for reproducibility
 sims_by_ep <- vector("list", Nep)
 u_sim <- numeric(Nep)
 
+# Simulate M repetitions for each episode
 for (j in seq_len(Nep)) {
   s0_j  <- s0_list_filtered[j]
   u_j   <- u_list_filtered[j]
@@ -71,6 +65,9 @@ for (j in seq_len(Nep)) {
   }
 }
 
+########################################################################
+# Marginal validation
+#########################################################################
 
 sims_all_raw <- unlist(sims_by_ep, recursive = FALSE)
 sims_all_disc <- sims_all_raw
@@ -100,18 +97,18 @@ for (site in sites_names) {
   )
 
   Xobs_site  <- Xobs_site [is.finite(Xobs_site)  & Xobs_site  > 0]
-  Xsim_raw   <- Xsim_raw  [is.finite(Xsim_raw)   & Xsim_raw   > 1e-2]
+  # Xsim_raw   <- Xsim_raw  [is.finite(Xsim_raw)   & Xsim_raw   > 1e-2]
   Xsim_disc  <- Xsim_disc [is.finite(Xsim_disc)  & Xsim_disc  > 1e-2]
 
   df_site <- bind_rows(
     tibble(source = "Observations", value = Xobs_site),
-    tibble(source = "Simulations raw", value = Xsim_raw),
+    # tibble(source = "Simulations raw", value = Xsim_raw),
     tibble(source = "Simulations corrected", value = Xsim_disc)
   )
 
   color_legend <- c(
     "Observations" = "#ee8686",
-    "Simulations raw" = "#86a8e7",
+    # "Simulations raw" = "#86a8e7",
     "Simulations corrected" = "#86e7a8"
   )
 
@@ -143,24 +140,23 @@ for (site in sites_names) {
   )
 }
 
-# Episode cumulative rainfall
 
+########################################################################
+# Cumulative rainfall validation
+#########################################################################
+
+# Episode cumulative rainfall
 sims_all <- unlist(sims_by_ep, recursive = FALSE)
 
 #  Match observation NA pattern and discretize simulations
-
 for (j in seq_len(Nep)) {
   obs_mat <- as.matrix(list_episodes_filtered[[j]][, sites_names, drop = FALSE])
-
   for (m in seq_len(M)) {
     sim_mat <- as.matrix(sims_by_ep[[j]][[m]]$X[, sites_names, drop = FALSE])
-
     # same missingness as observations
     sim_mat[is.na(obs_mat)] <- NA
-
     # pseudo tipping-bucket measurement
     sim_mat <- apply_discretization(sim_mat, p = p_tip)
-
     sims_by_ep[[j]][[m]]$X[, sites_names] <- sim_mat
   }
 }
@@ -204,9 +200,7 @@ df_cumul <- bind_rows(
     log_cumul = log1p(cumul)
   )
 
-# Cumul density + boxplot, raw scale
-
-
+# Cumul density + boxplot
 p_cumul_raw <- ggplot(df_cumul, aes(x = cumul, fill = source)) +
   geom_density(
     alpha = 0.35,
@@ -235,8 +229,7 @@ ggsave(
   height = 6
 )
 
-# Cumul density + boxplot, log scale
-
+# Cumul density + boxplot log scale
 p_cumul_log <- ggplot(df_cumul, aes(x = log_cumul, fill = source)) +
   geom_density(
     alpha = 0.35,
@@ -265,11 +258,11 @@ ggsave(
 )
 
 
+########################################################################
+# Trivariate conditional probabilities validation
+#########################################################################
 
-library(reshape2)
-library(ggplot2)
-
-# seuils globaux par site
+# threshold for conditional probabilities
 u_by_s0_from_list <- tapply(u_list, s0_list, median, na.rm = TRUE)
 u_global <- u_by_s0_from_list
 
@@ -282,6 +275,7 @@ get_X_matrix <- function(obj) {
   NULL
 }
 
+# Apply the same NA pattern as in the observed episode to the simulated episode
 apply_obs_na_mask <- function(Xsim, Xobs, sites) {
   Xsim2 <- Xsim
   mask_na <- is.na(as.matrix(Xobs)[, sites, drop = FALSE])
@@ -289,6 +283,7 @@ apply_obs_na_mask <- function(Xsim, Xobs, sites) {
   Xsim2
 }
 
+# Compute conditional probabilities P(X_i > u_i, X_j > u_j | X_k > u_k) for a single episode
 cond_probs_episode_q_na <- function(X, u_vec, sites = colnames(X)) {
   X <- as.matrix(X)[, sites, drop = FALSE]
   p <- length(sites)
@@ -323,7 +318,7 @@ cond_probs_episode_q_na <- function(X, u_vec, sites = colnames(X)) {
 
   list(P = P, denom = denom)
 }
-
+# Compute weighted average of conditional probabilities across episodes
 weighted_avg_cond_probs <- function(res_list) {
   p <- dim(res_list[[1]]$P)[1]
   sites <- dimnames(res_list[[1]]$P)$s1
@@ -354,6 +349,15 @@ weighted_avg_cond_probs <- function(res_list) {
 
   out
 }
+
+# change the threshold u_global to a single value for all sites if needed
+quantile_threshold <- 0.98
+u_global <- quantile(rain[rain > 0], probs = quantile_threshold, na.rm = TRUE)
+u_global <- apply(rain, 2, function(x) quantile(x[x > 0], probs = quantile_threshold, na.rm = TRUE))
+
+
+
+
 
 # observed conditional probabilities
 obs_res <- lapply(seq_along(list_episodes_filtered), function(j) {
@@ -412,7 +416,23 @@ sim_res_by_ep <- lapply(seq_along(sims_by_ep), function(j) {
 
 P_sim_avg <- weighted_avg_cond_probs(sim_res_by_ep)
 
-# reorder sites names by alphabetical order for plotting
+cond_probs_to_df2d <- function(P_array, source_label) {
+  p <- dim(P_array)[1]
+  sites <- dimnames(P_array)$s1
+
+  df <- expand.grid(
+    s1 = sites,
+    s2 = sites,
+    s3 = sites,
+    stringsAsFactors = FALSE
+  )
+  df <- dplyr::mutate(df, prob = as.vector(P_array), source = source_label)
+  df$prob <- as.vector(P_array)
+  df$source <- source_label
+
+  df
+}
+# # reorder sites names by alphabetical order for plotting
 sites_names <- sort(sites_names)
 for(s3_pick in sites_names) {
   P_obs_s3 <- P_obs_avg[, , s3_pick]
@@ -450,7 +470,7 @@ for(s3_pick in sites_names) {
 
   print(p)
 
-  foldername <- paste0(im_folder, "/swg/omsev/2025/cond_probs_all/")
+  foldername <- paste0(im_folder, "/swg/omsev/2025/cond_probs_all/q_", quantile_threshold*100, "/")
 
   if (!dir.exists(foldername)) dir.create(foldername, recursive = TRUE)
 
@@ -464,94 +484,369 @@ for(s3_pick in sites_names) {
 
 
 
-s3_pick <- "archie"
+
+# for one s3, plot relative difference...
+s3_pick <- "mse"
 
 P_obs_s3 <- P_obs_avg[, , s3_pick]
 P_sim_s3 <- P_sim_avg[, , s3_pick]
 
 
+# scatter plot of p_sim vs p_obs for a fixed s3
+df_scatter <- data.frame(
+  s1 = rep(sites_names, times = length(sites_names)),
+  s2 = rep(sites_names, each = length(sites_names)),
+  p_obs = as.vector(P_obs_s3),
+  p_sim = as.vector(P_sim_s3)
+)
 
-rel_diff_s3 <- (P_sim_s3 - P_obs_s3)
 
-# éviter les divisions par zéro
-rel_diff_s3[!is.finite(rel_diff_s3)] <- NA
-
-df_plot <- cond_probs_to_df2d(rel_diff_s3, "Relative difference")
-
-
-
-p <- ggplot(df_plot, aes(x = s1, y = s2, fill = prob)) +
-  geom_tile() +
-  coord_equal() +
-  scale_fill_gradient2(
-    low = "#570000",
-    mid = "white",
-    high = "#256460",
-    midpoint = 0,
-    limits = c(-1, 1),
-    oob = scales::squish,
-    na.value = "grey90"
-  ) +
-  labs(fill = expression(p[sim] - p[obs])) +
+ggplot(df_scatter, aes(x = p_obs, y = p_sim)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  xlab(expression(p[obs])) +
+  ylab(expression(p[sim])) +
   theme_minimal() +
-  xlab(expression(paste("Site s"[1]))) +
-  ylab(expression(paste("Site s"[2]))) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
-    axis.text.y = element_text(size = 15),
-    panel.grid = element_blank(),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
     axis.title = element_text(size = 16)
   )
-p
 
 
 
 
+# do scatter for all site combined
 
-
-
-
-
-library(ggplot2)
-
-df_u <- data.frame(
-  site = c("archie", "archiw", "brives", "cefe", "chu1", "chu2", "chu3", "chu4",
-           "chu5", "chu6", "chu7", "cines", "cnrs", "crbm", "hydro", "iem",
-           "mse", "poly", "um", "um35"),
-  u95 = c(1.291576, 1.076260, 1.076324, 1.291576, 1.291576, 1.076260,
-          1.076260, 1.076452, 1.291576, 1.076388, 1.076388, 1.076324,
-          0.861136, 1.291576, 1.291576, 1.076388, 1.076535, 1.076324,
-          1.291640, 1.291640)
+df_scatter_all <- data.frame(
+  s1 = rep(sites_names, times = length(sites_names)),
+  s2 = rep(sites_names, each = length(sites_names)),
+  p_obs = as.vector(P_obs_avg),
+  p_sim = as.vector(P_sim_avg)
 )
 
-df_u$site <- factor(df_u$site, levels = df_u$site[order(df_u$u95)])
-
-p_u <- ggplot(df_u, aes(x = u95, y = site)) +
-  geom_segment(aes(x = 0, xend = u95, y = site, yend = site),
-               linewidth = 0.8, alpha = 0.6) +
-  geom_point(size = 3) +
-  labs(
-    x = expression(u[0.95]~"(mm / 5 min)"),
-    y = "Site"
-  ) +
+ggplot(df_scatter_all, aes(x = p_obs, y = p_sim)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  xlab(expression(p[obs])) +
+  ylab(expression(p[sim])) +
   theme_minimal() +
-  # add the values of u95 on the right side of the points
-  geom_text(aes(label = round(u95, 3), x = u95 + 0.05), hjust = 0, size = 4) +
-  xlim(0, max(df_u$u95) + 0.1) +
   theme(
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.text = element_text(size = 13),
-    axis.title = element_text(size = 15)
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16)
+  ) +
+  xlab(expression(
+    P[obs](
+      X[s[1]*","*t] > u[1] * "," ~
+      X[s[2]*","*t] > u[2]
+      ~ "|" ~
+      X[s[3]*","*t] > u[3] * "," ~
+      X[s[0]*","*t[0]] > u[0]
+    )
+  )) +
+
+  ylab(expression(
+    P[sim](
+      X[s[1]*","*t] > u[1] * "," ~
+      X[s[2]*","*t] > u[2]
+      ~ "|" ~
+      X[s[3]*","*t] > u[3] * "," ~
+      X[s[0]*","*t[0]] > u[0]
+    )
+  )) +
+  # ggtitle(paste0("Conditional probabilities for all sites, threshold quantile = ", quantile_threshold*100, "%")) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16)
   )
 
-print(p_u)
+# save plot
+foldername <- paste0(im_folder, "/swg/omsev/2025/cond_probs_all/")
+filename <- paste0(foldername, "cond_probs_scatter_all_q_", quantile_threshold*100, ".png")
 
 ggsave(
-  paste0(foldername, "threshold_u95_by_site.png"),
-  plot = p_u,
+  filename,
   width = 8,
-  height = 6
+  height = 8
 )
+
+
+
+# number of episodes by s0
+s0_counts <- table(s0_list_filtered)
+
+# for "archiw" sites get corresponding simulations
+site_s0 <- "archiw"
+obs_s0 <- list_episodes_filtered[s0_list_filtered == site_s0]
+sim_s0 <- sims_by_ep[s0_list_filtered == site_s0]
+
+
+# compute conditional probabilities for this s0
+obs_res_s0 <- lapply(seq_along(obs_s0), function(j) {
+  cond_probs_episode_q_na(
+    X = obs_s0[[j]],
+    u_vec = u_global,
+    sites = sites
+  )
+})
+
+P_obs_s0 <- weighted_avg_cond_probs(obs_res_s0)
+
+sim_res_s0 <- lapply(seq_along(sim_s0), function(j) {
+  Xobs_j <- obs_s0[[j]]
+
+  reps <- lapply(seq_along(sim_s0[[j]]), function(m) {
+    Xsim <- get_X_matrix(sim_s0[[j]][[m]])
+    Xsim <- Xsim[, sites, drop = FALSE]
+    Xsim_masked <- apply_obs_na_mask(Xsim, Xobs_j, sites)
+
+    cond_probs_episode_q_na(
+      X = Xsim_masked,
+      u_vec = u_global,
+      sites = sites
+    )
+  })
+
+  P_list <- lapply(reps, `[[`, "P")
+  den_list <- lapply(reps, `[[`, "denom")
+
+  p <- dim(P_list[[1]])[1]
+  num <- array(0, dim = dim(P_list[[1]]), dimnames = dimnames(P_list[[1]]))
+  den <- rep(0, p); names(den) <- dimnames(P_list[[1]])$s3
+
+  for (m in seq_along(P_list)) {
+    for (k in seq_len(p)) {
+      d <- den_list[[m]][k]
+      if (!is.finite(d) || d <= 0) next
+
+      tmp <- P_list[[m]][, , k]
+      tmp[is.na(tmp)] <- 0
+
+      num[, , k] <- num[, , k] + tmp * d
+      den[k] <- den[k] + d
+    }
+  }
+
+  Pbar <- array(NA_real_, dim = dim(num), dimnames = dimnames(num))
+  for (k in seq_len(p)) {
+    if (den[k] > 0) Pbar[, , k] <- num[, , k] / den[k]
+  }
+
+  list(P = Pbar, denom = Reduce(`+`, den_list) / length(den_list))
+})
+
+
+P_sim_s0 <- weighted_avg_cond_probs(sim_res_s0)
+
+
+
+
+
+
+
+
+########################################################################
+# BIVARIATE CONDITIONAL PROBABILITY
+#
+# P(X_s1 > u1 | X_s3 > u3, X_s0,t0 > u0)
+#
+# The conditioning on X_s0,t0 is implicit because we only use
+# the selected conditional episodes
+########################################################################
+
+sites_names <- dimnames(P_obs_avg)$s1
+
+# conditional sites s1 names
+
+# ------------------------------------------------------------
+# Extract diagonal s1 = s2 from the trivariate array
+# ------------------------------------------------------------
+
+P_obs_biv_cond <- matrix(
+  NA_real_,
+  nrow = length(sites_names),
+  ncol = length(sites_names),
+  dimnames = list(
+    s1 = sites_names,
+    s3 = sites_names
+  )
+)
+
+P_sim_biv_cond <- P_obs_biv_cond
+
+
+for (i in seq_along(sites_names)) {
+
+  for (k in seq_along(sites_names)) {
+
+    # P(X_s1 > u1 | X_s3 > u3, X_s0,t0 > u0)
+    P_obs_biv_cond[i, k] <- P_obs_avg[i, i, k]
+
+    P_sim_biv_cond[i, k] <- P_sim_avg[i, i, k]
+  }
+}
+
+
+# ------------------------------------------------------------
+# Convert to data.frame
+# ------------------------------------------------------------
+
+df_biv_cond <- expand.grid(
+  s1 = sites_names,
+  s3 = sites_names,
+  stringsAsFactors = FALSE
+)
+
+df_biv_cond$p_obs <- as.vector(P_obs_biv_cond)
+df_biv_cond$p_sim <- as.vector(P_sim_biv_cond)
+
+
+# remove trivial diagonal:
+#
+# P(X_s > u | X_s > u, X_s0,t0 > u0) = 1
+#
+df_biv_cond <- df_biv_cond |>
+  dplyr::filter(
+    s1 != s3,
+    is.finite(p_obs),
+    is.finite(p_sim)
+  )
+
+
+# ------------------------------------------------------------
+# Scatter
+# ------------------------------------------------------------
+
+ggplot(
+  df_biv_cond,
+  aes(
+    x = p_obs,
+    y = p_sim
+  )
+) +
+
+  geom_point(
+    alpha = 0.6,
+    size = 2
+  ) +
+
+  geom_abline(
+    slope = 1,
+    intercept = 0,
+    linetype = "dashed",
+    color = "red"
+  ) +
+
+  coord_equal(
+    xlim = c(0, 1),
+    ylim = c(0, 1)
+  ) +
+
+  labs(
+    x = expression(
+      P[obs](
+        X[s[1]] > u[1] ~ "|" ~
+        X[s[3]] > u[3],
+        X[s[0]*","*t[0]] > u[0]
+      )
+    ),
+
+    y = expression(
+      P[sim](
+        X[s[1]] > u[1] ~ "|" ~
+        X[s[3]] > u[3],
+        X[s[0]*","*t[0]] > u[0]
+      )
+    ),
+
+    title = paste0(
+      "Bivariate conditional probabilities — q",
+      quantile_threshold * 100
+    )
+  ) +
+
+  theme_minimal(base_size = 14)
+
+
+
+
+
+cond_probs_biv_conditioned_episode <- function(
+    X,
+    u_vec,
+    sites = colnames(X)
+) {
+
+  X <- as.matrix(X)[, sites, drop = FALSE]
+
+  p <- length(sites)
+
+  if (length(u_vec) == 1) {
+    u_vec <- rep(u_vec, p)
+    names(u_vec) <- sites
+  }
+
+  if (is.null(names(u_vec))) {
+    names(u_vec) <- sites
+  }
+
+  u <- u_vec[sites]
+
+
+  P <- matrix(
+    NA_real_,
+    nrow = p,
+    ncol = p,
+    dimnames = list(
+      s1 = sites,
+      s3 = sites
+    )
+  )
+
+  denom <- matrix(
+    0,
+    nrow = p,
+    ncol = p,
+    dimnames = list(
+      s1 = sites,
+      s3 = sites
+    )
+  )
+
+
+  for (k in seq_len(p)) {
+
+    x3 <- X[, k]
+
+    for (i in seq_len(p)) {
+
+      x1 <- X[, i]
+
+
+      # Both variables must be observed
+      ok <- !is.na(x1) & !is.na(x3)
+
+      # conditioning:
+      # X_s3 > u3
+      # X_s0,t0 > u0 is already guaranteed by episode selection
+      cond <- ok & (x3 > u[k])
+
+      n_cond <- sum(cond)
+
+      denom[i, k] <- n_cond
+
+      if (n_cond == 0) next
+
+
+      P[i, k] <- sum(
+        x1[cond] > u[i]
+      ) / n_cond
+    }
+  }
+
+
+  list(
+    P = P,
+    denom = denom
+  )
+}

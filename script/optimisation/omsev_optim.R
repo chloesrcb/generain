@@ -1,5 +1,9 @@
 rm(list = ls())
 
+
+rm(list = ls())
+gc()
+
 # clear console
 cat("\014")
 
@@ -75,6 +79,13 @@ colnames(grid_coords_km) <- c("Longitude", "Latitude")
 rownames(grid_coords_km) <- rownames(sites_coords)
 
 
+
+
+# compute spatio-temporal chi on september 2022 fro the OMSEV dataset
+september_2022_data <- rain[rownames(rain) >= "2022-09-01 00:00:00" &
+                              rownames(rain) < "2022-10-01 00:00:00", ]
+
+
 ################################################################################
 # VARIOGRAM --------------------------------------------------------------------
 ################################################################################
@@ -89,7 +100,9 @@ rownames(grid_coords_km) <- rownames(sites_coords)
 # rain <- rain[, -ncol(rain)]
 # rain <- rain_complete
 # in rain remove when all data are NA
+q <- 0.95
 set_st_excess <- get_spatiotemp_excess(rain, quantile = q, remove_zeros = TRUE)
+
 
 # verify that the excess is above the threshold
 # get list of sites and times
@@ -105,7 +118,7 @@ s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
                             n_max_episodes = 10000,
-                            latlon = FALSE)
+                            latlon = FALSE, seed = 1000)
 
 selected_points <- s0t0_set
 length(selected_points$s0)
@@ -126,75 +139,18 @@ n_ep <- length(t0_vec)
 
 temporal_overlap <- matrix(FALSE, n_ep, n_ep)
 
-# for (i in 1:n_ep) {
-#   for (j in 1:n_ep) {
-#     temporal_overlap[i, j] <- same_temporality(t0_vec[i], t0_vec[j], delta)
-#   }
-# }
+# analyse season of the episodes
+SON <- c("09", "10", "11")
+DJF <- c("12", "01", "02")
+MAM <- c("03", "04", "05")
+JJA <- c("06", "07", "08")
 
-# has_temporal_neighbor <- apply(temporal_overlap, 1, function(x) sum(x) > 1)
-# table(has_temporal_neighbor)
+n_ep <- length(t0_vec)
+n_SON <- sum(format(t0_vec, "%m") %in% SON)
+n_DJF <- sum(format(t0_vec, "%m") %in% DJF)
+n_MAM <- sum(format(t0_vec, "%m") %in% MAM)
+n_JJA <- sum(format(t0_vec, "%m") %in% JJA)
 
-
-# dmin <- c(500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600)
-# n_episodes <- sapply(dmin, function(d) {
-#   s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
-#                               min_spatial_dist = d,
-#                               episode_size = delta,
-#                               set_st_excess = set_st_excess,
-#                               n_max_episodes = 10000,
-#                               latlon = FALSE)
-#   length(s0t0_set$s0)
-# })
-
-# # plot n_episodes by dmin
-# df_n_episodes <- data.frame(dmin = dmin, n_episodes = n_episodes)
-# ggplot(df_n_episodes, aes(x = dmin, y = n_episodes)) +
-#   geom_line(color=btfgreen) +
-#   geom_point(color=btfgreen) +
-#   ylim(0, 1000) +
-#   geom_vline(xintercept = 1200, linetype = "dashed", color = "red") +
-#   labs(x = "Minimum spatial distance (m)", y = "Number of episodes") +
-#   btf_theme
-
-# filename <- paste0(im_folder, "/optim/omsev/choice_config/2025_all/n_episodes_dmin1200_delta", delta, ".png")
-
-# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"))) {
-#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"), recursive = TRUE)
-# }
-
-# ggsave(filename, width = 7, height = 5)
-
-
-
-# deltas <- seq(2, 24, by = 2)  # in steps of 5 minutes
-# n_episodes <- sapply(deltas, function(d) {
-#    s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
-#                               min_spatial_dist = min_spatial_dist,
-#                               episode_size = d,
-#                               set_st_excess = set_st_excess,
-#                               n_max_episodes = 10000,
-#                               latlon = FALSE)
-#    length(s0t0_set$s0)
-# })
-
-# # plot n_episodes by dmin
-# df_n_episodes <- data.frame(delta = deltas * 5, n_episodes = n_episodes)
-# ggplot(df_n_episodes, aes(x = delta, y = n_episodes)) +
-#   geom_line(color=btfgreen) +
-#   geom_point(color=btfgreen) +
-#   ylim(0, 1000) +
-#   geom_vline(xintercept = delta * 5, linetype = "dashed", color = "red") +
-#   labs(x = "Episode size (minutes)", y = "Number of episodes") +
-#   btf_theme
-
-# filename <- paste0(im_folder, "/optim/omsev/choice_config/2025_all/n_episodes_delta_dmin", min_spatial_dist, ".png")
-
-# if (!dir.exists(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"))) {
-#   dir.create(paste0(im_folder, "/optim/omsev/choice_config/2025_all/"), recursive = TRUE)
-# }
-
-# ggsave(filename, width = 7, height = 5)
 
 selected_points <- selected_points %>%
   mutate(t0_date = as.POSIXct(t0_date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
@@ -230,28 +186,63 @@ datetimes <- unique(selected_points$t0_date)
 
 datetimes_hour <- unique(selected_points$t0_date_rounded)
 
-
+foldername <- paste0(data_folder, "omsev/random/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
 # save datetime list to csv
-datetime_filename <- paste(data_folder, "/omsev/t0_episodes_q", q * 100,
+datetime_filename <- paste(data_folder, "/omsev/random/t0_episodes_q", q * 100,
                            "_delta", delta, "_dmin", min_spatial_dist,
                            ".csv", sep = "")
 write.csv(data.frame(t0_date = datetimes_hour), datetime_filename, row.names = FALSE)
 
 
 # save datetime list to csv
-datetime_filename <- paste(data_folder, "/omsev/t0_5min_episodes_q", q * 100,
+datetime_filename <- paste(data_folder, "/omsev/random/t0_5min_episodes_q", q * 100,
                            "_delta", delta, "_dmin", min_spatial_dist,
                            ".csv", sep = "")
 write.csv(data.frame(t0_date = datetimes), datetime_filename, row.names = FALSE)
 
+# adv_filename <- paste(data_folder, "/omsev/adv_estim/2025_all/combined_comephore_omsev/episode_advection_q",
+#                           q * 100, "_delta", delta, "_dmin", min_spatial_dist,
+#                           ".csv", sep = "")
+# adv_df <- read.csv(adv_filename, sep = ",")
 
-adv_filename <- paste(data_folder, "/omsev/adv_estim/2025_all/combined_comephore_omsev/episode_advection_q",
-                          q * 100, "_delta", delta, "_dmin", min_spatial_dist,
-                          ".csv", sep = "")
-adv_df <- read.csv(adv_filename, sep = ",")
+# head(adv_df)
+# tail(adv_df)
 
-head(adv_df)
-tail(adv_df)
+
+
+
+source("./R/advection.R")
+
+# Start parallel backend
+nworkers <- min(
+  8,
+  max(1, parallel::detectCores() - 1)
+)
+
+future::plan(
+  future::multisession,
+  workers = nworkers
+)
+
+
+# Get advection
+adv_df <- get_advection(
+  q = q,
+  delta = delta,
+  dmin = min_spatial_dist,
+  data_folder = data_folder,
+  force = T
+)
+
+
+# Return to sequential execution
+future::plan(
+  future::sequential
+)
+
 
 # count number of mean_dx_kmh_comephore and mean_dy_kmh_comephore at 0 and value >0 in vx_final and vy_final
 n_zero_comephore <- sum(adv_df$mean_dx_kmh_comephore == 0 & adv_df$mean_dy_kmh_comephore == 0)
@@ -352,6 +343,18 @@ list_episodes <- list_episodes_points$episodes
 u0_list <- selected_episodes_nona$u_s0
 tmax <- max(tau_vect)
 df_coords <- as.data.frame(grid_coords_km)
+
+
+u_by_site <- data.frame(
+  site = unlist(set_st_excess$list_s),
+  u95  = unlist(set_st_excess$list_u)
+) %>%
+  dplyr::distinct(site, u95)
+
+u_vec <- setNames(u_by_site$u95, u_by_site$site)
+
+u_vec
+
 # Compute the lags and excesses for each conditional point
 list_results <- mclapply(1:length(s0_list), function(i) {
   s0 <- s0_list[i]
@@ -362,8 +365,15 @@ list_results <- mclapply(1:length(s0_list), function(i) {
   lags <- get_conditional_lag_vectors(df_coords, s0_coords, ind_t0_ep,
                                 tau_vect, latlon = FALSE)
   u <- u0_list[i]
-  excesses <- empirical_excesses_rpar(episode, threshold = u,
-                                      df_lags = lags, t0 = ind_t0_ep)
+  # u_vec_same <- setNames(rep(u, nrow(df_coords)), rownames(df_coords))
+  # excesses <- empirical_excesses_rpar(episode, threshold = u,
+  #                                     df_lags = lags, t0 = ind_t0_ep)
+  excesses <- empirical_excesses_rpar(
+                            data_rain = episode,
+                            df_lags = lags,
+                            thresholds_by_site = u_vec,
+                            t0 = ind_t0_ep
+                          )
   # tau is in 5 minutes
   lags$tau <- lags$tau * 5 / 60 # convert to hours
   # lags$hnorm <- lags$hnorm / 1000 # convert to km
@@ -387,7 +397,7 @@ selected_episodes$t0_date <- as.POSIXct(
 com_results <- c(0.1579947, 0.9923270, 0.5800128, 0.6627969, 3.8962660, 2.2208320)
 
 # check for na in adv and wind
-hmax <- max(dist_mat) / 1000
+hmax <- max(dist_mat)
 
 
 # Basic diagnostics on advection (optional)
@@ -397,8 +407,8 @@ selected_episodes$adv_direction <- atan2(selected_episodes$adv_y,
                                          selected_episodes$adv_x) * (180 / pi)
 selected_episodes$adv_direction[selected_episodes$adv_direction < 0] <-
   selected_episodes$adv_direction[selected_episodes$adv_direction < 0] + 360
-hist(selected_episodes$adv_speed, main = "Histogram of advection speed",
-     xlab = "Speed (km/h)", breaks = 30)
+# hist(selected_episodes$adv_speed, main = "Histogram of advection speed",
+#      xlab = "Speed (km/h)", breaks = 30)
 
 # remove episode with advection speed above 200 with transformation 
 eta1 <- com_results[5]
@@ -406,8 +416,8 @@ eta2 <- com_results[6]
 
 selected_episodes$adv_speed_transformed <- eta1 * selected_episodes$adv_speed^eta2
 # histogram of transformed advection speed
-hist(selected_episodes$adv_speed_transformed, main = "Histogram of transformed advection speed",
-     xlab = "Transformed Speed (km/h)", breaks = 30)
+# hist(selected_episodes$adv_speed_transformed, main = "Histogram of transformed advection speed",
+#      xlab = "Transformed Speed (km/h)", breaks = 30)
 
 # remove episode with advection speed above 200 with transformation 
 selected_episodes_filtered <- selected_episodes
@@ -420,30 +430,13 @@ V_episodes_filtered <- data.frame(
     vx = selected_episodes_filtered$adv_x,
     vy = selected_episodes_filtered$adv_y
 )
-number_episode <- length(list_episodes_filtered)
 
-print(paste("Number of episodes after filtering:", number_episode))
-
-# look in rain omsev for which dates there are at least 3 sites activated
-# rain_omsev$active_sites <- rowSums(rain_omsev[, -1] > 0, na.rm = TRUE)
-# rain_omsev_filtered <- rain_omsev[rain_omsev$active_sites >= 3, ]
-# head(rain_omsev_filtered)
-# head(rain_omsev)
-# remove episodes before 2019-10-01
-# id_filter_date <- which(selected_episodes_filtered$t0_date < as.POSIXct("2019-11-01", tz = "UTC"))
-# selected_episodes_filtered <- selected_episodes_filtered[-id_filter_date, ]
-# list_episodes_filtered <- list_episodes_filtered[-id_filter_date]
-# list_lags_filtered <- list_lags_filtered[-id_filter_date]
-# list_excesses_filtered <- list_excesses_filtered[-id_filter_date]
-# V_episodes_filtered <- V_episodes_filtered[-id_filter_date, ]
-# length(list_episodes_filtered)
 # OPTIMISATION ---------------------------------------------------------------
-# [1] 1.1533284 4.1566903 0.2059604 0.6466280 avec les 414 episodes 
 
 init_com_class <- com_results
 head(V_episodes_filtered)
 result <- optim(
-  par = init_com_class[1:4],
+  par =  c(1.08,  3.9, 0.12, 0.65),
   fn = neg_ll_composite_fixed_eta,
   list_lags = list_lags_filtered,
   list_episodes = list_episodes_filtered,
@@ -452,20 +445,42 @@ result <- optim(
   wind_df = V_episodes_filtered,
   latlon = FALSE,
   distance = "euclidean",
-  fixed_eta1 = eta1,
-  fixed_eta2 = eta2,
+  fixed_eta1 = com_results[5],
+  fixed_eta2 = com_results[6],
   method = "L-BFGS-B",
   lower = c(1e-08, 1e-08, 1e-08, 1e-08),
   upper = c(10, 10, 1.999, 1.999),
   control = list(maxit = 20000, trace = 1)
 )
 
+
+# wlse_params <- c(1.08,  3.6, 0.12, 0.65)
+# wlse_params <- c(0.2, 2.33, 0.2, 0.65)
+# init_wlse <- c(wlse_params, 1, 1)
+
+# result <- optim(
+#   par = init_wlse,
+#   fn = neg_ll_composite,
+#   list_lags = list_lags_filtered,
+#   list_episodes = list_episodes_filtered,
+#   list_excesses = list_excesses_filtered,
+#   hmax = hmax,
+#   wind_df = V_episodes_filtered,
+#   latlon = FALSE,
+#   distance = "euclidean",
+#   method = "L-BFGS-B",
+#   lower = c(1e-08, 1e-08, 1e-08, 1e-08, 1e-08, 1e-08),
+#   upper = c(10, 10, 1.999, 1.999, 10, 10),
+#   control = list(maxit = 20000, trace = 1)
+# )
+
+
 if(result$convergence == 0) {
   cat("Optimization converged successfully\n")
 } else {
   warning("Optimization did not converge")
 }
-# [1] 1.0756788 3.9110884 0.1160579 0.6534962 3.8962660 2.2208320
+
 result
 
 convert_params <- function(beta1, beta2, alpha1, alpha2, c_x = 1, c_t = 1) {
@@ -642,7 +657,7 @@ h_breaks_omsev <- quantile(
 )
 
 h_breaks_omsev <- unique(as.numeric(h_breaks_omsev))
-h_breaks_omsev[length(h_breaks_omsev)] <- 1.6
+h_breaks_omsev[length(h_breaks_omsev)] <- 2.4
 
 chi_omsev <- compute_group_chi(
   list_lags = list_lags_filtered,
@@ -679,6 +694,10 @@ res_om_cmp_dev %>%
   select(tau, hbin, chi_theo_bar, chi_emp_bar, diff, rel_diff, n_pairs, direction) %>%
   head(15)
 
+# remove trivial cases where chi_theo is 1
+res_om_cmp_dev <- res_om_cmp_dev %>%
+  filter(chi_emp_bar != 1)
+
 ggplot(res_om_cmp_dev,
        aes(x = chi_theo_bar, y = chi_emp_bar,
            size = n_pairs, color = diff)) +
@@ -686,7 +705,7 @@ ggplot(res_om_cmp_dev,
   geom_abline(linetype = "dashed", color = "red") +
   geom_text(
     data = head(res_om_cmp_dev, 10),
-    aes(label = paste0("tau=", tau, "\n", hbin)),
+    aes(label = paste0("tau=", tau * 60, "\n", hbin)),
     size = 3,
     vjust = -0.6
   ) +
@@ -697,6 +716,21 @@ ggplot(res_om_cmp_dev,
     color = "Emp - Theo",
     size = "Number of pairs"
   )
+
+# save plot 
+foldername <- paste0(im_folder, "workflows/full_pipeline/2025/quantile/hbin_", n_hbins, "/")
+if (!dir.exists(foldername)) {
+  dir.create(foldername, recursive = TRUE)
+}
+filename <- paste0(foldername, "omsev_chi_th_emp_dmin1200_dev.png")
+ggsave(filename,
+       width = 7,
+       height = 6)
+
+
+res_om_cmp <- res_om_cmp %>%
+  filter(chi_emp_bar != 1 & chi_theo_bar != 1)
+
 
 ggplot(res_om_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
   geom_point(alpha = 0.7, color = btfgreen) +
@@ -711,7 +745,7 @@ ggplot(res_om_cmp, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
         legend.text = element_text(size = 14))
 
 # save plot
-foldername <- paste0(im_folder, "workflows/full_pipeline/2025/")
+foldername <- paste0(im_folder, "workflows/full_pipeline/2025/quantile/hbin_", n_hbins, "/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
@@ -748,7 +782,7 @@ ggplot(res_taupos, aes(x = chi_theo_bar, y = chi_emp_bar, size = n_pairs)) +
         legend.text = element_text(size = 14))
 
 # save plot
-foldername <- paste0(im_folder, "workflows/full_pipeline/2025/")
+foldername <- paste0(im_folder, "workflows/full_pipeline/2025/quantile/hbin_", n_hbins, "/")
 if (!dir.exists(foldername)) {
   dir.create(foldername, recursive = TRUE)
 }
@@ -756,4 +790,180 @@ filename <- paste0(foldername, "omsev_chi_th_emp_taupos_dmin1200.png")
 ggsave(filename,
        width = 7,
         height = 6)
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+# SEASONAL DEPENDENCE ANALYSIS --------------------------------------------------
+################################################################################
+
+selected_episodes_filtered$t0_date <- as.POSIXct(
+    selected_episodes_filtered$t0_date,
+    format = "%Y-%m-%d %H:%M:%S",
+    tz = "UTC"
+)
+
+selected_episodes_filtered$month <- lubridate::month(
+    selected_episodes_filtered$t0_date
+)
+
+selected_episodes_filtered$season <- dplyr::case_when(
+    selected_episodes_filtered$month %in% c(12, 1, 2) ~ "DJF",
+    selected_episodes_filtered$month %in% c(3, 4, 5)  ~ "MAM",
+    selected_episodes_filtered$month %in% c(6, 7, 8)  ~ "JJA",
+    selected_episodes_filtered$month %in% c(9, 10, 11) ~ "SON"
+)
+
+table(selected_episodes_filtered$season)
+
+fit_season <- function(season_name) {
+
+    idx <- which(selected_episodes_filtered$season == season_name)
+
+    season_episodes <- list_episodes_filtered[idx]
+    season_lags <- list_lags_filtered[idx]
+    season_excesses <- list_excesses_filtered[idx]
+    season_wind <- V_episodes_filtered[idx, , drop = FALSE]
+
+    # NLL using GLOBAL parameters on this seasonal subset
+    nll_global <- neg_ll_composite_fixed_eta(
+        par = result$par,
+        list_lags = season_lags,
+        list_episodes = season_episodes,
+        list_excesses = season_excesses,
+        hmax = hmax,
+        wind_df = season_wind,
+        latlon = FALSE,
+        distance = "euclidean",
+        fixed_eta1 = eta1,
+        fixed_eta2 = eta2
+    )
+
+    # Seasonal optimization
+    res <- optim(
+        par = result$par,
+        fn = neg_ll_composite_fixed_eta,
+        list_lags = season_lags,
+        list_episodes = season_episodes,
+        list_excesses = season_excesses,
+        hmax = hmax,
+        wind_df = season_wind,
+        latlon = FALSE,
+        distance = "euclidean",
+        fixed_eta1 = eta1,
+        fixed_eta2 = eta2,
+        method = "L-BFGS-B",
+        lower = c(1e-8, 1e-8, 1e-8, 1e-8),
+        upper = c(10, 10, 1.999, 1.999),
+        control = list(
+            maxit = 20000,
+            trace = 0
+        )
+    )
+
+    data.frame(
+        season = season_name,
+        n_episode = length(idx),
+
+        beta1 = res$par[1],
+        beta2 = res$par[2],
+        alpha1 = res$par[3],
+        alpha2 = res$par[4],
+
+        nll_global = nll_global,
+        nll_seasonal = res$value,
+
+        improvement = nll_global - res$value,
+        improvement_pct =
+            100 * (nll_global - res$value) / nll_global,
+
+        convergence = res$convergence
+    )
+}
+
+seasonal_fits <- dplyr::bind_rows(
+    fit_season("DJF"),
+    fit_season("MAM"),
+    fit_season("JJA"),
+    fit_season("SON")
+)
+
+seasonal_fits
+
+
+# global_fit <- data.frame(
+#     season = "All",
+#     n_episode = nrow(selected_episodes_filtered),
+#     beta1 = result$par[1],
+#     beta2 = result$par[2],
+#     alpha1 = result$par[3],
+#     alpha2 = result$par[4],
+#     convergence = result$convergence,
+#     loglik = -result$value
+# )
+
+# fits_comparison <- bind_rows(
+#     global_fit,
+#     seasonal_fits
+# )
+
+# print(fits_comparison)
+
+
+fits_long <- fits_comparison %>%
+    dplyr::select(
+        season,
+        n_episode,
+        beta1,
+        beta2,
+        alpha1,
+        alpha2
+    ) %>%
+    tidyr::pivot_longer(
+        cols = c(beta1, beta2, alpha1, alpha2),
+        names_to = "parameter",
+        values_to = "estimate"
+    )
+
+ggplot(
+    fits_long,
+    aes(
+        x = season,
+        y = estimate
+    )
+) +
+    geom_point(size = 3) +
+    facet_wrap(
+        ~ parameter,
+        scales = "free_y"
+    ) +
+    labs(
+        x = "Season",
+        y = "Estimate"
+    ) +
+    btf_theme
+
+
+fits_long$season <- factor(
+    fits_long$season,
+    levels = c("All", "DJF", "MAM", "JJA", "SON")
+)
+
+
+
+
+
+
+
+
+
+
 

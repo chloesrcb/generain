@@ -1,3 +1,4 @@
+# Code to simulate one episode using the fitted model and plot the results
 rm(list = ls())
 
 # clear console

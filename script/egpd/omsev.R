@@ -498,16 +498,15 @@ mean_ad_ok
 
 
 # Do a fit over all sites together ------------------------------------------------
-rain_no3gauges <- rain 
-
 k_prec_censuring_all <- seq(0.22, 0.25, by = 0.01)
-y_all <- as.data.frame(na.omit(as.vector(as.matrix(rain_no3gauges))))
+y_all <- as.data.frame(na.omit(as.vector(as.matrix(rain))))
 site_result_all <- tryCatch({
-  process_site(y = y_all, site_name = "All_sites", save_path = save_path, R = 1000, forced_cens = k_prec_censuring)
+  process_site(y = y_all, site_name = "All_sites", save_path = save_path, R = 1000, forced_cens = k_prec_censuring_all)
 }, error = function(e) {
   warning("Failed for all sites")
   NULL
 })
+
 
 # Do Moran test on exceedances and proportion of 0 ---------------------------------
 u <- quantile(rain[rain > 0], 0.95, na.rm = TRUE)
@@ -668,3 +667,99 @@ ggplot() +
 
 # save plots
 ggsave(paste0(save_path, "moran_p0_map.pdf"), width = 8, height = 6, dpi = 400)
+
+
+
+
+
+
+
+library(tidyverse)
+
+# Site-specific estimates
+df_plot <- df_all_results %>%
+  select(
+    Site,
+    kappa, kappa_low, kappa_high,
+    sigma, sigma_low, sigma_high,
+    xi, xi_low, xi_high
+  ) 
+
+# check
+df_plot
+
+df_plot <- bind_rows(
+  df_all_results %>%
+    transmute(
+      Site,
+      parameter = "xi",
+      estimate = xi,
+      low = xi_low,
+      high = xi_high
+    ),
+  
+  df_all_results %>%
+    transmute(
+      Site,
+      parameter = "sigma",
+      estimate = sigma,
+      low = sigma_low,
+      high = sigma_high
+    ),
+  
+  df_all_results %>%
+    transmute(
+      Site,
+      parameter = "kappa",
+      estimate = kappa,
+      low = kappa_low,
+      high = kappa_high
+    )
+)
+
+
+
+pooled <- data.frame(
+  parameter = c("xi", "sigma", "kappa"),
+  estimate = c(
+    site_result_all$xi,
+    site_result_all$sigma,
+    site_result_all$kappa
+  ),
+  low = c(
+    site_result_all$xi_low,
+    site_result_all$sigma_low,
+    site_result_all$kappa_low
+  ),
+  high = c(
+    site_result_all$xi_high,
+    site_result_all$sigma_high,
+    site_result_all$kappa_high
+  )
+)
+
+
+ggplot(df_plot,
+       aes(x = Site, y = estimate)) +
+  
+  geom_errorbar(
+    aes(ymin = low, ymax = high),
+    width = 0.15
+  ) +
+  
+  geom_point(size = 2) +
+  
+  facet_wrap(
+    ~ parameter,
+    scales = "free_y",
+    ncol = 1
+  ) +
+  
+  coord_flip() +
+  
+  labs(
+    x = NULL,
+    y = "Parameter estimate"
+  ) +
+  
+  theme_bw()

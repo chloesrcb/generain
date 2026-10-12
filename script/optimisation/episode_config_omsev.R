@@ -36,8 +36,8 @@ location_gauges <- read.csv(filename_loc)
 #                              "cines", "brives", "hydro")
 
 # remove brives, cines, hydro from location_gauges and rain_omsev
-location_gauges <- location_gauges[!(location_gauges$Station %in% c("brives", "cines", "hydro")), ]
-rain_omsev <- rain_omsev[, !(colnames(rain_omsev) %in% c("brives", "cines", "hydro"))] 
+# location_gauges <- location_gauges[!(location_gauges$Station %in% c("brives", "cines", "hydro")), ]
+# rain_omsev <- rain_omsev[, !(colnames(rain_omsev) %in% c("brives", "cines", "hydro"))] 
 # DISTANCE AND COORDS ##########################################################
 nsites <- nrow(location_gauges)
 sites_coords <- location_gauges[, c("Longitude", "Latitude")]
@@ -194,10 +194,10 @@ ggsave(filename, plot = pB, width = 7, height = 5, units = "in", dpi = 300)
 
 
 qs <- c(0.95)
-min_spatial_dists <- c(1000, 1200, 1400, 1600)
+min_spatial_dists <- c(1000, 1200)
 deltas <- c(6, 8, 12, 15, 24)
 
-
+rain <- rain_omsev
 rain <- rain[rowSums(!is.na(rain)) > 0, ]
 
 results_summary <- data.frame(
@@ -300,27 +300,23 @@ pB
 
 library(ggplot2)
 library(dplyr)
-library(viridis) # Pour des palettes de couleurs magnifiques et accessibles
+library(viridis)
 
-# 1. On prépare les labels pour que le rendu soit propre
 plot_data <- results_summary %>%
   mutate(
     q_label = paste0("Quantile : ", q * 100, "%"),
     delta_factor = factor(delta, levels = sort(unique(delta)))
   )
 
-# 2. Le Plot
 p_lines <- ggplot(plot_data, aes(x = dmin, y = n_episodes, color = delta_factor, group = delta_factor)) +
   geom_line(linewidth = 1.2, alpha = 0.8) +
   geom_point(size = 2.5, alpha = 0.9) +
-  # Facettage par quantile (crée un sous-graphique par valeur de q)
   facet_wrap(~ q_label, scales = "free_y") + 
-  # Palette de couleur moderne
   theme_minimal(base_size = 13) +
   theme(
     plot.title = element_text(face = "bold", size = 15, margin = margin(b = 5)),
     plot.subtitle = element_text(color = "gray40", size = 11, margin = margin(b = 15)),
-    strip.background = element_rect(fill = "#f5f5f5", color = NA), # Fond des titres de cadres
+    strip.background = element_rect(fill = "#f5f5f5", color = NA), 
     strip.text = element_text(face = "bold", size = 11),
     panel.grid.minor = element_blank(),
     panel.spacing = unit(1.5, "lines"),
@@ -333,3 +329,5 @@ p_lines <- ggplot(plot_data, aes(x = dmin, y = n_episodes, color = delta_factor,
   )
 
 print(p_lines)
+
+
