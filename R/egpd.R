@@ -202,54 +202,347 @@ compute_rmse <- function(y, left_censore, bound_kappa = c(0, 2), bound_sigma = c
   sqrt(mean((q_emp - q_theo)^2))
 }
 
-# compute_rmse <- function(y, left_censore,
-#                          bound_kappa = c(0.05, 3),
-#                          bound_sigma = c(0.001, Inf),
-#                          bound_xi = c(0, 1.0)) {
-#   y <- y[y > 0]
-#   if (length(y) < 20) return(Inf)
 
-#   inits <- init_values(y, 0)
 
-#   fit <- tryCatch({
-#     fit.extgp(
-#       y, model = 1, method = "mle",
-#       init = c(1, inits[1], inits[2]),
-#       censoring = c(left_censore, Inf),
-#       plots = FALSE, confint = FALSE, ncpus = 1
-#     )
-#   }, error = function(e) NULL)
+# ============================================================
+# Moving block bootstrap for EGPD QQ-plots
+# Rainfall observations recorded every 5 minutes
+# ============================================================
 
-#   if (is.null(fit)) return(Inf)
+# Moving block bootstrap with non-circular blocks
 
-#   param <- fit$fit$mle
-#   if (!all(is.finite(param))) return(Inf)
+moving_block_sample <- function(x, block_length = 36) {
 
-#   kappa <- param[1]
-#   sigma <- param[2]
-#   xi    <- param[3]
+  n <- length(x)
 
-#   if (kappa < bound_kappa[1] || kappa > bound_kappa[2]) return(Inf)
-#   if (sigma < bound_sigma[1] || sigma > bound_sigma[2]) return(Inf)
-#   if (xi < bound_xi[1] || xi > bound_xi[2]) return(Inf)
+  if (block_length < 1 || block_length > n) {
+    stop("Invalid block length.")
+  }
 
-#   # Important : diagnostic seulement au-dessus de la censure
-#   y_eval <- y[y > left_censore]
-#   if (length(y_eval) < 20) return(Inf)
+  # Identify blocks with no missing observations
+  valid_starts <- which(vapply(
+    seq_len(n - block_length + 1),
+    function(s) {
+      all(is.finite(x[s:(s + block_length - 1)]))
+    },
+    logical(1)
+  ))
 
-#   probs <- ppoints(length(y_eval))
+  if (length(valid_starts) == 0) {
+    stop("No complete blocks available.")
+  }
 
-#   q_theo <- qextgp(
-#     probs, type = 1,
-#     kappa = kappa, sigma = sigma, xi = xi
-#   )
+  # Sample only complete blocks
+  n_blocks <- ceiling(n / block_length)
 
-#   if (!all(is.finite(q_theo))) return(Inf)
+  starts <- sample(
+    valid_starts,
+    size = n_blocks,
+    replace = TRUE
+  )
 
-#   q_emp <- sort(y_eval)
+  indices <- unlist(lapply(starts, function(s) {
+    s:(s + block_length - 1)
+  }))
 
-#   sqrt(mean((q_emp - q_theo)^2))
-# }
+  x[indices[seq_len(n)]]
+}
+
+
+
+# ============================================================
+# Process one site
+# ============================================================
+
+process_site <- function(y, site_name,
+                         save_path = "",
+                         R = 1000,
+                         forced_cens = NULL,
+                         block_length = 36) {
+
+  # IMPORTANT:
+  # y must be the complete chronological rainfall series,
+  # including zero rainfall observations.
+  # Missing observations should be handled beforehand.
+
+  y_full <- as.numeric(y)
+
+  # EGPD is fitted to strictly positive rainfall amounts
+  y <- y_full[y_full > 0]
+
+  if (length(y) < 20) return(NULL)
+
+  # ----------------------------------------------------------
+  # Select censoring threshold
+  # ----------------------------------------------------------
+
+  if (!is.null(forced_cens)) {
+
+    censures <- forced_cens
+
+  } else {
+
+    possible_values <- sort(unique(y))
+    censures <- unique(round(possible_values, 5))
+
+    # Avoid selecting more thresholds than available
+    censures <- head(censures, 10)
+  }
+  y_rmse <- na.omit(y)
+  rmse_vals <- sapply(
+    censures,
+    function(c) compute_rmse(y_rmse, c)
+  )
+
+  # if (all(!is.finite(rmse_vals))) {
+  #   stop("No valid RMSE values for censoring selection.")
+  # }
+
+  best_cens <- censures[which.min(rmse_vals)]
+
+  # ----------------------------------------------------------
+  # Fit EGPD to original positive observations
+  # ----------------------------------------------------------
+  y_nona <- na.omit(y)
+  inits <- init_values(y_nona, 0)
+
+  fit <- fit.extgp(
+    y_nona,
+    model = 1,
+    method = "mle",
+    init = c(1, inits[1], inits[2]),
+    censoring = c(best_cens, Inf),
+    plots = FALSE,
+    confint = FALSE,
+    ncpus = 7
+  )
+
+  param_mle <- as.numeric(fit$fit$mle)
+
+  if (length(param_mle) != 3 ||
+      any(!is.finite(param_mle))) {
+    stop("Invalid EGPD parameter estimates.")
+  }
+
+  kappa <- param_mle[1]
+  sigma <- param_mle[2]
+  xi <- param_mle[3]
+
+  # Moving block bootstrap on the COMPLETE time series
+  set.seed(123)
+
+  boot_t <- matrix(
+    NA_real_,
+    nrow = R,
+    ncol = 3
+  )
+
+  colnames(boot_t) <- c("kappa", "sigma", "xi")
+
+  for (r in seq_len(R)) {
+
+    # Resample consecutive blocks, including zero rainfall
+    y_star_full <- moving_block_sample(
+      y_full,
+      block_length = block_length
+    )
+
+    # Retain positive rainfall for EGPD fitting
+    y_boot <- y_star_full[y_star_full > 0]
+
+    if (length(y_boot) < 20) next
+
+    # Obtain starting values
+    inits_boot <- tryCatch(
+      init_values(y_boot, 0),
+      error = function(e) NULL
+    )
+
+    if (is.null(inits_boot) ||
+        length(inits_boot) < 2 ||
+        any(!is.finite(inits_boot[1:2]))) {
+      next
+    }
+
+    # Refit EGPD
+    fit_boot <- tryCatch(
+      fit.extgp(
+        y_boot,
+        model = 1,
+        method = "mle",
+        init = c(1, inits_boot[1], inits_boot[2]),
+        censoring = c(best_cens, Inf),
+        confint = FALSE,
+        plots = FALSE
+      ),
+      error = function(e) NULL
+    )
+
+    if (is.null(fit_boot)) next
+
+    params <- tryCatch(
+      as.numeric(fit_boot$fit$mle),
+      error = function(e) rep(NA_real_, 3)
+    )
+
+    if (length(params) == 3 &&
+        all(is.finite(params))) {
+      boot_t[r, ] <- params
+    }
+  }
+
+  # Retain successful bootstrap fits
+  valid_rows <- apply(
+    boot_t,
+    1,
+    function(x) all(is.finite(x))
+  )
+
+  boot_t_valid <- boot_t[
+    valid_rows,
+    ,
+    drop = FALSE
+  ]
+
+  n_valid <- nrow(boot_t_valid)
+
+  # Bootstrap confidence intervals for parameters
+  boot_ci <- function(param_index) {
+
+    quantile(
+      boot_t_valid[, param_index],
+      probs = c(0.025, 0.975),
+      na.rm = TRUE
+    )
+  }
+
+  ci_kappa <- boot_ci(1)
+  ci_sigma <- boot_ci(2)
+  ci_xi <- boot_ci(3)
+
+  y_sorted <- sort(y_nona)
+
+  # Use the same plotting probabilities for all quantiles
+  probs <- ppoints(length(y_nona))
+
+  q_mle <- qextgp(
+    p = probs,
+    type = 1,
+    kappa = kappa,
+    sigma = sigma,
+    xi = xi
+  )
+
+  # Calculate fitted quantiles for each valid bootstrap fit
+  q_mle_boot <- t(
+    apply(boot_t_valid, 1, function(params) {
+
+      qextgp(
+        p = probs,
+        type = 1,
+        kappa = params[1],
+        sigma = params[2],
+        xi = params[3]
+      )
+    })
+  )
+
+  # Pointwise 95% confidence limits
+  q_lower <- apply(
+    q_mle_boot,
+    2,
+    quantile,
+    probs = 0.025,
+    na.rm = TRUE
+  )
+
+  q_upper <- apply(
+    q_mle_boot,
+    2,
+    quantile,
+    probs = 0.975,
+    na.rm = TRUE
+  )
+
+  df_plot <- data.frame(
+    empirical = y_sorted,
+    fitted = as.numeric(q_mle),
+    lower = as.numeric(q_lower),
+    upper = as.numeric(q_upper)
+  )
+
+  p <- ggplot(
+    df_plot,
+    aes(x = empirical, y = fitted)
+  ) +
+    geom_ribbon(
+      aes(ymin = lower, ymax = upper),
+      fill = "#69b3a2",
+      alpha = 0.2
+    ) +
+    geom_point(
+      color = "#69b3a2",
+      size = 1.2
+    ) +
+    geom_abline(
+      slope = 1,
+      intercept = 0,
+      linetype = "dashed",
+      color = "#a33737"
+    ) +
+    xlab("Empirical quantiles") +
+    ylab("Fitted quantiles") +
+    theme_minimal() +
+    theme(
+      panel.grid.major = element_line(
+        color = "#d6d1d1"
+      ),
+      panel.grid.minor = element_line(
+        color = "#d6d1d1"
+      )
+    ) +
+    btf_theme
+  # from 0.2 to 02
+  format_best_cens <- gsub("\\.", "", as.character(best_cens)) 
+  filename <- paste0(
+    save_path,
+    "qqplot_egpd_",
+    site_name,
+    "_lcensoring_",
+    format_best_cens,
+    "_block_",
+    block_length,
+    ".png"
+  )
+
+  ggsave(
+    filename = filename,
+    plot = p,
+    width = 6,
+    height = 6,
+    dpi = 400,
+    device = "png",
+    bg = "transparent"
+  )
+
+  return(data.frame(
+    Site = site_name,
+    BestCens = best_cens,
+    BlockLength = block_length,
+    BootstrapValid = n_valid,
+    RMSE = round(min(rmse_vals), 5),
+    kappa = kappa,
+    kappa_low = ci_kappa[1],
+    kappa_high = ci_kappa[2],
+    sigma = sigma,
+    sigma_low = ci_sigma[1],
+    sigma_high = ci_sigma[2],
+    xi = xi,
+    xi_low = ci_xi[1],
+    xi_high = ci_xi[2]
+  ))
+}
+
 
 #' process_site function
 #' This function fits the Extreme Generalized Pareto Distribution (EGPD)
