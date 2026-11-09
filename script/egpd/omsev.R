@@ -55,7 +55,7 @@ min_censuring <- round(min_precision, 2)
 k_prec_censuring <- seq(min_censuring, 2*min_censuring, by = 0.01)
 # p <- min_censuring
 # k_prec_censuring <- round(c(p, 1.5 * p, 2 * p, 2.5 * p, 3 * p), 4)
-save_path <- paste0(im_folder,"/EGPD/OMSEV/2019_2025/continuous/")
+save_path <- paste0(im_folder,"/EGPD/OMSEV/2019_2025/bootstrap_block/")
 
 if (!dir.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
@@ -63,10 +63,11 @@ if (!dir.exists(save_path)) {
 # Fit EGPD for each site
 for (site_name in sites_name) {
   cat("Processing:", site_name, "\n")
-  y <- as.data.frame(na.omit(rain[[site_name]]))
+  # y <- as.data.frame(na.omit(rain[[site_name]]))
+  y <- rain[[site_name]]
   site_result <- tryCatch({
     process_site(y = y, site_name =  site_name,
-                 save_path = save_path, R = 1000, forced_cens = k_prec_censuring)
+                 save_path = save_path, R = 1000, forced_cens = k_prec_censuring, block_length = 72)
   }, error = function(e) {
     warning(paste("Failed for site:", site_name))
     NULL
@@ -763,3 +764,161 @@ ggplot(df_plot,
   ) +
   
   theme_bw()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================
+# COMPARISON: SITE-SPECIFIC vs POOLED MODEL
+# ============================================================
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+
+# 1. Site-specific estimates
+df_sites <- bind_rows(
+  df_all_results %>%
+    dplyr::transmute(
+      Site,
+      parameter = "xi",
+      estimate = xi,
+      low = xi_low,
+      high = xi_high
+    ),
+  df_all_results %>%
+    dplyr::transmute(
+      Site,
+      parameter = "sigma",
+      estimate = sigma,
+      low = sigma_low,
+      high = sigma_high
+    ),
+  df_all_results %>%
+    dplyr::transmute(
+      Site,
+      parameter = "kappa",
+      estimate = kappa,
+      low = kappa_low,
+      high = kappa_high
+    )
+) %>%
+  mutate(model = "Site-specific")
+
+# 2. Pooled estimates
+stopifnot(!is.null(site_result_all))
+
+df_pooled <- tibble(
+  Site = "Pooled (all stations)",
+  parameter = c("xi", "sigma", "kappa"),
+  estimate = c(
+    site_result_all$xi,
+    site_result_all$sigma,
+    site_result_all$kappa
+  ),
+  low = c(
+    site_result_all$xi_low,
+    site_result_all$sigma_low,
+    site_result_all$kappa_low
+  ),
+  high = c(
+    site_result_all$xi_high,
+    site_result_all$sigma_high,
+    site_result_all$kappa_high
+  ),
+  model = "Pooled"
+)
+
+# 3. Combine results
+df_comparison <- bind_rows(df_sites, df_pooled) %>%
+  filter(
+    is.finite(estimate),
+    is.finite(low),
+    is.finite(high)
+  ) %>%
+  mutate(
+    Site = reorder(Site, estimate)
+  )
+
+# 4. Forest plot
+p_comparison <- ggplot(
+  df_comparison,
+  aes(x = estimate, y = Site, color = model)
+) +
+  geom_errorbar(
+    aes(xmin = low, xmax = high),
+    orientation = "y",
+    width = 0.25,
+    linewidth = 0.7
+  ) +
+  geom_point(size = 2.8) +
+  facet_wrap(
+    ~ parameter,
+    scales = "free_x",
+    ncol = 1
+  ) +
+  scale_color_manual(
+    values = c(
+      "Site-specific" = "#D55E00",
+      "Pooled" = "#0072B2"
+    )
+  ) +
+  labs(
+    title = "Site-specific versus pooled parameter estimates",
+    x = "Parameter estimate",
+    y = NULL,
+    color = "Model"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_comparison)
+
+# 5. Save figure
+ggsave(
+  filename = file.path(
+    save_path,
+    "pooled_vs_site_specific.png"
+  ),
+  plot = p_comparison,
+  width = 9,
+  height = 10,
+  dpi = 400
+)
+
+ggsave(
+  filename = file.path(
+    save_path,
+    "pooled_vs_site_specific.pdf"
+  ),
+  plot = p_comparison,
+  width = 9,
+  height = 10
+)
+
+# 6. Save comparison table
+write.csv(
+  df_comparison,
+  file.path(save_path, "pooled_vs_site_specific.csv"),
+  row.names = FALSE
+)
