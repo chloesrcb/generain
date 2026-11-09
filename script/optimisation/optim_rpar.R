@@ -35,7 +35,7 @@ invisible(lapply(files, function(f) source(f, echo = FALSE)))
 library(latex2exp)
 
 # SIMULATION ###################################################################
-result_folder <- paste0(data_folder, "optim_results/rpar/")
+result_folder <- paste0(data_folder, "optim_results/rpar/misspecified/")
 if (!dir.exists(result_folder)) {
   dir.create(result_folder, recursive = TRUE)
 }
@@ -61,6 +61,7 @@ wind_list <- lapply(1:M, function(i) {
   )
 })
 
+params <- c(0.2, 1, 0.6, 0.7)
 true_param <- c(params, eta1, eta2)
 beta1 <- params[1]
 beta2 <- params[2]
@@ -147,7 +148,7 @@ if (use_wind_data) {
   eta_type <- ""
 }
 
-result_folder <- paste0(data_folder, "optim_results/rpar/")
+result_folder <- paste0(data_folder, "optim_results/rpar/misspecified/")
 # Folder name to save the data
 foldername <- file.path(
   result_folder,
@@ -185,7 +186,7 @@ cl <- makeCluster(num_cores)
 
 # Export variables and functions to the cluster
 clusterExport(cl, varlist = c(
-  "sim_rpareto", "beta1", "beta2", "alpha1", "alpha2",
+  "sim_rpareto_gamma", "g_gamma_quantile", "beta1", "beta2", "alpha1", "alpha2",
   "spa", "temp", "adv_df", "t0", "m", "random_s0", "s0",
   "s0_radius", "distance_type",
   "foldername", "generate_grid_coords", "save_simulations",
@@ -216,7 +217,7 @@ result_list <- parLapply(cl, 1:M, function(i) {
   wind_df_i <- wind_list[[i]]
   adv_mat_i <- radial_adv_from_wind(wind_df_i, eta1, eta2)  # m x 2
 
-  simu <- sim_rpareto(
+  simu <- sim_rpareto_gamma(
     beta1 = beta1, beta2 = beta2,
     alpha1 = alpha1, alpha2 = alpha2,
     x = spa, y = spa, t = temp,
@@ -274,6 +275,14 @@ list_wind <- lapply(result_list, function(res) res$wind_df)
 sums_kij <- sapply(list_excesses, function(ex) sum(ex$kij, na.rm = TRUE))
 sums_kij
 
+
+# plot one simulation
+sim_index <- 1
+sim_data <- list_rpar[[sim_index]]  
+sim_S1 <- sim_data[,3 ]
+plot(sim_S1, type = "l", main = paste("Simulation", sim_index),
+     xlab = "Time", ylab = "Value")
+
 ### Optimization ###############################################################
 
 # Initialization
@@ -320,7 +329,7 @@ result_list_opt <- mclapply(
 
 
 print("Optimization done")
-# Combine results_list into a data.frame
+# Combine results_list 
 df_result_all <- do.call(rbind, result_list_opt)
 
 # Redefine the column names
@@ -335,7 +344,7 @@ if (use_wind_data) {
 
 print(head(df_result_all))
 
-# Eta type (if it has changed in optimization)
+# Eta type 
 eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
   "fixed_eta"
 } else if (!is.na(fixed_eta1)) {
@@ -349,7 +358,7 @@ eta_type <- if (!is.na(fixed_eta1) && !is.na(fixed_eta2)) {
 # save data in csv
 foldername_result <- file.path(
   data_folder,
-  "optim_results/rpar",
+  "optim_results/rpar/misspecified/",
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
@@ -444,7 +453,7 @@ if (fixed_eta1 && fixed_eta2) {
 # folder to save the plots
 foldername_image <- file.path(
   im_folder,
-  "/optim_results/rpar",
+  "/optim_results/rpar/misspecified/",
   paste0("rpar_", param_str),
   paste0("sim_", ngrid^2, "s_", length(temp), "t_s0_", s0_str, "_t0_", t0_str),
   s0_type,
