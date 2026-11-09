@@ -118,7 +118,7 @@ s0t0_set <- get_s0t0_pairs(grid_coords_m, rain,
                             episode_size = delta,
                             set_st_excess = set_st_excess,
                             n_max_episodes = 10000,
-                            latlon = FALSE, seed = 1000)
+                            latlon = FALSE)
 
 selected_points <- s0t0_set
 length(selected_points$s0)
@@ -234,7 +234,7 @@ adv_df <- get_advection(
   delta = delta,
   dmin = min_spatial_dist,
   data_folder = data_folder,
-  force = T
+  force = FALSE
 )
 
 
@@ -387,6 +387,10 @@ df_lags$hnorm
 df_excesses <- list_excesses[[15]]
 sum(df_excesses$kij)
 
+x <- 123
+get("x", envir = .GlobalEnv)
+ls()
+exists("x", envir = .GlobalEnv)
 
 selected_episodes$t0_date <- as.POSIXct(
   selected_episodes$t0_date,
@@ -431,6 +435,10 @@ V_episodes_filtered <- data.frame(
     vy = selected_episodes_filtered$adv_y
 )
 
+V_noadv <- data.frame(
+    vx = rep(0, nrow(selected_episodes_filtered)),
+    vy = rep(0, nrow(selected_episodes_filtered))
+)
 # OPTIMISATION ---------------------------------------------------------------
 
 init_com_class <- com_results
@@ -452,6 +460,13 @@ result <- optim(
   upper = c(10, 10, 1.999, 1.999),
   control = list(maxit = 20000, trace = 1)
 )
+
+
+$par
+[1] 1.1718682 4.2156795 0.2296586 0.6334772
+
+$value
+[1] 30741.81
 
 
 # wlse_params <- c(1.08,  3.6, 0.12, 0.65)

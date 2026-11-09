@@ -172,154 +172,154 @@ get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 
 
 
-get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
-                           episode_size, set_st_excess,
-                           n_max_episodes = 10000,
-                           latlon = FALSE,
-                           beta = 0,
-                           seed = NULL) {
+# get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
+#                            episode_size, set_st_excess,
+#                            n_max_episodes = 10000,
+#                            latlon = FALSE,
+#                            beta = 0,
+#                            seed = NULL) {
 
-  if (!is.null(seed)) {
-    set.seed(seed)
-  }
+#   if (!is.null(seed)) {
+#     set.seed(seed)
+#   }
 
-  data <- as.matrix(data)
-  site_names <- colnames(data)
+#   data <- as.matrix(data)
+#   site_names <- colnames(data)
 
-  if (is.null(site_names)) {
-    stop("ERROR: 'data' must have column names.")
-  }
+#   if (is.null(site_names)) {
+#     stop("ERROR: 'data' must have column names.")
+#   }
 
-  coord_names <- rownames(sites_coords)
+#   coord_names <- rownames(sites_coords)
 
-  if (is.null(coord_names)) {
-    stop("ERROR: 'sites_coords' must have row names.")
-  }
+#   if (is.null(coord_names)) {
+#     stop("ERROR: 'sites_coords' must have row names.")
+#   }
 
-  missing_in_coords <- setdiff(site_names, coord_names)
+#   missing_in_coords <- setdiff(site_names, coord_names)
 
-  if (length(missing_in_coords) > 0) {
-    stop(
-      paste(
-        "Missing sites in coords:",
-        paste(missing_in_coords, collapse = ", ")
-      )
-    )
-  }
+#   if (length(missing_in_coords) > 0) {
+#     stop(
+#       paste(
+#         "Missing sites in coords:",
+#         paste(missing_in_coords, collapse = ", ")
+#       )
+#     )
+#   }
 
-  # Reorder coordinates according to data columns
-  sites_coords <- sites_coords[
-    site_names,
-    ,
-    drop = FALSE
-  ]
+#   # Reorder coordinates according to data columns
+#   sites_coords <- sites_coords[
+#     site_names,
+#     ,
+#     drop = FALSE
+#   ]
 
-  # Distance matrix
-  if (latlon) {
-    dist_matrix <- get_dist_mat(
-      sites_coords,
-      latlon = TRUE
-    ) / 1000
-  } else {
-    dist_matrix <- get_dist_mat(
-      sites_coords,
-      latlon = FALSE
-    )
-  }
+#   # Distance matrix
+#   if (latlon) {
+#     dist_matrix <- get_dist_mat(
+#       sites_coords,
+#       latlon = TRUE
+#     ) / 1000
+#   } else {
+#     dist_matrix <- get_dist_mat(
+#       sites_coords,
+#       latlon = FALSE
+#     )
+#   }
 
-  rownames(dist_matrix) <- site_names
-  colnames(dist_matrix) <- site_names
+#   rownames(dist_matrix) <- site_names
+#   colnames(dist_matrix) <- site_names
 
-  # Extract exceedances
-  list_s <- set_st_excess$list_s
-  list_t <- set_st_excess$list_t
-  list_u <- set_st_excess$list_u
+#   # Extract exceedances
+#   list_s <- set_st_excess$list_s
+#   list_t <- set_st_excess$list_t
+#   list_u <- set_st_excess$list_u
 
-  excess_dt <- data.table::data.table(
-    s = unlist(list_s),
-    t = unlist(list_t),
-    t_dates = names(list_t),
-    u = unlist(list_u)
-  )
+#   excess_dt <- data.table::data.table(
+#     s = unlist(list_s),
+#     t = unlist(list_t),
+#     t_dates = names(list_t),
+#     u = unlist(list_u)
+#   )
 
-  if (is.null(excess_dt$t_dates)) {
-    excess_dt[, t_dates := NA_character_]
-  }
+#   if (is.null(excess_dt$t_dates)) {
+#     excess_dt[, t_dates := NA_character_]
+#   }
 
-  # ---------------------------------------------------------
-  # Random order of ALL candidate (s0, t0) pairs
-  # ---------------------------------------------------------
-  excess_dt <- excess_dt[
-    sample.int(.N)
-  ]
+#   # ---------------------------------------------------------
+#   # Random order of ALL candidate (s0, t0) pairs
+#   # ---------------------------------------------------------
+#   excess_dt <- excess_dt[
+#     sample.int(.N)
+#   ]
 
-  # Initialize selected episodes
-  selected_points <- data.table::data.table(
-    s0 = character(),
-    t0 = integer(),
-    t0_date = character(),
-    u_s0 = numeric()
-  )
+#   # Initialize selected episodes
+#   selected_points <- data.table::data.table(
+#     s0 = character(),
+#     t0 = integer(),
+#     t0_date = character(),
+#     u_s0 = numeric()
+#   )
 
-  # Loop through randomly ordered candidate pairs
-  for (i in seq_len(nrow(excess_dt))) {
+#   # Loop through randomly ordered candidate pairs
+#   for (i in seq_len(nrow(excess_dt))) {
 
-    s0 <- excess_dt$s[i]
-    t0 <- excess_dt$t[i]
-    t0_date <- excess_dt$t_dates[i]
-    u0 <- excess_dt$u[i]
+#     s0 <- excess_dt$s[i]
+#     t0 <- excess_dt$t[i]
+#     t0_date <- excess_dt$t_dates[i]
+#     u0 <- excess_dt$u[i]
 
-    is_valid <- TRUE
+#     is_valid <- TRUE
 
-    if (nrow(selected_points) > 0) {
+#     if (nrow(selected_points) > 0) {
 
-      for (j in seq_len(nrow(selected_points))) {
+#       for (j in seq_len(nrow(selected_points))) {
 
-        s_prev <- selected_points$s0[j]
-        t_prev <- selected_points$t0[j]
+#         s_prev <- selected_points$s0[j]
+#         t_prev <- selected_points$t0[j]
 
-        if (is.na(s_prev) || is.na(t_prev)) {
-          next
-        }
+#         if (is.na(s_prev) || is.na(t_prev)) {
+#           next
+#         }
 
-        spatial_dist <- dist_matrix[s0, s_prev]
-        temporal_dist <- abs(t0 - t_prev)
+#         spatial_dist <- dist_matrix[s0, s_prev]
+#         temporal_dist <- abs(t0 - t_prev)
 
-        if (
-          spatial_dist < min_spatial_dist &&
-          temporal_dist < (episode_size + 2 * beta)
-        ) {
-          is_valid <- FALSE
-          break
-        }
-      }
-    }
+#         if (
+#           spatial_dist < min_spatial_dist &&
+#           temporal_dist < (episode_size + 2 * beta)
+#         ) {
+#           is_valid <- FALSE
+#           break
+#         }
+#       }
+#     }
 
-    if (is_valid) {
+#     if (is_valid) {
 
-      selected_points <- rbind(
-        selected_points,
-        data.table::data.table(
-          s0 = s0,
-          t0 = t0,
-          t0_date = ifelse(
-            is.na(t0_date),
-            NA_character_,
-            t0_date
-          ),
-          u_s0 = u0
-        ),
-        fill = TRUE
-      )
+#       selected_points <- rbind(
+#         selected_points,
+#         data.table::data.table(
+#           s0 = s0,
+#           t0 = t0,
+#           t0_date = ifelse(
+#             is.na(t0_date),
+#             NA_character_,
+#             t0_date
+#           ),
+#           u_s0 = u0
+#         ),
+#         fill = TRUE
+#       )
 
-      if (nrow(selected_points) >= n_max_episodes) {
-        break
-      }
-    }
-  }
+#       if (nrow(selected_points) >= n_max_episodes) {
+#         break
+#       }
+#     }
+#   }
 
-  return(selected_points)
-}
+#   return(selected_points)
+# }
 
 # get_s0t0_pairs <- function(sites_coords, data, min_spatial_dist,
 #                            episode_size, set_st_excess,
@@ -790,46 +790,46 @@ empirical_excesses_rpar <- function(data_rain, df_lags, threshold, t0 = 0) {
 }
 
 
-empirical_excesses_rpar <- function(data_rain, df_lags, thresholds_by_site, t0 = 0) {
+# empirical_excesses_rpar <- function(data_rain, df_lags, thresholds_by_site, t0 = 0) {
 
-  # df_lags must contain columns: s1, s2, tau
-  excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
-  excesses[, kij := 0L]
-  excesses[, Tobs := 1L]
+#   # df_lags must contain columns: s1, s2, tau
+#   excesses <- as.data.table(df_lags[, c("s1", "s2", "tau")])
+#   excesses[, kij := 0L]
+#   excesses[, Tobs := 1L]
 
-  s1_name <- df_lags$s1[1]
+#   s1_name <- df_lags$s1[1]
 
-  for (i in seq_len(nrow(excesses))) {
+#   for (i in seq_len(nrow(excesses))) {
 
-    tau     <- excesses$tau[i]
-    s2_name <- df_lags$s2[i]
+#     tau     <- excesses$tau[i]
+#     s2_name <- df_lags$s2[i]
 
-    ind_s2 <- which(colnames(data_rain) == s2_name)
-    X_s2   <- data_rain[, ind_s2]
+#     ind_s2 <- which(colnames(data_rain) == s2_name)
+#     X_s2   <- data_rain[, ind_s2]
 
-    t_shift <- t0 + 1 + tau
+#     t_shift <- t0 + 1 + tau
 
-    # Missing rainfall: ignore
-    if (is.na(X_s2[t_shift])) {
-      excesses$kij[i] <- 0
-      next
-    }
+#     # Missing rainfall: ignore
+#     if (is.na(X_s2[t_shift])) {
+#       excesses$kij[i] <- 0
+#       next
+#     }
 
-    # Site-specific 95% threshold for s2
-    threshold_s2 <- thresholds_by_site[s2_name]
+#     # Site-specific 95% threshold for s2
+#     threshold_s2 <- thresholds_by_site[s2_name]
 
-    if (is.na(threshold_s2)) {
-      stop(paste("No threshold found for site", s2_name))
-    }
+#     if (is.na(threshold_s2)) {
+#       stop(paste("No threshold found for site", s2_name))
+#     }
 
-    # Same marginal quantile at each target site
-    is_excess <- X_s2[t_shift] >= threshold_s2
+#     # Same marginal quantile at each target site
+#     is_excess <- X_s2[t_shift] >= threshold_s2
 
-    excesses$kij[i] <- as.integer(is_excess)
-  }
+#     excesses$kij[i] <- as.integer(is_excess)
+#   }
 
-  return(excesses)
-}
+#   return(excesses)
+# }
 
 # THEORETICAL CHI --------------------------------------------------------------
 
@@ -1402,7 +1402,7 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
         list_lags = list_lags_m,
         list_excesses = list_excesses_m,
         hmax = hmax,
-        wind_df = wind_df,          # m×2
+        wind_df = wind_df,
         threshold = TRUE,
         latlon = FALSE,
         distance = distance,
@@ -1415,7 +1415,6 @@ process_simulation <- function(i, m, list_simu, u, list_lags,
       )
     }, error = function(e) return(NULL))
 
-    # opt_res$par est longueur 4 : on reconstruit longueur 6
     if (!is.null(opt_res) && opt_res$convergence == 0) {
       estimates <- c(opt_res$par, fixed_eta1, fixed_eta2)
       names(estimates) <- out_names

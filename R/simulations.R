@@ -668,6 +668,236 @@ sim_rpareto <- function(beta1, beta2, alpha1, alpha2, x, y, t,
       Y <- exp(W - W[ind_s0_t0] - gamma_0)
       R <- 1 / runif(1) # Pareto(1)
       Z[,,, i, j] <- R * Y
+      cat("Y : min =", min(Y, na.rm = TRUE),
+          "médiane =", median(Y, na.rm = TRUE),
+          "moyenne =", mean(Y, na.rm = TRUE),
+          "max =", max(Y, na.rm = TRUE), "\n")
+
+      cat("Proportion Y > 1 :", mean(Y > 1, na.rm = TRUE), "\n")
+    }
+  }
+
+  return(list(Z = Z, s0_used = s0_list))
+}
+
+
+
+
+# Transformation quantile Gamma normalisee
+g_gamma_quantile <- function(x, shape = 2, scale = 1) {
+  if (shape <= 0 || scale <= 0) {
+    stop("shape et scale doivent etre strictement positifs.")
+  }
+
+  # Eviter les probabilites exactement egales a 0 ou 1
+  u <- pnorm(x)
+  u <- pmin(pmax(u, .Machine$double.eps),
+            1 - .Machine$double.eps)
+
+  # Quantile Gamma
+  q <- qgamma(u, shape = shape, scale = scale)
+
+  # Normalisation : g(0) = 1
+  q0 <- qgamma(0.5, shape = shape, scale = scale)
+
+  q / q0
+}
+
+
+gamma_prol <- function(x) {
+  sapply(x, function(a) {
+
+    if (is.na(a) || !is.finite(a)) {
+      return(NaN)
+    }
+
+    # Pôles : 0, -1, -2, ...
+    if (a <= 0 && a == floor(a)) {
+      return(Inf)
+    }
+
+    # Argument positif : calcul direct
+    if (a > 0) {
+      return(gamma(a))
+    }
+
+    # Argument négatif non entier :
+    # remonter vers un argument positif
+    b <- a
+    facteur <- 1
+
+    while (b <= 0) {
+      facteur <- facteur * b
+      b <- b + 1
+    }
+
+    gamma(b) / facteur
+  })
+}
+
+
+#' sim_rpareto_gamma function (misspecified)
+#'
+#' This function simulates a spatio-temporal r-Pareto process using either 
+#' a fractional Brownian motion model.
+#' It supports conditioning on one or multiple spatial points s0.
+#'
+#' @param beta1, beta2 Variogram scale parameters for space and time.
+#' @param alpha1, alpha2 Variogram smoothness parameters for space and time.
+#' @param x, y, t Vectors representing spatial (x, y) and temporal (t) grids.
+#' @param adv Advection vector (default = c(0, 0)).
+#' @param t0 Time point at which the process is conditioned.
+#' @param nres Number of simulations to perform.
+#' @param random_s0 If TRUE, selects conditioning point(s) randomly within radius.
+#' @param s0 Conditioning spatial location(s). 
+#'        Either a vector c(x,y) for one point, or a matrix/data.frame with 2 columns for multiple points.
+#' @param s0_radius Radius used if random_s0 is TRUE.
+#' @param distance Type of distance metric to use ("euclidean" or "lalpha").
+#'
+#' @return A list with simulated field Z (5D array: x × y × t × nres × n_s0)
+#'         and list of conditioning points s0_used.
+#' @export
+sim_rpareto_gamma <- function(
+    beta1, beta2, alpha1, alpha2, x, y, t,
+    adv = c(0, 0), t0 = 0, nres = 1,
+    random_s0 = FALSE, s0 = c(1, 1),
+    s0_radius = Inf,
+    distance = "euclidean", seed = NULL,
+    shape = 2, scale = 1
+        ) {
+  if (!is.null(seed)) set.seed(seed)
+
+  RandomFields::RFoptions(spConform = FALSE, allow_duplicated_locations = TRUE,
+                          install = "no")
+
+  if (!(distance %in% c("euclidean", "lalpha"))) {
+    stop('Invalid distance type. Choose either "euclidean" or "lalpha".')
+  }
+
+  lx <- length(x); ly <- length(y); lt <- length(t)
+  site_names <- paste0("S", seq_len(lx * ly))
+
+  modelSpace <- RandomFields::RMfbm(alpha = alpha1, var = 2 * beta1)
+  modelTime  <- RandomFields::RMfbm(alpha = alpha2, var = 2 * beta2)
+
+  # adv handling
+  if (is.null(dim(adv))) {
+    # vector length 2
+    if (length(adv) != 2) stop("adv must be length-2 vector or nres x 2 matrix/data.frame.")
+    adv_mat <- matrix(rep(adv, nres), ncol = 2, byrow = TRUE)
+  } else {
+    adv_mat <- as.matrix(adv)
+    if (ncol(adv_mat) != 2) stop("adv must have 2 columns (adv1, adv2).")
+    if (nrow(adv_mat) != nres) stop("If adv is a matrix/data.frame, it must have nres rows.")
+  }
+
+  # Normalize s0 input
+  if (is.null(dim(s0))) {
+    s0_df <- data.frame(x = s0[1], y = s0[2])
+  } else {
+    s0_df <- as.data.frame(s0); names(s0_df) <- c("x", "y")
+  }
+  n_s0 <- nrow(s0_df)
+
+  # If random s0, candidates
+  if (random_s0) {
+    s0_center <- as.numeric(s0_df[1, ])
+    grid_points <- expand.grid(x = seq_len(lx), y = seq_len(ly))
+    distances <- sqrt((grid_points$x - s0_center[1])^2 +
+                      (grid_points$y - s0_center[2])^2)
+    candidate_points <- grid_points[distances <= s0_radius, ]
+    if (nrow(candidate_points) == 0) stop("No grid points found within specified radius.")
+  }
+
+  s0_list <- vector("list", nres)
+  Z <- array(NA_real_, dim = c(lx, ly, lt, nres, n_s0))
+
+  # Base grid
+  base_grid <- expand.grid(x = seq_len(lx), y = seq_len(ly), t = t)
+  base_grid$site <- rep(site_names, times = lt)
+
+  for (i in seq_len(nres)) {
+    s0_list[[i]] <- list()
+
+    adv_i <- adv_mat[i, ]  # (adv1, adv2)
+
+    # grid for one episode
+    grid <- base_grid
+    grid$shifted_x <- grid$x - grid$t * adv_i[1]
+    grid$shifted_y <- grid$y - grid$t * adv_i[2]
+    coords <- grid[, c("shifted_x", "shifted_y")]
+
+    if (all(adv_i == 0)) {
+      coords <- coords[!duplicated(coords), ]
+    }
+
+    for (j in seq_len(n_s0)) {
+      # Select s0
+      s0_curr <- s0_df[j, , drop = FALSE]
+      if (random_s0) {
+        s0_curr <- candidate_points[sample(nrow(candidate_points), 1), , drop = FALSE]
+      }
+      s0_list[[i]][[j]] <- s0_curr
+
+      ind_s0_t0 <- which(grid$x == s0_curr$x & grid$y == s0_curr$y & grid$t == t0)
+      if (length(ind_s0_t0) != 1) stop("Conditioning index ind_s0_t0 not found uniquely.")
+      
+      # Temporal variogram at t0
+      gamma_temp <- RandomFields::RFvariogram(modelTime, x = t - grid$t[ind_s0_t0])
+
+      # Spatial variogram and Gaussian process
+      if (distance == "lalpha") {
+        gamma_space_x <- RandomFields::RFvariogram(
+          modelSpace, x = coords$shifted_x - grid$shifted_x[ind_s0_t0])
+        gamma_space_y <- RandomFields::RFvariogram(
+          modelSpace, x = coords$shifted_y - grid$shifted_y[ind_s0_t0])
+
+        gamma_0 <- compute_st_variogram(
+          grid,
+          gamma_space_x = gamma_space_x,
+          gamma_space_y = gamma_space_y,
+          gamma_temp = gamma_temp,
+          adv = adv_i
+        )
+
+        W_s_x <- RandomFields::RFsimulate(modelSpace, coords[, 1], grid = FALSE)
+        W_s_y <- RandomFields::RFsimulate(modelSpace, coords[, 2], grid = FALSE)
+        W_t   <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+        W <- compute_st_gaussian_process(
+          grid, W_s_x = W_s_x, W_s_y = W_s_y, W_t = W_t, adv = adv_i
+        )
+      } else {
+        gamma_space <- RandomFields::RFvariogram(
+          modelSpace,
+          x = coords$shifted_x - grid$shifted_x[ind_s0_t0],
+          y = coords$shifted_y - grid$shifted_y[ind_s0_t0]
+        )
+
+        gamma_0 <- compute_st_variogram(
+          grid,
+          gamma_space = gamma_space,
+          gamma_temp = gamma_temp,
+          adv = adv_i
+        )
+
+        W_s <- RandomFields::RFsimulate(modelSpace, coords[, 1], coords[, 2], grid = FALSE)
+        W_t <- RandomFields::RFsimulate(modelTime, t, n = 1, grid = TRUE)
+
+        W <- compute_st_gaussian_process(
+          grid, W_s = W_s, W_t = W_t, adv = adv_i
+        )
+      }
+
+      Y <- g_gamma_quantile(W - W[ind_s0_t0] - gamma_0, shape = shape, scale = scale)
+      R <- 1 / runif(1) # Pareto(1)
+      Z[,,, i, j] <- R * Y
+      # cat("Y : min =", min(Y, na.rm = TRUE),
+      #     "médiane =", median(Y, na.rm = TRUE),
+      #     "moyenne =", mean(Y, na.rm = TRUE),
+      #     "max =", max(Y, na.rm = TRUE), "\n")
+
+      # cat("Proportion Y > 1 :", mean(Y > 1, na.rm = TRUE), "\n")
     }
   }
 
